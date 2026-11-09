@@ -59,7 +59,7 @@ export default function BiometricSettingsScreen() {
             {enabled ? 'Biométrie activée' : 'Biométrie désactivée'}
           </Text>
           <Text style={styles.heroText}>
-            Utilisez Face ID ou votre empreinte digitale pour déverrouiller PLAA et confirmer
+            Utilisez Face ID ou votre empreinte digitale pour déverrouiller Bringo Mind et confirmer
             les actions sensibles.
           </Text>
 
@@ -138,7 +138,7 @@ export default function BiometricSettingsScreen() {
         <View style={styles.infoCard}>
           <Icon name="shield" size={16} color={Serene.onSurfaceVariant} />
           <Text style={styles.infoText}>
-            Vos données biométriques restent sur l’appareil. PLAA ne les reçoit ni ne les
+            Vos données biométriques restent sur l’appareil. Bringo Mind ne les reçoit ni ne les
             stocke jamais.
           </Text>
         </View>

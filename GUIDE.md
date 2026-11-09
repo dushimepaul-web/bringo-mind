@@ -1,4 +1,4 @@
-# GUIDE DE DÉVELOPPEMENT — PLAA (bringo-mind)
+# GUIDE DE DÉVELOPPEMENT — Bringo Mind
 
 Guide destiné aux développeurs qui rejoignent le projet : comprendre la structure, créer un écran, respecter le design system et éviter les pièges du stack Expo actuel.
 

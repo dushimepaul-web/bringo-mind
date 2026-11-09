@@ -58,7 +58,7 @@ export default function EmailViewerScreen() {
             </View>
             <View style={styles.labelPill}>
               <Icon name="auto_awesome" size={11} color={Serene.secondary} />
-              <Text style={[styles.labelText, styles.labelTextAccent]}>Importé par PLAA</Text>
+              <Text style={[styles.labelText, styles.labelTextAccent]}>Importé par Bringo Mind</Text>
             </View>
           </View>
 

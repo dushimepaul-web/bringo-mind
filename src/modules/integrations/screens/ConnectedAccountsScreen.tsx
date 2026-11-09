@@ -113,7 +113,7 @@ export default function ConnectedAccountsScreen() {
           <View style={styles.heroBody}>
             <Text style={styles.heroTitle}>{connectedCount} comptes connectés</Text>
             <Text style={styles.heroText}>
-              Importez automatiquement vos e-mails et événements dans PLAA.
+              Importez automatiquement vos e-mails et événements dans Bringo Mind.
             </Text>
           </View>
         </View>
@@ -254,7 +254,7 @@ export default function ConnectedAccountsScreen() {
         <View style={styles.privacyCard}>
           <Icon name="shield" size={16} color={Serene.onSurfaceVariant} />
           <Text style={styles.privacyText}>
-            PLAA n’accède qu’aux données nécessaires. Vous pouvez révoquer l’accès à tout
+            Bringo Mind n’accède qu’aux données nécessaires. Vous pouvez révoquer l’accès à tout
             moment ; les jetons sont chiffrés et jamais partagés.
           </Text>
         </View>

@@ -9,8 +9,8 @@ import type { AuthTokens } from './types';
  * - Web : mémoire uniquement. Aucun jeton n'est écrit dans localStorage ;
  *   la session web ne survit donc pas à un rechargement (à revoir avec l'équipe Web).
  */
-const ACCESS_KEY = 'plaa.access_token';
-const REFRESH_KEY = 'plaa.refresh_token';
+const ACCESS_KEY = 'bringomind.access_token';
+const REFRESH_KEY = 'bringomind.refresh_token';
 
 const isNative = Platform.OS === 'ios' || Platform.OS === 'android';
 

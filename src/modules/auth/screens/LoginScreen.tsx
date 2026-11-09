@@ -3,6 +3,7 @@ import { router } from 'expo-router';
 import { useRef, useState } from 'react';
 import type { TextInputInstance } from 'react-native';
 import {
+  ActivityIndicator,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -17,7 +18,16 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icon';
-import { FontFamily, Radius, Serene, Space } from '@/constants/design';
+import { FontFamily, Radius, Serene, Space, Tint } from '@/constants/design';
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** Libellé biométrique adapté au téléphone. */
+const BIOMETRIC =
+  Platform.OS === 'android'
+    ? { label: 'Déverrouiller avec l’empreinte', icon: 'fingerprint' }
+    : { label: 'Déverrouiller avec Face ID', icon: 'familiar_face_and_zone' };
+
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('claire.martin@email.fr');
@@ -25,17 +35,33 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(true);
   const [focusedField, setFocusedField] = useState<'email' | 'password' | null>(null);
+  const [emailTouched, setEmailTouched] = useState(false);
+  const [loading, setLoading] = useState(false);
   const passwordRef = useRef<TextInputInstance>(null);
 
-  const valid = email.trim().includes('@') && password.length > 0;
+  const emailValid = EMAIL_PATTERN.test(email.trim());
+  const emailError = emailTouched && email.length > 0 && !emailValid;
+  const valid = emailValid && password.length > 0;
+  const canSubmit = valid && !loading;
 
   const handleSubmit = () => {
-    if (!valid) return;
-    router.replace('/dashboard');
+    if (!canSubmit) return;
+    setLoading(true);
+    // Démo : simule l'appel réseau avant d'ouvrir le tableau de bord.
+    setTimeout(() => router.replace('/dashboard'), 700);
   };
+
+  const iconColor = (field: 'email' | 'password') =>
+    focusedField === field ? Tint.primary : Serene.onSurfaceVariant;
 
   return (
     <SafeAreaView style={styles.safe}>
+      <View style={styles.decor} pointerEvents="none">
+        <View style={styles.blobTop} />
+        <View style={styles.waveBottom} />
+        <View style={styles.waveBottomInner} />
+      </View>
+
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -44,149 +70,177 @@ export default function LoginScreen() {
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled">
-          <View style={styles.topBar}>
-            <Pressable
-              style={({ pressed }) => [styles.backButton, pressed && styles.iconPressed]}
-              hitSlop={4}
-              accessibilityRole="button"
-              accessibilityLabel="Retour"
-              onPress={() => router.back()}>
-              <Icon name="arrow_back" size={26} color={Serene.onSurface} />
-            </Pressable>
-          </View>
-
           <View style={styles.brandRow}>
             <View style={styles.logo}>
               <Text style={styles.logoLetter}>K</Text>
+              <View style={styles.logoSwoosh} />
             </View>
-            <Text style={styles.wordmark}>Bringo Mind</Text>
+            <View>
+              <Text style={styles.wordmark}>
+                Bringo <Text style={styles.wordmarkAccent}>Mind</Text>
+              </Text>
+              <Text style={styles.tagline}>Organisez • Gérez • Avancez</Text>
+            </View>
           </View>
 
-          <Text style={styles.title}>Bon retour parmi nous</Text>
-          <Text style={styles.subtitle}>Retrouvez vos tâches, documents et rappels.</Text>
-
-          <Text style={styles.fieldLabel}>Adresse e-mail</Text>
-          <View style={[styles.inputRow, focusedField === 'email' && styles.inputRowFocused]}>
-            <Icon
-              name="mail"
-              size={20}
-              color={focusedField === 'email' ? Serene.secondary : Serene.onSurfaceVariant}
-            />
-            <TextInput
-              style={styles.inputInline}
-              placeholder="vous@email.fr"
-              placeholderTextColor={Serene.onSurfaceVariant}
-              value={email}
-              onChangeText={setEmail}
-              onFocus={() => setFocusedField('email')}
-              onBlur={() => setFocusedField(null)}
-              keyboardType="email-address"
-              inputMode="email"
-              autoCapitalize="none"
-              autoCorrect={false}
-              autoComplete="email"
-              textContentType="username"
-              returnKeyType="next"
-              submitBehavior="submit"
-              onSubmitEditing={() => passwordRef.current?.focus()}
-              selectionColor={Serene.secondary}
-              accessibilityLabel="Adresse e-mail"
-            />
+          <View style={styles.hero}>
+            <View style={styles.heroText}>
+              <Text style={styles.title}>
+                Bon retour{'\n'}
+                <Text style={styles.titleAccent}>parmi nous !</Text>
+              </Text>
+              <View style={styles.titleUnderline} />
+              <Text style={styles.subtitle}>
+                Retrouvez vos tâches, documents et rappels en un seul endroit.
+              </Text>
+            </View>
+            <HeroIllustration />
           </View>
 
-          <Text style={styles.fieldLabel}>Mot de passe</Text>
-          <View style={[styles.inputRow, focusedField === 'password' && styles.inputRowFocused]}>
-            <Icon
-              name="lock"
-              size={20}
-              color={focusedField === 'password' ? Serene.secondary : Serene.onSurfaceVariant}
-            />
-            <TextInput
-              ref={passwordRef}
-              style={styles.inputInline}
-              placeholder="Votre mot de passe"
-              placeholderTextColor={Serene.onSurfaceVariant}
-              value={password}
-              onChangeText={setPassword}
-              onFocus={() => setFocusedField('password')}
-              onBlur={() => setFocusedField(null)}
-              secureTextEntry={!showPassword}
-              autoCapitalize="none"
-              autoComplete="current-password"
-              textContentType="password"
-              returnKeyType="go"
-              onSubmitEditing={handleSubmit}
-              selectionColor={Serene.secondary}
-              accessibilityLabel="Mot de passe"
-            />
+          <View style={styles.card}>
+            <Text style={styles.fieldLabel}>Adresse e-mail</Text>
+            <View
+              style={[
+                styles.inputRow,
+                focusedField === 'email' && styles.inputRowFocused,
+                emailError && styles.inputRowError,
+              ]}>
+              <Icon name="mail" size={20} color={emailError ? Serene.error : iconColor('email')} />
+              <TextInput
+                style={styles.inputInline}
+                placeholder="vous@email.fr"
+                placeholderTextColor={Serene.onSurfaceVariant}
+                value={email}
+                onChangeText={setEmail}
+                onFocus={() => setFocusedField('email')}
+                onBlur={() => {
+                  setFocusedField(null);
+                  setEmailTouched(true);
+                }}
+                keyboardType="email-address"
+                inputMode="email"
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="email"
+                textContentType="username"
+                returnKeyType="next"
+                submitBehavior="submit"
+                onSubmitEditing={() => passwordRef.current?.focus()}
+                selectionColor={Tint.primary}
+                accessibilityLabel="Adresse e-mail"
+                aria-invalid={emailError}
+              />
+            </View>
+            {emailError ? (
+              <View style={styles.errorRow} accessibilityLiveRegion="polite">
+                <Icon name="error" size={16} color={Serene.error} />
+                <Text style={styles.errorText}>Saisissez une adresse e-mail valide.</Text>
+              </View>
+            ) : null}
+
+            <Text style={[styles.fieldLabel, styles.fieldLabelSpaced]}>Mot de passe</Text>
+            <View
+              style={[styles.inputRow, focusedField === 'password' && styles.inputRowFocused]}>
+              <Icon name="lock" size={20} color={iconColor('password')} />
+              <TextInput
+                ref={passwordRef}
+                style={styles.inputInline}
+                placeholder="Votre mot de passe"
+                placeholderTextColor={Serene.onSurfaceVariant}
+                value={password}
+                onChangeText={setPassword}
+                onFocus={() => setFocusedField('password')}
+                onBlur={() => setFocusedField(null)}
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
+                autoComplete="current-password"
+                textContentType="password"
+                returnKeyType="go"
+                onSubmitEditing={handleSubmit}
+                selectionColor={Tint.primary}
+                accessibilityLabel="Mot de passe"
+              />
+              <Pressable
+                style={({ pressed }) => [pressed && styles.iconPressed]}
+                hitSlop={10}
+                accessibilityRole="button"
+                onPress={() => setShowPassword((value) => !value)}
+                accessibilityLabel={
+                  showPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'
+                }>
+                <Icon
+                  name={showPassword ? 'visibility' : 'visibility_off'}
+                  size={22}
+                  color={iconColor('password')}
+                />
+              </Pressable>
+            </View>
+
+            <View style={styles.optionsRow}>
+              <View style={styles.rememberRow}>
+                <Switch
+                  value={remember}
+                  onValueChange={setRemember}
+                  trackColor={{ false: Serene.surfaceContainerHigh, true: Tint.primary }}
+                  thumbColor={Serene.surfaceContainerLowest}
+                  {...(Platform.OS === 'web' ? { activeThumbColor: Serene.surfaceContainerLowest } : {})}
+                  ios_backgroundColor={Serene.surfaceContainerHigh}
+                  accessibilityLabel="Rester connecté"
+                />
+                <Pressable
+                  hitSlop={8}
+                  onPress={() => setRemember((value) => !value)}
+                  accessibilityElementsHidden
+                  importantForAccessibility="no">
+                  <Text style={styles.rememberText} numberOfLines={1}>
+                    Rester connecté
+                  </Text>
+                </Pressable>
+              </View>
+              <View style={styles.optionsDivider} />
+              <Pressable
+                style={({ pressed }) => [pressed && styles.linkPressed]}
+                hitSlop={8}
+                accessibilityRole="link"
+                onPress={() => router.push('/forgot-password')}>
+                <Text style={styles.forgotText} numberOfLines={1}>Mot de passe oublié ?</Text>
+              </Pressable>
+            </View>
+
             <Pressable
-              style={({ pressed }) => [pressed && styles.iconPressed]}
-              hitSlop={10}
+              style={({ pressed }) => [
+                styles.primaryButton,
+                !valid && styles.primaryButtonDisabled,
+                pressed && canSubmit && styles.primaryButtonPressed,
+              ]}
               accessibilityRole="button"
-              onPress={() => setShowPassword((value) => !value)}
-              accessibilityLabel={showPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}>
-              <Icon
-                name={showPassword ? 'visibility_off' : 'visibility'}
-                size={22}
-                color={focusedField === 'password' ? Serene.secondary : Serene.onSurfaceVariant}
-              />
+              accessibilityState={{ disabled: !canSubmit, busy: loading }}
+              disabled={!canSubmit}
+              onPress={handleSubmit}>
+              {loading ? (
+                <>
+                  <ActivityIndicator color={Serene.onPrimary} />
+                  <Text style={styles.primaryButtonText}>Connexion…</Text>
+                </>
+              ) : (
+                <>
+                  <Text
+                    style={[styles.primaryButtonText, !valid && styles.primaryButtonTextDisabled]}>
+                    Se connecter
+                  </Text>
+                  <Icon
+                    name="arrow_forward"
+                    size={22}
+                    color={Serene.onPrimary}
+                  />
+                </>
+              )}
             </Pressable>
           </View>
-
-          <View style={styles.optionsRow}>
-            <View style={styles.rememberRow}>
-              <Switch
-                value={remember}
-                onValueChange={setRemember}
-                trackColor={{ false: Serene.surfaceContainerHigh, true: Serene.secondary }}
-                thumbColor={Serene.surfaceContainerLowest}
-                ios_backgroundColor={Serene.surfaceContainerHigh}
-                accessibilityLabel="Rester connecté"
-              />
-              <Text style={styles.rememberText}>Rester connecté</Text>
-            </View>
-            <Pressable
-              style={({ pressed }) => [pressed && styles.linkPressed]}
-              hitSlop={8}
-              accessibilityRole="link"
-              onPress={() => router.push('/forgot-password')}>
-              <Text style={styles.forgotText}>Mot de passe oublié ?</Text>
-            </Pressable>
-          </View>
-
-          <Pressable
-            style={({ pressed }) => [
-              styles.primaryButton,
-              !valid && styles.primaryButtonDisabled,
-              pressed && valid && styles.primaryButtonPressed,
-            ]}
-            accessibilityRole="button"
-            accessibilityState={{ disabled: !valid }}
-            disabled={!valid}
-            onPress={handleSubmit}>
-            <Text
-              style={[styles.primaryButtonText, !valid && styles.primaryButtonTextDisabled]}>
-              Se connecter
-            </Text>
-            <Icon
-              name="arrow_forward"
-              size={20}
-              color={valid ? Serene.onPrimary : Serene.onSurfaceVariant}
-            />
-          </Pressable>
-
-          <Pressable
-            style={({ pressed }) => [styles.biometricRow, pressed && styles.linkPressed]}
-            hitSlop={8}
-            accessibilityRole="button"
-            onPress={() => router.replace('/dashboard')}>
-            <Icon name="face" size={21} color={Serene.secondary} />
-            <Text style={styles.biometricText}>Déverrouiller avec Face ID</Text>
-          </Pressable>
 
           <View style={styles.dividerRow}>
             <View style={styles.divider} />
-            <Text style={styles.dividerText}>ou</Text>
+            <Text style={styles.dividerText}>Ou se connecter avec</Text>
             <View style={styles.divider} />
           </View>
 
@@ -194,7 +248,8 @@ export default function LoginScreen() {
             <Pressable
               style={({ pressed }) => [styles.socialButton, pressed && styles.socialButtonPressed]}
               accessibilityRole="button"
-              accessibilityLabel="Continuer avec Google">
+              accessibilityLabel="Continuer avec Google"
+              onPress={() => router.replace('/dashboard')}>
               <Image
                 source={require('../../../../assets/images/brand/google.png')}
                 style={styles.brandIcon}
@@ -205,7 +260,8 @@ export default function LoginScreen() {
             <Pressable
               style={({ pressed }) => [styles.socialButton, pressed && styles.socialButtonPressed]}
               accessibilityRole="button"
-              accessibilityLabel="Continuer avec Apple">
+              accessibilityLabel="Continuer avec Apple"
+              onPress={() => router.replace('/dashboard')}>
               <Image
                 source={require('../../../../assets/images/brand/apple.png')}
                 style={styles.appleIcon}
@@ -214,6 +270,16 @@ export default function LoginScreen() {
               <Text style={styles.socialText}>Apple</Text>
             </Pressable>
           </View>
+
+          <Pressable
+            style={({ pressed }) => [styles.biometricButton, pressed && styles.socialButtonPressed]}
+            accessibilityRole="button"
+            accessibilityLabel={BIOMETRIC.label}
+            onPress={() => router.replace('/dashboard')}>
+            <Icon name="verified_user" size={22} color={Tint.primary} />
+            <Text style={styles.biometricText}>{BIOMETRIC.label}</Text>
+            <Icon name={BIOMETRIC.icon} size={24} color={Tint.primary} />
+          </Pressable>
 
           <View style={styles.footer}>
             <Text style={styles.footerText}>Pas encore de compte ?</Text>
@@ -226,11 +292,9 @@ export default function LoginScreen() {
             </Pressable>
           </View>
 
-          <View style={styles.demoCard}>
-            <Icon name="science" size={20} color={Serene.success} />
-            <Text style={styles.demoText}>
-              Version de démonstration : l’e-mail et le mot de passe sont préremplis.
-            </Text>
+          <View style={styles.securityRow}>
+            <Icon name="lock" size={16} color={Serene.onSurfaceVariant} filled />
+            <Text style={styles.securityText}>Votre sécurité, notre priorité</Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -238,10 +302,50 @@ export default function LoginScreen() {
   );
 }
 
+/** Illustration décorative : téléphone, calendrier et notifications. */
+function HeroIllustration() {
+  return (
+    <View style={styles.art} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      <View style={styles.artBlob} />
+      <View style={styles.artPhone}>
+        {[0, 1, 2].map((row) => (
+          <View key={row} style={styles.artRow}>
+            <Icon
+              name="check_circle"
+              size={16}
+              color={row === 2 ? Serene.success : Tint.primary}
+              filled
+            />
+            <View style={styles.artLines}>
+              <View style={styles.artLine} />
+              <View style={[styles.artLine, styles.artLineShort]} />
+            </View>
+          </View>
+        ))}
+        <View style={styles.artButton} />
+      </View>
+      <View style={styles.artCalendar}>
+        <Icon name="calendar_month" size={30} color={Tint.primary} filled />
+      </View>
+      <View style={styles.artBell}>
+        <Icon name="notifications" size={40} color={Tint.amber} filled />
+        <View style={styles.artBellDot} />
+      </View>
+      <View style={styles.artBadge}>
+        <Icon name="notifications" size={20} color={Serene.onPrimary} filled />
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: Serene.surface,
+    backgroundColor: Tint.softer,
+  },
+  decor: {
+    ...StyleSheet.absoluteFill,
+    overflow: 'hidden',
   },
   flex: {
     flex: 1,
@@ -250,20 +354,42 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
+    width: '100%',
+    maxWidth: 440,
+    alignSelf: 'center',
     paddingHorizontal: 20,
-    paddingTop: Space.xs,
-    paddingBottom: 32,
+    paddingTop: Space.md,
+    paddingBottom: 40,
   },
-  topBar: {
-    height: 44,
-    justifyContent: 'center',
+  blobTop: {
+    position: 'absolute',
+    top: -120,
+    right: -110,
+    width: 300,
+    height: 300,
+    borderRadius: Radius.full,
+    backgroundColor: Tint.glow,
+    opacity: 0.28,
   },
-  backButton: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: -10,
+  waveBottom: {
+    position: 'absolute',
+    bottom: -260,
+    left: -80,
+    right: -80,
+    height: 330,
+    borderRadius: 400,
+    backgroundColor: Tint.lavender,
+    opacity: 0.9,
+  },
+  waveBottomInner: {
+    position: 'absolute',
+    bottom: -300,
+    right: -160,
+    width: 420,
+    height: 340,
+    borderRadius: Radius.full,
+    backgroundColor: Tint.glow,
+    opacity: 0.25,
   },
   iconPressed: {
     opacity: 0.55,
@@ -274,17 +400,21 @@ const styles = StyleSheet.create({
   brandRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
-    marginTop: Space.lg,
-    marginBottom: 28,
+    gap: 14,
   },
   logo: {
     width: 64,
     height: 64,
     borderRadius: 18,
-    backgroundColor: Serene.primaryContainer,
+    backgroundColor: Tint.navy,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+    shadowColor: Tint.navy,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 6,
   },
   logoLetter: {
     fontFamily: FontFamily.headingBold,
@@ -292,55 +422,235 @@ const styles = StyleSheet.create({
     lineHeight: 44,
     color: Serene.onPrimary,
   },
+  logoSwoosh: {
+    position: 'absolute',
+    bottom: 12,
+    right: 8,
+    width: 30,
+    height: 7,
+    borderRadius: Radius.full,
+    backgroundColor: Tint.primary,
+    transform: [{ rotate: '-18deg' }],
+  },
   wordmark: {
     fontFamily: FontFamily.headingBold,
     fontSize: 28,
     lineHeight: 34,
     letterSpacing: -0.4,
-    color: Serene.onSurface,
+    color: Tint.navy,
+  },
+  wordmarkAccent: {
+    color: Tint.primary,
+  },
+  tagline: {
+    fontFamily: FontFamily.bodyMedium,
+    fontSize: 13,
+    lineHeight: 18,
+    color: Serene.onSurfaceVariant,
+    marginTop: 2,
+  },
+  hero: {
+    marginTop: 28,
+    minHeight: 190,
+  },
+  heroText: {
+    width: '62%',
+    zIndex: 1,
   },
   title: {
     fontFamily: FontFamily.headingBold,
-    fontSize: 31,
-    lineHeight: 37,
-    letterSpacing: -0.7,
-    color: Serene.onSurface,
+    fontSize: 34,
+    lineHeight: 40,
+    letterSpacing: -0.8,
+    color: Tint.navy,
+  },
+  titleAccent: {
+    color: Tint.primary,
+  },
+  titleUnderline: {
+    width: 150,
+    height: 4,
+    borderRadius: Radius.full,
+    backgroundColor: Tint.primary,
+    marginTop: 6,
+    marginLeft: 14,
+    transform: [{ rotate: '-2deg' }],
   },
   subtitle: {
     fontFamily: FontFamily.body,
     fontSize: 15,
     lineHeight: 22,
     color: Serene.onSurfaceVariant,
-    marginTop: 8,
+    marginTop: 16,
+  },
+  art: {
+    position: 'absolute',
+    top: -6,
+    right: -8,
+    width: 150,
+    height: 190,
+  },
+  artBlob: {
+    position: 'absolute',
+    top: 10,
+    left: 0,
+    width: 150,
+    height: 170,
+    borderRadius: 80,
+    backgroundColor: Tint.lavender,
+  },
+  artPhone: {
+    position: 'absolute',
+    top: 8,
+    left: 42,
+    width: 88,
+    height: 160,
+    borderRadius: 20,
+    borderWidth: 4,
+    borderColor: Tint.navy,
+    backgroundColor: Serene.surfaceContainerLowest,
+    paddingTop: 22,
+    paddingHorizontal: 9,
+    gap: 12,
+    transform: [{ rotate: '12deg' }],
+    shadowColor: Tint.navy,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  artRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  artLines: {
+    flex: 1,
+    gap: 4,
+  },
+  artLine: {
+    height: 5,
+    borderRadius: Radius.full,
+    backgroundColor: Tint.border,
+  },
+  artLineShort: {
+    width: '60%',
+  },
+  artButton: {
+    height: 14,
+    borderRadius: 6,
+    backgroundColor: Tint.soft,
+    marginTop: 4,
+  },
+  artCalendar: {
+    position: 'absolute',
+    top: 62,
+    left: 6,
+    width: 50,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: Serene.surfaceContainerLowest,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: Tint.navy,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 4,
+    transform: [{ rotate: '-8deg' }],
+  },
+  artBell: {
+    position: 'absolute',
+    top: 24,
+    right: -4,
+    transform: [{ rotate: '14deg' }],
+  },
+  artBellDot: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    width: 10,
+    height: 10,
+    borderRadius: Radius.full,
+    backgroundColor: Tint.red,
+    borderWidth: 2,
+    borderColor: Serene.surfaceContainerLowest,
+  },
+  artBadge: {
+    position: 'absolute',
+    bottom: 14,
+    right: 8,
+    width: 38,
+    height: 38,
+    borderRadius: 11,
+    backgroundColor: Tint.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: Tint.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  card: {
+    marginTop: Space.lg,
+    padding: 16,
+    borderRadius: 22,
+    backgroundColor: Serene.surfaceContainerLowest,
+    shadowColor: Tint.navy,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.07,
+    shadowRadius: 24,
+    elevation: 4,
   },
   fieldLabel: {
     fontFamily: FontFamily.bodySemiBold,
-    fontSize: 14,
-    lineHeight: 19,
-    color: Serene.onSurface,
-    marginTop: 22,
-    marginBottom: 8,
+    fontSize: 15,
+    lineHeight: 20,
+    color: Tint.navy,
+    marginBottom: 10,
+  },
+  fieldLabelSpaced: {
+    marginTop: 20,
+  },
+  inputRowError: {
+    borderColor: Serene.error,
+    backgroundColor: Serene.surfaceContainerLowest,
+  },
+  errorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+  },
+  errorText: {
+    fontFamily: FontFamily.bodyMedium,
+    fontSize: 13,
+    lineHeight: 18,
+    color: Serene.error,
   },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    height: 56,
+    height: 54,
     paddingHorizontal: 16,
-    borderRadius: Radius.xl,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'transparent',
-    backgroundColor: Serene.surfaceContainerLow,
+    borderColor: Tint.border,
+    backgroundColor: Tint.soft,
   },
   inputRowFocused: {
-    borderColor: Serene.secondary,
+    borderColor: Tint.primary,
     backgroundColor: Serene.surfaceContainerLowest,
   },
   inputInline: {
     flex: 1,
+    minWidth: 0,
+    outlineWidth: 0,
     fontFamily: FontFamily.body,
     fontSize: 16,
-    color: Serene.onSurface,
+    color: Tint.navy,
     paddingVertical: 0,
   },
   optionsRow: {
@@ -355,71 +665,71 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   rememberText: {
-    fontFamily: FontFamily.body,
-    fontSize: 14,
-    lineHeight: 19,
-    color: Serene.onSurface,
+    fontFamily: FontFamily.bodyMedium,
+    fontSize: 13,
+    lineHeight: 18,
+    color: Tint.navy,
+  },
+  optionsDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: 24,
+    backgroundColor: Tint.border,
+    marginHorizontal: 10,
   },
   forgotText: {
     fontFamily: FontFamily.bodySemiBold,
-    fontSize: 14,
-    lineHeight: 19,
-    color: Serene.secondary,
+    fontSize: 13,
+    lineHeight: 18,
+    color: Tint.primary,
   },
   primaryButton: {
-    height: 58,
-    borderRadius: Radius.xl,
-    backgroundColor: Serene.primaryContainer,
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: Tint.black,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
-    marginTop: Space.lg,
+    gap: 12,
+    marginTop: 22,
+    shadowColor: Tint.black,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.22,
+    shadowRadius: 16,
+    elevation: 8,
   },
   primaryButtonDisabled: {
-    backgroundColor: Serene.surfaceContainerHigh,
+    // Bouton noir estompé : reste reconnaissable comme bouton, sans se confondre avec un champ.
+    opacity: 0.3,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   primaryButtonPressed: {
-    opacity: 0.9,
+    backgroundColor: Tint.blackPressed,
     transform: [{ scale: 0.99 }],
   },
   primaryButtonText: {
     fontFamily: FontFamily.bodySemiBold,
-    fontSize: 16,
-    lineHeight: 21,
+    fontSize: 18,
+    lineHeight: 23,
     color: Serene.onPrimary,
   },
   primaryButtonTextDisabled: {
-    color: Serene.onSurfaceVariant,
-  },
-  biometricRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 8,
-    marginTop: 12,
-  },
-  biometricText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 14,
-    lineHeight: 19,
-    color: Serene.secondary,
+    color: Serene.onPrimary,
   },
   dividerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    marginTop: Space.lg,
-    marginBottom: Space.lg,
+    marginTop: 28,
+    marginBottom: 18,
   },
   divider: {
     flex: 1,
     height: StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(11, 28, 48, 0.12)',
+    backgroundColor: Tint.border,
   },
   dividerText: {
-    fontFamily: FontFamily.body,
+    fontFamily: FontFamily.bodyMedium,
     fontSize: 14,
     lineHeight: 18,
     color: Serene.onSurfaceVariant,
@@ -430,33 +740,49 @@ const styles = StyleSheet.create({
   },
   socialButton: {
     flex: 1,
-    height: 54,
-    borderRadius: Radius.xl,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(11, 28, 48, 0.14)',
+    height: 56,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: Tint.border,
     backgroundColor: Serene.surfaceContainerLowest,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: 10,
   },
   socialButtonPressed: {
-    backgroundColor: Serene.surfaceContainerLow,
+    backgroundColor: Tint.soft,
     transform: [{ scale: 0.99 }],
   },
   socialText: {
     fontFamily: FontFamily.bodySemiBold,
-    fontSize: 15,
-    lineHeight: 20,
-    color: Serene.onSurface,
+    fontSize: 16,
+    lineHeight: 21,
+    color: Tint.navy,
   },
   brandIcon: {
-    width: 20,
-    height: 20,
+    width: 22,
+    height: 22,
   },
   appleIcon: {
-    width: 21,
-    height: 21,
+    width: 22,
+    height: 22,
+  },
+  biometricButton: {
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: Tint.soft,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    marginTop: 14,
+  },
+  biometricText: {
+    fontFamily: FontFamily.bodySemiBold,
+    fontSize: 15,
+    lineHeight: 20,
+    color: Tint.primary,
   },
   footer: {
     flexDirection: 'row',
@@ -474,22 +800,19 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.bodySemiBold,
     fontSize: 14,
     lineHeight: 19,
-    color: Serene.secondary,
+    color: Tint.primary,
   },
-  demoCard: {
+  securityRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    marginTop: Space.lg,
-    padding: 16,
-    borderRadius: Radius.xl,
-    backgroundColor: Serene.successContainer,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 14,
   },
-  demoText: {
-    flex: 1,
+  securityText: {
     fontFamily: FontFamily.body,
     fontSize: 13,
-    lineHeight: 19,
+    lineHeight: 18,
     color: Serene.onSurfaceVariant,
   },
 });

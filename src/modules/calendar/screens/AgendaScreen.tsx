@@ -39,7 +39,7 @@ const SECTIONS: AgendaSection[] = [
       },
       {
         id: 'reunion',
-        title: 'Réunion projet PLAA',
+        title: 'Réunion projet Bringo Mind',
         time: '14:00',
         end: '15:00',
         location: 'Visioconférence',

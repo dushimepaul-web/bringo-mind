@@ -19,7 +19,7 @@ const FAQ = [
       'Chaque élément possède un niveau de visibilité. Un document marqué « privé » reste visible uniquement par vous, même au sein du foyer.',
   },
   {
-    question: 'Puis-je utiliser PLAA sans connexion externe ?',
+    question: 'Puis-je utiliser Bringo Mind sans connexion externe ?',
     answer:
       'Oui. Les connexions Gmail ou Agenda sont optionnelles : elles permettent l’import automatique mais toutes les fonctions restent accessibles manuellement.',
   },
@@ -221,14 +221,14 @@ export default function HelpSupportScreen() {
         )}
 
         <View style={styles.footerCard}>
-          <FooterRow icon="mail" label="support@plaa.app" hint="Réponse par e-mail" />
+          <FooterRow icon="mail" label="support@bringomind.app" hint="Réponse par e-mail" />
           <View style={styles.divider} />
-          <FooterRow icon="public" label="status.plaa.app" hint="État des services" />
+          <FooterRow icon="public" label="status.bringomind.app" hint="État des services" />
           <View style={styles.divider} />
           <FooterRow icon="description" label="Conditions & confidentialité" hint="Documents légaux" />
         </View>
 
-        <Text style={styles.version}>PLAA 1.0.0 • Build 2024.05</Text>
+        <Text style={styles.version}>Bringo Mind 1.0.0 • Build 2026.11</Text>
       </ScrollView>
     </SafeAreaView>
   );

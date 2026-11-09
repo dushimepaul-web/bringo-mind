@@ -32,6 +32,24 @@ export const Serene = {
   success: '#15803d',
 } as const;
 
+/**
+ * Teinte validée sur l'écran de connexion (reprise de la maquette « Documents & IA ») :
+ * fond blanc lavande, panneaux bleutés, reflet turquoise, accent #006a61 et bouton principal noir.
+ */
+export const Tint = {
+  primary: '#006a61',
+  navy: '#131b2e',
+  soft: '#eff4ff',
+  softer: '#f8f9ff',
+  border: '#d3e4fe',
+  lavender: '#e5eeff',
+  glow: '#86f2e4',
+  amber: '#f59e0b',
+  red: '#ef4444',
+  black: '#000000',
+  blackPressed: '#1f2329',
+} as const;
+
 export const FontFamily = {
   heading: 'PlusJakartaSans_600SemiBold',
   headingBold: 'PlusJakartaSans_700Bold',

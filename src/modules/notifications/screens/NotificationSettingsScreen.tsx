@@ -139,7 +139,7 @@ export default function NotificationSettingsScreen() {
             <ToggleRow
               icon="campaign"
               label="Nouveautés produit"
-              hint="Conseils et évolutions de PLAA"
+              hint="Conseils et évolutions de Bringo Mind"
               value={types.product}
               onChange={() => toggleType('product')}
             />

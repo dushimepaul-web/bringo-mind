@@ -205,7 +205,7 @@ export default function EventFormScreen() {
                 />
                 <Text style={hasConflict ? styles.conflictText : styles.freeText}>
                   {hasConflict
-                    ? 'Conflit détecté avec « Réunion projet PLAA » (14:00 – 15:00). Choisissez un autre horaire ou acceptez le chevauchement.'
+                    ? 'Conflit détecté avec « Réunion projet Bringo Mind » (14:00 – 15:00). Choisissez un autre horaire ou acceptez le chevauchement.'
                     : 'Aucun conflit détecté sur ce créneau.'}
                 </Text>
               </View>

@@ -1,257 +1,313 @@
 // S-02 - Inscription | Module M01 Comptes et authentification | Phase S2
 import { router } from 'expo-router';
-import { useState } from 'react';
-import {
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useState, type ReactNode } from 'react';
+import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Icon } from '@/components/icon';
-import { FontFamily, Radius, Serene, Shadow, Space, Typography } from '@/constants/design';
+import { FontFamily, Radius, Serene, Space, Tint } from '@/constants/design';
+
+import {
+  AuthBrand,
+  AuthCard,
+  AuthScreen,
+  AuthTitle,
+  Divider,
+  InfoNote,
+  PrimaryButton,
+  TextLink,
+  formStyles,
+} from '../components/auth-ui';
+
+type Field = 'firstName' | 'lastName' | 'email' | 'password' | 'confirm';
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function RegisterScreen() {
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirm, setConfirm] = useState('');
+  // Démo : formulaire prérempli pour parcourir l'inscription en un appui.
+  const [firstName, setFirstName] = useState('Claire');
+  const [lastName, setLastName] = useState('Martin');
+  const [email, setEmail] = useState('claire.martin@email.fr');
+  const [emailTouched, setEmailTouched] = useState(false);
+  const [password, setPassword] = useState('Demo2026!');
+  const [confirm, setConfirm] = useState('Demo2026!');
   const [showPassword, setShowPassword] = useState(false);
-  const [terms, setTerms] = useState(false);
+  const [terms, setTerms] = useState(true);
   const [newsletter, setNewsletter] = useState(true);
+  const [focused, setFocused] = useState<Field | null>(null);
+  const [loading, setLoading] = useState(false);
 
   const strength = getStrength(password);
+  const emailValid = EMAIL_PATTERN.test(email.trim());
+  const emailError = emailTouched && email.length > 0 && !emailValid;
   const mismatch = confirm.length > 0 && confirm !== password;
   const valid =
     firstName.trim().length > 1 &&
     lastName.trim().length > 1 &&
-    email.includes('@') &&
+    emailValid &&
     password.length >= 8 &&
     confirm === password &&
     terms;
 
+  const focusProps = (field: Field) => ({
+    onFocus: () => setFocused(field),
+    onBlur: () => {
+      setFocused(null);
+      if (field === 'email') setEmailTouched(true);
+    },
+    selectionColor: Tint.primary,
+    placeholderTextColor: Serene.onSurfaceVariant,
+  });
+  const iconColor = (field: Field) =>
+    focused === field ? Tint.primary : Serene.onSurfaceVariant;
+
+  const handleSubmit = () => {
+    if (!valid || loading) return;
+    setLoading(true);
+    // Démo : simule la création du compte avant la vérification de l'e-mail.
+    setTimeout(() => router.push('/verify-email'), 700);
+  };
+
   return (
-    <SafeAreaView style={styles.safe}>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={styles.content}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled">
-          <View style={styles.topBar}>
-            <Pressable
-              style={styles.backButton}
-              accessibilityRole="button"
-              accessibilityLabel="Retour"
-              onPress={() => router.back()}>
-              <Icon name="arrow_back" size={22} color={Serene.onSurface} />
-            </Pressable>
-            <View style={styles.logo}>
-              <Text style={styles.logoLetter}>K</Text>
-            </View>
-            <View style={styles.backButton} />
-          </View>
+    <AuthScreen back>
+      <AuthBrand />
+      <AuthTitle
+        lead="Créer votre"
+        accent="compte"
+        subtitle="Quelques informations suffisent pour commencer."
+      />
 
-          <Text style={styles.title}>Créer votre compte</Text>
-          <Text style={styles.subtitle}>
-            Quelques informations suffisent pour commencer.
-          </Text>
+      <View style={styles.social}>
+        <SocialButton
+          label="Google"
+          source={require('../../../../assets/images/brand/google.png')}
+          onPress={() => router.replace('/dashboard')}
+        />
+        <SocialButton
+          label="Apple"
+          source={require('../../../../assets/images/brand/apple.png')}
+          onPress={() => router.replace('/dashboard')}
+        />
+      </View>
 
-          <View style={styles.social}>
-            <Pressable style={styles.socialButton} accessibilityRole="button">
-              <Icon name="g_translate" size={18} color={Serene.onSurface} />
-              <Text style={styles.socialText}>Google</Text>
-            </Pressable>
-            <Pressable style={styles.socialButton} accessibilityRole="button">
-              <Icon name="phone_iphone" size={18} color={Serene.onSurface} />
-              <Text style={styles.socialText}>Apple</Text>
-            </Pressable>
-          </View>
+      <Divider label="Ou avec un e-mail" />
 
-          <View style={styles.dividerRow}>
-            <View style={styles.divider} />
-            <Text style={styles.dividerText}>ou avec un e-mail</Text>
-            <View style={styles.divider} />
-          </View>
-
-          <View style={styles.row}>
-            <View style={styles.rowField}>
-              <FieldLabel text="Prénom" required />
-              <TextInput
-                style={styles.input}
-                placeholder="Claire"
-                placeholderTextColor={Serene.onSurfaceVariant}
-                value={firstName}
-                onChangeText={setFirstName}
-                autoCapitalize="words"
-                accessibilityLabel="Prénom"
-              />
-            </View>
-            <View style={styles.rowField}>
-              <FieldLabel text="Nom" required />
-              <TextInput
-                style={styles.input}
-                placeholder="Martin"
-                placeholderTextColor={Serene.onSurfaceVariant}
-                value={lastName}
-                onChangeText={setLastName}
-                autoCapitalize="words"
-                accessibilityLabel="Nom"
-              />
-            </View>
-          </View>
-
-          <FieldLabel text="Adresse e-mail" required />
-          <View style={styles.inputRow}>
-            <Icon name="mail" size={18} color={Serene.onSurfaceVariant} />
+      <AuthCard style={styles.card}>
+        <View style={styles.row}>
+          <View style={styles.rowField}>
+            <FieldLabel text="Prénom" required />
             <TextInput
-              style={styles.inputInline}
-              placeholder="vous@email.fr"
-              placeholderTextColor={Serene.onSurfaceVariant}
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoComplete="email"
-              accessibilityLabel="Adresse e-mail"
+              style={[formStyles.input, focused === 'firstName' && formStyles.inputRowFocused]}
+              {...focusProps('firstName')}
+              placeholder="Prénom"
+              value={firstName}
+              onChangeText={setFirstName}
+              autoCapitalize="words"
+              autoComplete="given-name"
+              accessibilityLabel="Prénom"
             />
           </View>
-
-          <FieldLabel text="Mot de passe" required />
-          <View style={styles.inputRow}>
-            <Icon name="lock" size={18} color={Serene.onSurfaceVariant} />
+          <View style={styles.rowField}>
+            <FieldLabel text="Nom" required />
             <TextInput
-              style={styles.inputInline}
-              placeholder="8 caractères minimum"
-              placeholderTextColor={Serene.onSurfaceVariant}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPassword}
-              autoCapitalize="none"
-              accessibilityLabel="Mot de passe"
+              style={[formStyles.input, focused === 'lastName' && formStyles.inputRowFocused]}
+              {...focusProps('lastName')}
+              placeholder="Nom"
+              value={lastName}
+              onChangeText={setLastName}
+              autoCapitalize="words"
+              autoComplete="family-name"
+              accessibilityLabel="Nom"
             />
-            <Pressable
-              onPress={() => setShowPassword((value) => !value)}
-              accessibilityLabel={showPassword ? 'Masquer' : 'Afficher'}>
-              <Icon
-                name={showPassword ? 'visibility_off' : 'visibility'}
-                size={18}
-                color={Serene.onSurfaceVariant}
-              />
-            </Pressable>
           </View>
+        </View>
 
-          {password.length > 0 ? (
-            <View style={styles.strengthBlock}>
-              <View style={styles.strengthTrack}>
-                <View
-                  style={[
-                    styles.strengthFill,
-                    { width: `${(strength.score / 4) * 100}%` },
-                    strength.score >= 3 ? styles.strengthGood : styles.strengthWeak,
-                  ]}
-                />
-              </View>
-              <Text style={styles.strengthText}>{strength.label}</Text>
-            </View>
-          ) : null}
-
-          <FieldLabel text="Confirmer le mot de passe" required />
-          <View style={[styles.inputRow, mismatch && styles.inputRowError]}>
-            <Icon name="lock_reset" size={18} color={Serene.onSurfaceVariant} />
-            <TextInput
-              style={styles.inputInline}
-              placeholder="Répétez le mot de passe"
-              placeholderTextColor={Serene.onSurfaceVariant}
-              value={confirm}
-              onChangeText={setConfirm}
-              secureTextEntry={!showPassword}
-              autoCapitalize="none"
-              accessibilityLabel="Confirmer le mot de passe"
-            />
-            {confirm.length > 0 ? (
-              <Icon
-                name={mismatch ? 'error' : 'check_circle'}
-                size={18}
-                color={mismatch ? Serene.error : Serene.success}
-              />
-            ) : null}
+        <FieldLabel text="Adresse e-mail" required spaced />
+        <View
+          style={[
+            formStyles.inputRow,
+            focused === 'email' && formStyles.inputRowFocused,
+            emailError && formStyles.inputRowError,
+          ]}>
+          <Icon name="mail" size={20} color={emailError ? Serene.error : iconColor('email')} />
+          <TextInput
+            style={formStyles.inputInline}
+            {...focusProps('email')}
+            placeholder="vous@email.fr"
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            inputMode="email"
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoComplete="email"
+            accessibilityLabel="Adresse e-mail"
+            aria-invalid={emailError}
+          />
+        </View>
+        {emailError ? (
+          <View style={formStyles.errorRow} accessibilityLiveRegion="polite">
+            <Icon name="error" size={16} color={Serene.error} />
+            <Text style={formStyles.errorText}>Saisissez une adresse e-mail valide.</Text>
           </View>
-          {mismatch ? (
-            <Text style={styles.errorText}>Les mots de passe ne correspondent pas.</Text>
-          ) : null}
+        ) : null}
 
+        <FieldLabel text="Mot de passe" required spaced />
+        <View style={[formStyles.inputRow, focused === 'password' && formStyles.inputRowFocused]}>
+          <Icon name="lock" size={20} color={iconColor('password')} />
+          <TextInput
+            style={formStyles.inputInline}
+            {...focusProps('password')}
+            placeholder="8 caractères minimum"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry={!showPassword}
+            autoCapitalize="none"
+            autoComplete="new-password"
+            accessibilityLabel="Mot de passe"
+          />
           <Pressable
-            style={styles.checkRow}
-            onPress={() => setTerms((value) => !value)}
-            accessibilityRole="checkbox"
-            accessibilityState={{ checked: terms }}>
-            <View style={[styles.checkbox, terms && styles.checkboxActive]}>
-              {terms ? <Icon name="check" size={12} color={Serene.onPrimary} /> : null}
-            </View>
-            <Text style={styles.checkText}>
-              J’accepte les{' '}
-              <Text style={styles.link}>conditions d’utilisation</Text> et la{' '}
-              <Text style={styles.link}>politique de confidentialité</Text>.
-            </Text>
-          </Pressable>
-
-          <Pressable
-            style={styles.checkRow}
-            onPress={() => setNewsletter((value) => !value)}
-            accessibilityRole="checkbox"
-            accessibilityState={{ checked: newsletter }}>
-            <View style={[styles.checkbox, newsletter && styles.checkboxActive]}>
-              {newsletter ? <Icon name="check" size={12} color={Serene.onPrimary} /> : null}
-            </View>
-            <Text style={styles.checkText}>
-              Recevoir les conseils PLAA et les nouveautés (facultatif).
-            </Text>
-          </Pressable>
-
-          <Pressable
-            style={[styles.primaryButton, !valid && styles.primaryButtonDisabled]}
+            style={({ pressed }) => [pressed && styles.pressed]}
+            hitSlop={10}
             accessibilityRole="button"
-            disabled={!valid}
-            onPress={() => router.push('/verify-email')}>
-            <Text style={styles.primaryButtonText}>Créer mon compte</Text>
-            <Icon name="arrow_forward" size={18} color={Serene.onPrimary} />
+            onPress={() => setShowPassword((value) => !value)}
+            accessibilityLabel={showPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}>
+            <Icon
+              name={showPassword ? 'visibility' : 'visibility_off'}
+              size={22}
+              color={iconColor('password')}
+            />
           </Pressable>
+        </View>
 
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>Déjà un compte ?</Text>
-            <Pressable onPress={() => router.push('/login')}>
-              <Text style={styles.footerLink}>Se connecter</Text>
-            </Pressable>
+        {password.length > 0 ? (
+          <View style={styles.strengthBlock}>
+            <View style={styles.strengthTrack}>
+              <View
+                style={[
+                  styles.strengthFill,
+                  { width: `${(strength.score / 4) * 100}%` },
+                  strength.score >= 3 ? styles.strengthGood : styles.strengthWeak,
+                ]}
+              />
+            </View>
+            <Text style={styles.strengthText}>{strength.label}</Text>
           </View>
+        ) : null}
 
-          <View style={styles.privacyCard}>
-            <Icon name="shield" size={15} color={Serene.onSurfaceVariant} />
-            <Text style={styles.privacyText}>
-              Vos données sont chiffrées et hébergées en Europe. Vous pouvez les exporter ou les
-              supprimer à tout moment.
-            </Text>
+        <FieldLabel text="Confirmer le mot de passe" required spaced />
+        <View
+          style={[
+            formStyles.inputRow,
+            focused === 'confirm' && formStyles.inputRowFocused,
+            mismatch && formStyles.inputRowError,
+          ]}>
+          <Icon name="lock_reset" size={20} color={mismatch ? Serene.error : iconColor('confirm')} />
+          <TextInput
+            style={formStyles.inputInline}
+            {...focusProps('confirm')}
+            placeholder="Répétez le mot de passe"
+            value={confirm}
+            onChangeText={setConfirm}
+            secureTextEntry={!showPassword}
+            autoCapitalize="none"
+            autoComplete="new-password"
+            accessibilityLabel="Confirmer le mot de passe"
+          />
+          {confirm.length > 0 ? (
+            <Icon
+              name={mismatch ? 'error' : 'check_circle'}
+              size={20}
+              color={mismatch ? Serene.error : Serene.success}
+            />
+          ) : null}
+        </View>
+        {mismatch ? (
+          <View style={formStyles.errorRow} accessibilityLiveRegion="polite">
+            <Icon name="error" size={16} color={Serene.error} />
+            <Text style={formStyles.errorText}>Les mots de passe ne correspondent pas.</Text>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+        ) : null}
+
+        <CheckRow checked={terms} onToggle={() => setTerms((value) => !value)}>
+          J’accepte les <Text style={styles.link}>conditions d’utilisation</Text> et la{' '}
+          <Text style={styles.link}>politique de confidentialité</Text>.
+        </CheckRow>
+        <CheckRow checked={newsletter} onToggle={() => setNewsletter((value) => !value)}>
+          Recevoir les conseils Bringo Mind et les nouveautés (facultatif).
+        </CheckRow>
+
+        <PrimaryButton
+          label="Créer mon compte"
+          loadingLabel="Création…"
+          disabled={!valid}
+          loading={loading}
+          onPress={handleSubmit}
+        />
+      </AuthCard>
+
+      <View style={formStyles.footerRow}>
+        <Text style={formStyles.footerText}>Déjà un compte ?</Text>
+        <TextLink label="Se connecter" onPress={() => router.push('/login')} />
+      </View>
+
+      <InfoNote icon="shield">
+        Vos données sont chiffrées et hébergées en Europe. Vous pouvez les exporter ou les
+        supprimer à tout moment.
+      </InfoNote>
+    </AuthScreen>
   );
 }
 
-function FieldLabel({ text, required }: { text: string; required?: boolean }) {
+function FieldLabel({ text, required, spaced }: { text: string; required?: boolean; spaced?: boolean }) {
   return (
-    <Text style={styles.fieldLabel}>
+    <Text style={[formStyles.fieldLabel, spaced && formStyles.fieldLabelSpaced]}>
       {text}
-      {required ? <Text style={styles.required}> *</Text> : null}
+      {required ? <Text style={formStyles.required}> *</Text> : null}
     </Text>
+  );
+}
+
+function SocialButton({
+  label,
+  source,
+  onPress,
+}: {
+  label: string;
+  source: number;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.socialButton, pressed && styles.socialPressed]}
+      accessibilityRole="button"
+      accessibilityLabel={`Continuer avec ${label}`}
+      onPress={onPress}>
+      <Image source={source} style={styles.socialIcon} resizeMode="contain" />
+      <Text style={styles.socialText}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function CheckRow({
+  checked,
+  onToggle,
+  children,
+}: {
+  checked: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <Pressable
+      style={styles.checkRow}
+      onPress={onToggle}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked }}>
+      <View style={[styles.checkbox, checked && styles.checkboxActive]}>
+        {checked ? <Icon name="check" size={16} color={Serene.onPrimary} /> : null}
+      </View>
+      <Text style={styles.checkText}>{children}</Text>
+    </Pressable>
   );
 }
 
@@ -270,158 +326,62 @@ function getStrength(value: string) {
 }
 
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: Serene.surface,
-  },
-  flex: {
-    flex: 1,
-  },
-  scroll: {
-    flex: 1,
-  },
-  content: {
-    paddingHorizontal: Space.gutter,
-    paddingTop: Space.xs,
-    paddingBottom: Space.lg,
-  },
-  topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: Space.md,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logo: {
-    width: 36,
-    height: 36,
-    borderRadius: Radius.md,
-    backgroundColor: Serene.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoLetter: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 19,
-    lineHeight: 24,
-    color: Serene.onPrimary,
-  },
-  title: {
-    ...Typography.headlineLg,
-    color: Serene.onSurface,
-  },
-  subtitle: {
-    fontFamily: FontFamily.body,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurfaceVariant,
-    marginTop: 3,
+  pressed: {
+    opacity: 0.55,
   },
   social: {
     flexDirection: 'row',
-    gap: 8,
-    marginTop: Space.md,
+    gap: 12,
+    marginTop: Space.lg,
   },
   socialButton: {
     flex: 1,
-    height: 46,
-    borderRadius: Radius.lg,
+    height: 56,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: Serene.outlineVariant,
+    borderColor: Tint.border,
     backgroundColor: Serene.surfaceContainerLowest,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: 10,
+  },
+  socialPressed: {
+    backgroundColor: Tint.soft,
+    transform: [{ scale: 0.99 }],
+  },
+  socialIcon: {
+    width: 22,
+    height: 22,
   },
   socialText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurface,
+    fontFamily: FontFamily.bodySemiBold,
+    fontSize: 16,
+    lineHeight: 21,
+    color: Tint.navy,
   },
-  dividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginVertical: Space.md,
-  },
-  divider: {
-    flex: 1,
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: Serene.surfaceContainerHigh,
-  },
-  dividerText: {
-    fontFamily: FontFamily.body,
-    fontSize: 10,
-    lineHeight: 14,
-    color: Serene.onSurfaceVariant,
+  card: {
+    marginTop: 0,
   },
   row: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 12,
   },
   rowField: {
     flex: 1,
-  },
-  fieldLabel: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 11,
-    lineHeight: 14,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-    color: Serene.onSurfaceVariant,
-    marginBottom: 5,
-    marginTop: 10,
-  },
-  required: {
-    color: Serene.error,
-  },
-  input: {
-    height: 46,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.surfaceContainerLow,
-    paddingHorizontal: 12,
-    fontFamily: FontFamily.body,
-    fontSize: 13,
-    color: Serene.onSurface,
-  },
-  inputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    height: 48,
-    paddingHorizontal: 12,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.surfaceContainerLow,
-  },
-  inputRowError: {
-    borderWidth: 1,
-    borderColor: Serene.error,
-  },
-  inputInline: {
-    flex: 1,
-    fontFamily: FontFamily.body,
-    fontSize: 13,
-    color: Serene.onSurface,
-    paddingVertical: 0,
+    minWidth: 0,
   },
   strengthBlock: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginTop: 6,
+    gap: 10,
+    marginTop: 10,
   },
   strengthTrack: {
     flex: 1,
-    height: 5,
+    height: 6,
     borderRadius: Radius.full,
-    backgroundColor: Serene.surfaceContainerHigh,
+    backgroundColor: Tint.soft,
     overflow: 'hidden',
   },
   strengthFill: {
@@ -436,101 +396,39 @@ const styles = StyleSheet.create({
   },
   strengthText: {
     fontFamily: FontFamily.bodyMedium,
-    fontSize: 10,
-    lineHeight: 14,
+    fontSize: 13,
+    lineHeight: 18,
     color: Serene.onSurfaceVariant,
-  },
-  errorText: {
-    fontFamily: FontFamily.body,
-    fontSize: 11,
-    lineHeight: 15,
-    color: Serene.error,
-    marginTop: 4,
   },
   checkRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 8,
-    marginTop: 12,
+    gap: 12,
+    marginTop: 18,
   },
   checkbox: {
-    width: 19,
-    height: 19,
-    borderRadius: 5,
+    width: 24,
+    height: 24,
+    borderRadius: 7,
     borderWidth: 1.5,
-    borderColor: Serene.outlineVariant,
+    borderColor: Tint.border,
+    backgroundColor: Tint.soft,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 1,
   },
   checkboxActive: {
-    backgroundColor: Serene.primary,
-    borderWidth: 0,
+    backgroundColor: Tint.primary,
+    borderColor: Tint.primary,
   },
   checkText: {
     flex: 1,
     fontFamily: FontFamily.body,
-    fontSize: 11,
-    lineHeight: 17,
+    fontSize: 14,
+    lineHeight: 21,
     color: Serene.onSurfaceVariant,
   },
   link: {
-    color: Serene.secondary,
-    textDecorationLine: 'underline',
-  },
-  primaryButton: {
-    height: 50,
-    borderRadius: Radius.xl,
-    backgroundColor: Serene.primary,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    marginTop: Space.md,
-    ...Shadow.floating,
-  },
-  primaryButtonDisabled: {
-    backgroundColor: Serene.surfaceContainerHigh,
-  },
-  primaryButtonText: {
     fontFamily: FontFamily.bodySemiBold,
-    fontSize: 15,
-    lineHeight: 20,
-    color: Serene.onPrimary,
-  },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 4,
-    marginTop: Space.md,
-  },
-  footerText: {
-    fontFamily: FontFamily.body,
-    fontSize: 12,
-    lineHeight: 16,
-    color: Serene.onSurfaceVariant,
-  },
-  footerLink: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 12,
-    lineHeight: 16,
-    color: Serene.secondary,
-  },
-  privacyCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 7,
-    marginTop: Space.md,
-    padding: 10,
-    borderRadius: Radius.md,
-    backgroundColor: Serene.surfaceContainerLow,
-  },
-  privacyText: {
-    flex: 1,
-    fontFamily: FontFamily.body,
-    fontSize: 10,
-    lineHeight: 15,
-    color: Serene.onSurfaceVariant,
+    color: Tint.primary,
   },
 });
-

@@ -165,7 +165,7 @@ export default function ProfileSettingsScreen() {
             <Icon name="workspace_premium" size={22} color={Serene.onSecondaryContainer} />
           </View>
           <View style={styles.premiumBody}>
-            <Text style={styles.premiumTitle}>PLAA Premium</Text>
+            <Text style={styles.premiumTitle}>Bringo Mind Premium</Text>
             <Text style={styles.premiumText}>
               Assistant IA illimité • Documents avancés • Foyer étendu
             </Text>
@@ -205,7 +205,7 @@ export default function ProfileSettingsScreen() {
           <Text style={styles.deleteText}>Supprimer mon compte</Text>
         </Pressable>
 
-        <Text style={styles.version}>PLAA v1.0.0 • Build 2026.11</Text>
+        <Text style={styles.version}>Bringo Mind 1.0.0 • Build 2026.11</Text>
       </ScrollView>
     </SafeAreaView>
   );

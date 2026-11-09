@@ -2,32 +2,36 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icon';
-import { FontFamily, Radius, Serene, Shadow, Space } from '@/constants/design';
+import { FontFamily, Radius, Serene, Space, Tint } from '@/constants/design';
+
+import { AuthBrand, AuthScreen, PrimaryButton } from '../components/auth-ui';
 
 const STEPS = [
   {
-    icon: 'auto_awesome',
-    badge: 'Étape 1 sur 3',
-    title: 'Laissez Kora faire le tri',
-    text: 'Importez un document ou un e-mail : Kora identifie les dates, montants et actions importantes pour vous.',
-    bullets: ['Analyse automatique', 'Résumé clair', 'Zéro saisie inutile'],
-  },
-  {
     icon: 'task_alt',
-    badge: 'Étape 2 sur 3',
-    title: 'Gardez le contrôle',
+    badge: 'Étape 1 sur 3',
+    lead: 'Gardez',
+    accent: 'le contrôle',
     text: 'Tâches, rappels et calendrier se synchronisent. Vous validez chaque suggestion avant qu’elle soit appliquée.',
     bullets: ['Rappels intelligents', 'Détection des conflits', 'Tout centralisé'],
   },
   {
     icon: 'diversity_3',
-    badge: 'Étape 3 sur 3',
-    title: 'Avancez ensemble',
+    badge: 'Étape 2 sur 3',
+    lead: 'Avancez',
+    accent: 'ensemble',
     text: 'Partagez les démarches avec votre foyer tout en gardant certains documents strictement privés.',
     bullets: ['Espace foyer', 'Rôles et permissions', 'Confidentialité maîtrisée'],
+  },
+  {
+    icon: 'auto_awesome',
+    badge: 'Étape 3 sur 3',
+    lead: 'Laissez Kora',
+    accent: 'faire le tri',
+    text: 'Importez un document ou un e-mail : Kora identifie les dates, montants et actions importantes pour vous.',
+    bullets: ['Analyse automatique', 'Résumé clair', 'Zéro saisie inutile'],
   },
 ];
 
@@ -45,197 +49,201 @@ export default function OnboardingScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <AuthScreen
+      footer={
+        <>
+          <View style={styles.dots}>
+            {STEPS.map((entry, dotIndex) => (
+              <Pressable
+                key={entry.badge}
+                onPress={() => setIndex(dotIndex)}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={`Étape ${dotIndex + 1}`}
+                style={[styles.dot, dotIndex === index && styles.dotActive]}
+              />
+            ))}
+          </View>
+          <PrimaryButton
+            label={last ? 'Commencer' : 'Suivant'}
+            icon={last ? 'check' : 'arrow_forward'}
+            onPress={next}
+            style={styles.cta}
+          />
+        </>
+      }>
       <View style={styles.topBar}>
-        <View style={styles.logo}>
-          <Text style={styles.logoLetter}>K</Text>
-        </View>
+        <AuthBrand compact />
         <Pressable
-          style={styles.skip}
+          style={({ pressed }) => [styles.skip, pressed && styles.pressed]}
           accessibilityRole="button"
           onPress={() => router.replace('/welcome')}>
           <Text style={styles.skipText}>Passer</Text>
         </Pressable>
       </View>
 
-      <View style={styles.stage}>
-        <View style={styles.illustration}>
-          <View style={styles.illustrationRing} />
-          <View style={styles.illustrationCircle}>
-            <Icon name={step.icon} size={54} color={Serene.onPrimary} />
-          </View>
-          <View style={styles.floatingCard}>
-            <Icon name="check_circle" size={16} color={Serene.success} />
-            <Text style={styles.floatingText}>Aucune action en retard</Text>
-          </View>
+      <View style={styles.illustration}>
+        <View style={styles.illustrationRing} />
+        <View style={styles.illustrationCircle}>
+          <Icon name={step.icon} size={56} color={Serene.onPrimary} />
         </View>
-
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>{step.badge}</Text>
+        <View style={styles.floatingCard}>
+          <Icon name="check_circle" size={18} color={Serene.success} filled />
+          <Text style={styles.floatingText}>Aucune action en retard</Text>
         </View>
-        <Text style={styles.title}>{step.title}</Text>
-        <Text style={styles.text}>{step.text}</Text>
+      </View>
 
-        <View style={styles.bullets}>
-          {step.bullets.map((bullet) => (
-            <View key={bullet} style={styles.bulletRow}>
-              <View style={styles.bulletIcon}>
-                <Icon name="check" size={12} color={Serene.secondary} />
-              </View>
-              <Text style={styles.bulletText}>{bullet}</Text>
+      <View style={styles.badge}>
+        <Text style={styles.badgeText}>{step.badge}</Text>
+      </View>
+      <Text style={styles.title}>
+        {step.lead} <Text style={styles.accent}>{step.accent}</Text>
+      </Text>
+      <View style={styles.underline} />
+      <Text style={styles.text}>{step.text}</Text>
+
+      <View style={styles.bullets}>
+        {step.bullets.map((bullet) => (
+          <View key={bullet} style={styles.bulletRow}>
+            <View style={styles.bulletIcon}>
+              <Icon name="check" size={14} color={Tint.primary} />
             </View>
-          ))}
-        </View>
+            <Text style={styles.bulletText}>{bullet}</Text>
+          </View>
+        ))}
       </View>
-
-      <View style={styles.footer}>
-        <View style={styles.dots}>
-          {STEPS.map((entry, dotIndex) => (
-            <Pressable
-              key={entry.title}
-              onPress={() => setIndex(dotIndex)}
-              accessibilityRole="button"
-              accessibilityLabel={`Étape ${dotIndex + 1}`}
-              style={[styles.dot, dotIndex === index && styles.dotActive]}
-            />
-          ))}
-        </View>
-
-        <Pressable style={styles.primaryButton} accessibilityRole="button" onPress={next}>
-          <Text style={styles.primaryButtonText}>
-            {last ? 'Commencer' : 'Suivant'}
-          </Text>
-          <Icon name={last ? 'check' : 'arrow_forward'} size={18} color={Serene.onPrimary} />
-        </Pressable>
-      </View>
-    </SafeAreaView>
+    </AuthScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: Serene.surface,
-  },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: Space.gutter,
-    paddingTop: Space.sm,
-  },
-  logo: {
-    width: 36,
-    height: 36,
-    borderRadius: Radius.md,
-    backgroundColor: Serene.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoLetter: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 19,
-    lineHeight: 24,
-    color: Serene.onPrimary,
   },
   skip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 16,
+    height: 40,
+    justifyContent: 'center',
     borderRadius: Radius.full,
-    backgroundColor: Serene.surfaceContainerLow,
+    borderWidth: 1,
+    borderColor: Tint.border,
+    backgroundColor: Serene.surfaceContainerLowest,
   },
   skipText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 12,
-    lineHeight: 16,
-    color: Serene.onSurfaceVariant,
+    fontFamily: FontFamily.bodySemiBold,
+    fontSize: 14,
+    lineHeight: 19,
+    color: Tint.navy,
   },
-  stage: {
-    flex: 1,
-    paddingHorizontal: Space.gutter,
-    paddingTop: Space.lg,
+  pressed: {
+    opacity: 0.7,
   },
   illustration: {
     alignItems: 'center',
     justifyContent: 'center',
-    height: 220,
+    height: 240,
+    marginTop: Space.md,
   },
   illustrationRing: {
     position: 'absolute',
-    width: 210,
-    height: 210,
+    width: 220,
+    height: 220,
     borderRadius: Radius.full,
-    backgroundColor: Serene.secondaryContainer,
-    opacity: 0.35,
+    backgroundColor: Tint.glow,
+    opacity: 0.3,
   },
   illustrationCircle: {
-    width: 132,
-    height: 132,
+    width: 136,
+    height: 136,
     borderRadius: Radius.full,
-    backgroundColor: Serene.primary,
+    backgroundColor: Tint.navy,
     alignItems: 'center',
     justifyContent: 'center',
-    ...Shadow.floating,
+    shadowColor: Tint.navy,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 8,
   },
   floatingCard: {
     position: 'absolute',
-    bottom: 12,
+    bottom: 14,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
     borderRadius: Radius.full,
     backgroundColor: Serene.surfaceContainerLowest,
-    ...Shadow.card,
+    shadowColor: Tint.navy,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
+    elevation: 3,
   },
   floatingText: {
     fontFamily: FontFamily.bodyMedium,
-    fontSize: 11,
-    lineHeight: 15,
-    color: Serene.onSurface,
+    fontSize: 13,
+    lineHeight: 18,
+    color: Tint.navy,
   },
   badge: {
     alignSelf: 'flex-start',
-    paddingHorizontal: 9,
-    paddingVertical: 3,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderRadius: Radius.full,
     backgroundColor: Serene.secondaryContainer,
+    marginTop: Space.lg,
   },
   badgeText: {
     fontFamily: FontFamily.bodySemiBold,
-    fontSize: 10,
-    lineHeight: 14,
+    fontSize: 12,
+    lineHeight: 16,
     letterSpacing: 0.4,
     textTransform: 'uppercase',
     color: Serene.onSecondaryContainer,
   },
   title: {
     fontFamily: FontFamily.headingBold,
-    fontSize: 26,
-    lineHeight: 33,
-    color: Serene.onSurface,
-    marginTop: 10,
+    fontSize: 32,
+    lineHeight: 38,
+    letterSpacing: -0.7,
+    color: Tint.navy,
+    marginTop: 12,
+  },
+  accent: {
+    color: Tint.primary,
+  },
+  underline: {
+    width: 130,
+    height: 4,
+    borderRadius: Radius.full,
+    backgroundColor: Tint.primary,
+    marginTop: 6,
+    marginLeft: 12,
+    transform: [{ rotate: '-2deg' }],
   },
   text: {
     fontFamily: FontFamily.body,
-    fontSize: 13,
-    lineHeight: 20,
+    fontSize: 15,
+    lineHeight: 22,
     color: Serene.onSurfaceVariant,
-    marginTop: 6,
+    marginTop: 14,
   },
   bullets: {
-    gap: 8,
+    gap: 10,
     marginTop: Space.md,
   },
   bulletRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
   },
   bulletIcon: {
-    width: 22,
-    height: 22,
+    width: 26,
+    height: 26,
     borderRadius: Radius.full,
     backgroundColor: Serene.secondaryContainer,
     alignItems: 'center',
@@ -243,14 +251,9 @@ const styles = StyleSheet.create({
   },
   bulletText: {
     fontFamily: FontFamily.bodyMedium,
-    fontSize: 12,
-    lineHeight: 17,
-    color: Serene.onSurface,
-  },
-  footer: {
-    paddingHorizontal: Space.gutter,
-    paddingBottom: Space.lg,
-    gap: Space.md,
+    fontSize: 15,
+    lineHeight: 20,
+    color: Tint.navy,
   },
   dots: {
     flexDirection: 'row',
@@ -261,27 +264,13 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: Radius.full,
-    backgroundColor: Serene.surfaceContainerHigh,
+    backgroundColor: Tint.border,
   },
   dotActive: {
     width: 24,
-    backgroundColor: Serene.primary,
+    backgroundColor: Tint.primary,
   },
-  primaryButton: {
-    height: 50,
-    borderRadius: Radius.xl,
-    backgroundColor: Serene.primary,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    ...Shadow.floating,
-  },
-  primaryButtonText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 15,
-    lineHeight: 20,
-    color: Serene.onPrimary,
+  cta: {
+    marginTop: Space.md,
   },
 });
-

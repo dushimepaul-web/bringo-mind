@@ -244,7 +244,7 @@ export default function PrivacyDataScreen() {
         <View style={styles.footerNote}>
           <Icon name="lock" size={14} color={Serene.outlineVariant} />
           <Text style={styles.footerNoteText}>
-            Responsable de traitement : PLAA SAS • DPO : dpo@plaa.app
+            Responsable de traitement : Bringo Mind • DPO : dpo@bringomind.app
           </Text>
         </View>
       </ScrollView>

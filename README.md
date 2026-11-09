@@ -1,4 +1,4 @@
-# PLAA — bringo-mind
+# Bringo Mind
 
 Application mobile **Expo / React Native** de gestion de vie administrative personnelle et partagée. Le dépôt contient une interface complète et navigable, alimentée par des données de démonstration locales.
 

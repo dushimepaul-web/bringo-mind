@@ -1,6 +1,6 @@
 # API — guide d'intégration
 
-Ce document décrit la couche réseau du projet PLAA et la manière de brancher une API HTTP sans casser l'isolation des modules.
+Ce document décrit la couche réseau du projet Bringo Mind et la manière de brancher une API HTTP sans casser l'isolation des modules.
 
 ## État actuel
 

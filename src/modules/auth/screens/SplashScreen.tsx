@@ -1,11 +1,11 @@
 // [Hors catalogue] - Écran de démarrage | Module M01 Comptes et authentification | Phase S0
 import { router } from 'expo-router';
 import { useEffect } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { StyleSheet, Text, View } from 'react-native';
 
-import { Icon } from '@/components/icon';
-import { FontFamily, Radius, Serene, Space } from '@/constants/design';
+import { FontFamily, Radius, Serene, Space, Tint } from '@/constants/design';
+
+import { AuthBrand, AuthScreen, TextLink } from '../components/auth-ui';
 
 export default function SplashScreen() {
   useEffect(() => {
@@ -14,126 +14,77 @@ export default function SplashScreen() {
   }, []);
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <View style={styles.body}>
-        <View style={styles.glow} />
-        <View style={styles.logo}>
-          <Text style={styles.logoLetter}>K</Text>
+    <AuthScreen
+      centered
+      footer={
+        <View style={styles.footer}>
+          <TextLink
+            label="Continuer"
+            trailingIcon="arrow_forward"
+            onPress={() => router.replace('/welcome')}
+          />
+          <Text style={styles.version}>Bringo Mind 1.0.0</Text>
         </View>
-        <Text style={styles.brand}>PLAA</Text>
-        <Text style={styles.tagline}>Votre vie administrative, simplifiée</Text>
+      }>
+      <View style={styles.body}>
+        <View style={styles.halo} />
+        <AuthBrand large />
+        <Text style={styles.claim}>Votre vie administrative, simplifiée</Text>
 
-        <View style={styles.dots}>
+        <View style={styles.dots} accessibilityElementsHidden>
           <View style={[styles.dot, styles.dotActive]} />
           <View style={styles.dot} />
           <View style={styles.dot} />
         </View>
       </View>
-
-      <View style={styles.footer}>
-        <Pressable
-          style={styles.skip}
-          accessibilityRole="button"
-          onPress={() => router.replace('/welcome')}>
-          <Text style={styles.skipText}>Continuer</Text>
-          <Icon name="arrow_forward" size={16} color={Serene.onSurfaceVariant} />
-        </Pressable>
-        <Text style={styles.version}>PLAA 1.0.0</Text>
-      </View>
-    </SafeAreaView>
+    </AuthScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: Serene.primary,
-  },
   body: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: Space.gutter,
   },
-  glow: {
+  halo: {
     position: 'absolute',
     width: 280,
     height: 280,
     borderRadius: Radius.full,
-    backgroundColor: Serene.secondary,
-    opacity: 0.18,
+    backgroundColor: Tint.glow,
+    opacity: 0.22,
   },
-  logo: {
-    width: 96,
-    height: 96,
-    borderRadius: Radius.xl,
-    backgroundColor: Serene.surfaceContainerLowest,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoLetter: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 48,
-    lineHeight: 56,
-    color: Serene.primary,
-  },
-  brand: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 32,
-    lineHeight: 40,
-    letterSpacing: 4,
-    color: Serene.onPrimary,
-    marginTop: 20,
-  },
-  tagline: {
+  claim: {
     fontFamily: FontFamily.body,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onPrimary,
-    opacity: 0.8,
-    marginTop: 4,
+    fontSize: 15,
+    lineHeight: 22,
+    color: Serene.onSurfaceVariant,
+    textAlign: 'center',
+    marginTop: Space.md,
   },
   dots: {
     flexDirection: 'row',
     gap: 6,
-    marginTop: 36,
+    marginTop: Space.xl,
   },
   dot: {
-    width: 7,
-    height: 7,
+    width: 8,
+    height: 8,
     borderRadius: Radius.full,
-    backgroundColor: Serene.onPrimary,
-    opacity: 0.35,
+    backgroundColor: Tint.border,
   },
   dotActive: {
-    width: 22,
-    opacity: 1,
+    width: 24,
+    backgroundColor: Tint.primary,
   },
   footer: {
     alignItems: 'center',
-    gap: 8,
-    paddingBottom: Space.lg,
-  },
-  skip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.surfaceContainerLowest,
-  },
-  skipText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 12,
-    lineHeight: 16,
-    color: Serene.onSurfaceVariant,
+    gap: 10,
   },
   version: {
     fontFamily: FontFamily.body,
-    fontSize: 10,
-    lineHeight: 14,
-    color: Serene.onPrimary,
-    opacity: 0.6,
+    fontSize: 12,
+    lineHeight: 16,
+    color: Serene.onSurfaceVariant,
   },
 });
