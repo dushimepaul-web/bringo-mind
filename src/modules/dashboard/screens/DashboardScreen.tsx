@@ -1,13 +1,34 @@
 // S-07 - Tableau de bord | Module M03 Tableau de bord | Phase S3
-import { router } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { router, type Href } from 'expo-router';
+import { useCallback, useState, type ReactNode } from 'react';
+import {
+  Platform,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppHeader } from '@/components/app-header';
 import { Icon } from '@/components/icon';
-import { FontFamily, Radius, Serene, Shadow, Space, Typography } from '@/constants/design';
+import { FontFamily, Radius, Serene, Space, Tint } from '@/constants/design';
+
+import { KoraSuggestions } from '../components/kora-suggestions';
 
 export default function DashboardScreen() {
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Démo : simule le rechargement de la synthèse.
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    setTimeout(() => setRefreshing(false), 900);
+  }, []);
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <AppHeader />
@@ -15,9 +36,19 @@ export default function DashboardScreen() {
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}>
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={Tint.primary}
+            colors={[Tint.primary]}
+          />
+        }>
+        <View style={styles.glow} pointerEvents="none" />
+
         <Greeting />
-        <AiSuggestionCard />
+        <KoraSuggestions />
         <QuickActions />
 
         <SectionHeader
@@ -47,13 +78,38 @@ export default function DashboardScreen() {
           action="Archives"
           onPressAction={() => router.push('/documents')}
         />
-        <View style={styles.stack}>
-          <RecentDocumentCard />
-        </View>
+        <RecentDocumentCard />
 
         <HouseholdInviteCard />
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+/** Carte blanche du style validé ; cliquable si `href` est fourni. */
+function Card({
+  children,
+  href,
+  label,
+  style,
+}: {
+  children: ReactNode;
+  href?: Href;
+  label?: string;
+  style?: StyleProp<ViewStyle>;
+}) {
+  if (!href) {
+    return <View style={[styles.card, style]}>{children}</View>;
+  }
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.card, style, pressed && styles.cardPressed]}
+      // Sur le web, un rôle « button » produirait un <button> contenant d'autres boutons (HTML invalide).
+      accessibilityRole={Platform.OS === 'web' ? undefined : 'button'}
+      accessibilityLabel={label}
+      onPress={() => router.push(href)}>
+      {children}
+    </Pressable>
   );
 }
 
@@ -62,10 +118,10 @@ function Greeting() {
     <View style={styles.greeting}>
       <View style={styles.greetingRow}>
         <View style={styles.greetingNameRow}>
-          <Text style={styles.greetingName}>Bonjour Claire</Text>
-          <View style={styles.verified}>
-            <Icon name="verified" size={15} filled color={Serene.onSecondaryFixed} />
-          </View>
+          <Text style={styles.greetingName} numberOfLines={1}>
+            Bonjour <Text style={styles.accent}>Claire</Text>
+          </Text>
+          <Icon name="verified" size={18} filled color={Tint.primary} />
         </View>
         <View style={styles.veille}>
           <View style={styles.veilleDot} />
@@ -81,39 +137,6 @@ function Greeting() {
   );
 }
 
-function AiSuggestionCard() {
-  return (
-    <View style={styles.aiCard}>
-      <View style={styles.aiBlob} />
-      <View style={styles.aiRow}>
-        <View style={styles.aiIcon}>
-          <Icon name="bolt" size={20} filled color={Serene.onSecondaryContainer} />
-        </View>
-        <View style={styles.flex}>
-          <View style={styles.aiLabelRow}>
-            <Icon name="auto_awesome" size={14} color={Serene.secondary} />
-            <Text style={styles.aiLabel}>Suggestion Kora IA</Text>
-          </View>
-          <Text style={styles.title}>Facture EDF reçue</Text>
-          <Text style={styles.aiBody}>
-            <Text style={styles.aiAmount}>84,20 €</Text> prévu le 21 mai • Prélèvement automatique
-          </Text>
-
-          <View style={styles.aiActions}>
-            <Pressable style={styles.primaryButton} onPress={() => router.push('/documents')}>
-              <Text style={styles.primaryButtonText}>Vérifier</Text>
-              <Icon name="arrow_forward" size={16} color={Serene.onPrimary} />
-            </Pressable>
-            <Pressable style={styles.ghostButton}>
-              <Text style={styles.ghostButtonText}>Ignorer</Text>
-            </Pressable>
-          </View>
-        </View>
-      </View>
-    </View>
-  );
-}
-
 function QuickActions() {
   return (
     <ScrollView
@@ -121,25 +144,54 @@ function QuickActions() {
       showsHorizontalScrollIndicator={false}
       contentContainerStyle={styles.quickRow}
       style={styles.quickScroll}>
-      <Pressable style={styles.quickAction} onPress={() => router.push('/documents')}>
-        <View style={[styles.quickIcon, { backgroundColor: Serene.secondaryContainer }]}>
-          <Icon name="document_scanner" size={16} color={Serene.onSecondaryContainer} />
-        </View>
-        <Text style={styles.quickLabel}>Scanner document</Text>
-      </Pressable>
-
-      <Pressable style={styles.quickAction} onPress={() => router.push('/tasks/add')}>
-        <View style={[styles.quickIcon, { backgroundColor: Serene.surfaceContainerHigh }]}>
-          <Icon name="add_task" size={16} color={Serene.onSurface} />
-        </View>
-        <Text style={styles.quickLabel}>Nouvelle tâche</Text>
-      </Pressable>
-
-      <Pressable style={styles.koraButton} onPress={() => router.push('/assistant')}>
-        <Icon name="arrow_back_ios_new" size={16} color={Serene.secondaryFixed} />
+      <QuickAction
+        icon="document_scanner"
+        label="Scanner document"
+        tone="teal"
+        onPress={() => router.push('/documents')}
+      />
+      <QuickAction
+        icon="add_task"
+        label="Nouvelle tâche"
+        tone="soft"
+        onPress={() => router.push('/tasks/add')}
+      />
+      <Pressable
+        style={({ pressed }) => [styles.koraButton, pressed && styles.blackButtonPressed]}
+        accessibilityRole="button"
+        onPress={() => router.push('/assistant')}>
+        <Icon name="auto_awesome" size={18} color={Serene.secondaryFixed} />
         <Text style={styles.koraButtonText}>Demander à Kora</Text>
       </Pressable>
     </ScrollView>
+  );
+}
+
+function QuickAction({
+  icon,
+  label,
+  tone,
+  onPress,
+}: {
+  icon: string;
+  label: string;
+  tone: 'teal' | 'soft';
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.quickAction, pressed && styles.cardPressed]}
+      accessibilityRole="button"
+      onPress={onPress}>
+      <View style={[styles.quickIcon, tone === 'teal' ? styles.iconTeal : styles.iconSoft]}>
+        <Icon
+          name={icon}
+          size={18}
+          color={tone === 'teal' ? Serene.onSecondaryContainer : Tint.navy}
+        />
+      </View>
+      <Text style={styles.quickLabel}>{label}</Text>
+    </Pressable>
   );
 }
 
@@ -165,8 +217,12 @@ function SectionHeader({
         ) : null}
       </View>
       {action ? (
-        <Pressable onPress={onPressAction}>
-          <Text style={styles.sectionAction}>{action}</Text>
+        <Pressable
+          style={({ pressed }) => [pressed && styles.linkPressed]}
+          hitSlop={8}
+          accessibilityRole="link"
+          onPress={onPressAction}>
+          <Text style={styles.linkText}>{action}</Text>
         </Pressable>
       ) : null}
     </View>
@@ -175,21 +231,21 @@ function SectionHeader({
 
 function DeclarationCard() {
   return (
-    <View style={styles.card}>
-      <View style={styles.priorityTop}>
-        <View style={styles.priorityLeft}>
-          <View style={[styles.priorityIcon, { backgroundColor: Serene.errorContainer }]}>
-            <Icon name="draw" size={18} color={Serene.onErrorContainer} />
-          </View>
-          <View style={styles.flexMin}>
-            <Text style={styles.title} numberOfLines={1}>
-              Renvoyer attestation de domicile signée
-            </Text>
-            <Text style={styles.muted}>Bailleur Foncia • Format PDF certifié</Text>
-          </View>
+    <Card href={{ pathname: '/tasks/detail', params: { id: 'attestation' } }} label="Renvoyer attestation de domicile signée">
+      <View style={styles.rowTop}>
+        <View style={[styles.rowIcon, { backgroundColor: Serene.errorContainer }]}>
+          <Icon name="draw" size={20} color={Serene.onErrorContainer} />
+        </View>
+        <View style={styles.flexMin}>
+          <Text style={styles.cardTitle} numberOfLines={2}>
+            Renvoyer attestation de domicile signée
+          </Text>
+          <Text style={styles.muted} numberOfLines={2}>
+            Bailleur Foncia • Format PDF certifié
+          </Text>
         </View>
         <View style={styles.urgentBadge}>
-          <Text style={styles.urgentBadgeText}>Aujourd&apos;hui 17h</Text>
+          <Text style={styles.urgentBadgeText}>Aujourd’hui 17h</Text>
         </View>
       </View>
 
@@ -198,77 +254,83 @@ function DeclarationCard() {
           <View style={styles.highDot} />
           <Text style={styles.highText}>Haute priorité</Text>
         </View>
-        <Pressable style={styles.tealButton} onPress={() => router.push('/documents')}>
+        <Pressable
+          style={({ pressed }) => [styles.tealButton, pressed && styles.tealButtonPressed]}
+          accessibilityRole="button"
+          onPress={() => router.push('/documents/detail')}>
           <Text style={styles.tealButtonText}>Signer &amp; joindre</Text>
-          <Icon name="send" size={15} color={Serene.onSecondary} />
+          <Icon name="send" size={16} color={Serene.onSecondary} />
         </Pressable>
       </View>
-    </View>
+    </Card>
   );
 }
 
 function CarInspectionCard() {
   return (
-    <View style={[styles.card, styles.rowBetween]}>
-      <View style={styles.priorityLeft}>
-        <View style={[styles.priorityIcon, { backgroundColor: Serene.surfaceContainerHigh }]}>
-          <Icon name="directions_car" size={18} color={Serene.onSurface} />
+    <Card href={{ pathname: '/tasks/detail', params: { id: 'controle-technique' } }} label="Contrôle technique Peugeot 208">
+      <View style={styles.rowCenter}>
+        <View style={[styles.rowIcon, styles.iconSoft]}>
+          <Icon name="directions_car" size={20} color={Tint.navy} />
         </View>
         <View style={styles.flexMin}>
-          <Text style={styles.title} numberOfLines={1}>
+          <Text style={styles.cardTitle} numberOfLines={2}>
             Contrôle technique Peugeot 208
           </Text>
           <View style={styles.metaRow}>
-            <Text style={styles.mutedNoMargin}>AutoSécurité République</Text>
+            <Text style={styles.mutedInline} numberOfLines={1}>
+              AutoSécurité République
+            </Text>
             <View style={styles.bullet} />
             <Text style={styles.metaStrong}>Demain</Text>
           </View>
         </View>
+        <Pressable
+          style={({ pressed }) => [styles.squareButton, pressed && styles.outlinePressed]}
+          accessibilityRole="button"
+          accessibilityLabel="Ajouter au calendrier"
+          onPress={() => router.push('/calendar/add')}>
+          <Icon name="calendar_add_on" size={20} color={Tint.navy} />
+        </Pressable>
       </View>
-      <Pressable
-        style={styles.squareButton}
-        accessibilityLabel="Ajouter au calendrier"
-        onPress={() => router.push('/calendar/add')}>
-        <Icon name="calendar_add_on" size={18} color={Serene.onSurface} />
-      </Pressable>
-    </View>
+    </Card>
   );
 }
 
 function HealthRefundCard() {
   return (
-    <View style={[styles.card, styles.rowBetween]}>
-      <View style={styles.priorityLeft}>
-        <View style={[styles.priorityIcon, { backgroundColor: Serene.secondaryContainer }]}>
-          <Icon name="health_and_safety" size={18} color={Serene.onSecondaryContainer} />
+    <Card href={{ pathname: '/tasks/detail', params: { id: 'remboursement' } }} label="Remboursement soins dentaires">
+      <View style={styles.rowCenter}>
+        <View style={[styles.rowIcon, styles.iconTeal]}>
+          <Icon name="health_and_safety" size={20} color={Serene.onSecondaryContainer} />
         </View>
         <View style={styles.flexMin}>
-          <Text style={styles.title} numberOfLines={1}>
+          <Text style={styles.cardTitle} numberOfLines={2}>
             Remboursement soins dentaires
           </Text>
           <View style={styles.metaRow}>
             <Text style={styles.metaTeal}>142,50 €</Text>
             <View style={styles.bullet} />
-            <Text style={styles.mutedNoMargin} numberOfLines={1}>
+            <Text style={styles.mutedInline} numberOfLines={1}>
               Harmonie Mutuelle
             </Text>
           </View>
         </View>
+        <View style={styles.statusPill}>
+          <Text style={styles.statusPillText}>En cours</Text>
+        </View>
       </View>
-      <View style={styles.statusPill}>
-        <Text style={styles.statusPillText}>En cours</Text>
-      </View>
-    </View>
+    </Card>
   );
 }
 
 function AppointmentCard() {
   return (
-    <View style={styles.card}>
+    <Card href="/calendar/detail" label="Contrôle ophtalmologique" style={styles.cardGap}>
       <View style={styles.rowBetween}>
         <View style={styles.metaRow}>
-          <Icon name="medical_services" size={20} color={Serene.secondary} />
-          <Text style={styles.eyebrow}>RDV Médical</Text>
+          <Icon name="medical_services" size={20} color={Tint.primary} />
+          <Text style={styles.eyebrow}>RDV médical</Text>
         </View>
         <View style={styles.jBadge}>
           <Text style={styles.jBadgeText}>J-2</Text>
@@ -276,36 +338,61 @@ function AppointmentCard() {
       </View>
 
       <View>
-        <Text style={styles.title}>Contrôle ophtalmologique</Text>
+        <Text style={styles.cardTitle}>Contrôle ophtalmologique</Text>
         <Text style={styles.muted}>Dr. Vasseur • Centre Médical Saint-Honoré</Text>
       </View>
 
       <View style={styles.timePill}>
-        <Icon name="schedule" size={18} color={Serene.secondary} />
+        <Icon name="schedule" size={18} color={Tint.primary} />
         <Text style={styles.timeText}>Jeudi 16 mai à 14h30</Text>
       </View>
 
       <View style={styles.actionRow}>
-        <Pressable style={styles.smallButton} onPress={() => router.push('/calendar/detail')}>
-          <Icon name="directions" size={16} color={Serene.onSurface} />
-          <Text style={styles.smallButtonText}>Itinéraire</Text>
-        </Pressable>
-        <Pressable style={styles.smallButton} onPress={() => router.push('/reminders/add')}>
-          <Icon name="notifications_active" size={16} color={Serene.onSurface} />
-          <Text style={styles.smallButtonText}>Rappel (1h)</Text>
-        </Pressable>
+        <SmallButton
+          icon="directions"
+          label="Itinéraire"
+          onPress={() => router.push('/calendar/detail')}
+        />
+        <SmallButton
+          icon="notifications_active"
+          label="Rappel (1h)"
+          onPress={() => router.push('/reminders/add')}
+        />
       </View>
-    </View>
+    </Card>
+  );
+}
+
+function SmallButton({
+  icon,
+  label,
+  onPress,
+}: {
+  icon: string;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.smallButton, pressed && styles.outlinePressed]}
+      accessibilityRole="button"
+      onPress={onPress}>
+      <Icon name={icon} size={18} color={Tint.navy} />
+      <Text style={styles.smallButtonText}>{label}</Text>
+    </Pressable>
   );
 }
 
 function TaxDeadlineCard() {
   return (
-    <View style={styles.card}>
+    <Card
+      href={{ pathname: '/tasks/detail', params: { id: 'declaration' } }}
+      label="Déclaration de revenus 2023"
+      style={styles.cardGap}>
       <View style={styles.rowBetween}>
         <View style={styles.metaRow}>
-          <Icon name="account_balance" size={20} color={Serene.onSurface} />
-          <Text style={styles.eyebrow}>Échéance Fiscale</Text>
+          <Icon name="account_balance" size={20} color={Tint.navy} />
+          <Text style={styles.eyebrow}>Échéance fiscale</Text>
         </View>
         <View style={styles.neutralPill}>
           <Text style={styles.neutralPillText}>Dans 12 jours</Text>
@@ -313,14 +400,14 @@ function TaxDeadlineCard() {
       </View>
 
       <View>
-        <Text style={styles.title}>Déclaration de revenus 2023</Text>
+        <Text style={styles.cardTitle}>Déclaration de revenus 2023</Text>
         <Text style={styles.muted}>Données pré-remplies analysées et consolidées</Text>
       </View>
 
       <View style={styles.progressBlock}>
         <View style={styles.rowBetween}>
           <Text style={styles.progressLabel}>Progression du dossier</Text>
-          <Text style={styles.progressValue}>75%</Text>
+          <Text style={styles.progressValue}>75 %</Text>
         </View>
         <View style={styles.progressTrack}>
           <View style={styles.progressFill} />
@@ -329,63 +416,67 @@ function TaxDeadlineCard() {
 
       <View style={styles.rowBetween}>
         <View style={styles.metaRow}>
-          <Icon name="check_circle" size={16} color={Serene.secondary} />
-          <Text style={styles.mutedNoMargin}>Frais réels vérifiés</Text>
+          <Icon name="check_circle" size={18} color={Tint.primary} />
+          <Text style={styles.mutedInline}>Frais réels vérifiés</Text>
         </View>
-        <Pressable onPress={() => router.push('/tasks')}>
-          <Text style={styles.sectionAction}>Finaliser</Text>
+        <Pressable
+          style={({ pressed }) => [pressed && styles.linkPressed]}
+          hitSlop={8}
+          accessibilityRole="link"
+          onPress={() =>
+            router.push({ pathname: '/tasks/detail', params: { id: 'declaration' } })
+          }>
+          <Text style={styles.linkText}>Finaliser</Text>
         </Pressable>
       </View>
-    </View>
+    </Card>
   );
 }
 
 function RecentDocumentCard() {
   return (
-    <View style={[styles.card, styles.rowBetween]}>
-      <View style={styles.priorityLeft}>
-        <View style={styles.docIcon}>
-          <Icon name="picture_as_pdf" size={20} color={Serene.onSurface} />
+    <Card href="/documents/detail" label="Facture_Engie_Mai2024.pdf">
+      <View style={styles.rowCenter}>
+        <View style={[styles.rowIcon, styles.iconSoft]}>
+          <Icon name="picture_as_pdf" size={22} color={Tint.navy} />
         </View>
         <View style={styles.flexMin}>
-          <Text style={styles.title} numberOfLines={1}>
+          <Text style={styles.cardTitle} numberOfLines={1}>
             Facture_Engie_Mai2024.pdf
           </Text>
           <View style={styles.metaRow}>
-            <Icon name="arrow_back_ios_new" size={13} color={Serene.secondary} />
-            <Text style={styles.mutedNoMargin} numberOfLines={1}>
+            <Icon name="auto_awesome" size={15} color={Tint.primary} />
+            <Text style={styles.mutedInline} numberOfLines={1}>
               Analysé par IA • Classé dans Énergie
             </Text>
           </View>
         </View>
+        <Pressable
+          style={({ pressed }) => [styles.squareButton, pressed && styles.outlinePressed]}
+          accessibilityRole="button"
+          accessibilityLabel="Voir le document"
+          onPress={() => router.push('/documents/detail')}>
+          <Icon name="visibility" size={20} color={Tint.navy} />
+        </Pressable>
       </View>
-      <Pressable
-        style={styles.squareButton}
-        accessibilityLabel="Voir le document"
-        onPress={() => router.push('/documents/detail')}>
-        <Icon name="visibility" size={18} color={Serene.onSurface} />
-      </Pressable>
-    </View>
+    </Card>
   );
 }
 
 function HouseholdInviteCard() {
   return (
     <View style={styles.householdCard}>
-      <View style={styles.householdLeft}>
-        <View style={styles.householdIcon}>
-          <Icon name="group" size={16} color={Serene.onPrimary} />
-        </View>
-        <View style={styles.flexMin}>
-          <Text style={styles.title} numberOfLines={1}>
-            Partager avec votre foyer ?
-          </Text>
-          <Text style={styles.muted} numberOfLines={1}>
-            Découvrez le mode Foyer collaboratif
-          </Text>
-        </View>
+      <View style={styles.householdIcon}>
+        <Icon name="group" size={20} color={Serene.onPrimary} />
       </View>
-      <Pressable style={styles.exploreButton} onPress={() => router.push('/household')}>
+      <View style={styles.flexMin}>
+        <Text style={styles.cardTitle}>Partager avec votre foyer ?</Text>
+        <Text style={styles.muted}>Découvrez le mode Foyer collaboratif</Text>
+      </View>
+      <Pressable
+        style={({ pressed }) => [styles.exploreButton, pressed && styles.outlinePressed]}
+        accessibilityRole="button"
+        onPress={() => router.push('/household')}>
         <Text style={styles.exploreButtonText}>Explorer</Text>
       </Pressable>
     </View>
@@ -395,76 +486,104 @@ function HouseholdInviteCard() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: Serene.surface,
+    backgroundColor: Tint.softer,
   },
   scroll: {
     flex: 1,
   },
   content: {
-    paddingBottom: Space.lg,
-  },
-  greeting: {
+    width: '100%',
+    maxWidth: 560,
+    alignSelf: 'center',
     paddingHorizontal: Space.gutter,
-    paddingTop: 12,
+    paddingBottom: 48,
+    overflow: 'hidden',
+  },
+  glow: {
+    position: 'absolute',
+    top: -140,
+    right: -120,
+    width: 300,
+    height: 300,
+    borderRadius: Radius.full,
+    backgroundColor: Tint.glow,
+    opacity: 0.18,
+  },
+  flexMin: {
+    flex: 1,
+    minWidth: 0,
+  },
+  accent: {
+    color: Tint.primary,
+  },
+
+  // Salutation
+  greeting: {
+    paddingTop: 16,
     paddingBottom: 8,
-    gap: 4,
+    gap: 6,
   },
   greetingRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 8,
   },
   greetingNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
+    flexShrink: 1,
+    minWidth: 0,
   },
   greetingName: {
-    ...Typography.headlineMd,
-    color: Serene.onSurface,
-  },
-  verified: {
-    padding: 2,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.secondaryFixed,
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexShrink: 1,
+    fontFamily: FontFamily.headingBold,
+    fontSize: 26,
+    lineHeight: 32,
+    letterSpacing: -0.5,
+    color: Tint.navy,
   },
   veille: {
+    flexShrink: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
     borderRadius: Radius.full,
-    backgroundColor: Serene.surfaceContainerHigh,
+    backgroundColor: Serene.secondaryContainer,
   },
   veilleDot: {
-    width: 8,
-    height: 8,
+    width: 7,
+    height: 7,
     borderRadius: Radius.full,
-    backgroundColor: Serene.secondary,
+    backgroundColor: Tint.primary,
   },
   veilleText: {
     fontFamily: FontFamily.bodySemiBold,
-    fontSize: 11,
-    lineHeight: 14,
-    letterSpacing: 0.5,
+    fontSize: 12,
+    lineHeight: 16,
+    letterSpacing: 0.4,
     textTransform: 'uppercase',
-    color: Serene.secondary,
+    color: Serene.onSecondaryContainer,
   },
   subRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
   },
   subText: {
-    ...Typography.bodyMd,
+    fontFamily: FontFamily.body,
+    fontSize: 15,
+    lineHeight: 20,
     color: Serene.onSurfaceVariant,
   },
   subStrong: {
-    ...Typography.labelMd,
-    color: Serene.onSurface,
+    fontFamily: FontFamily.bodySemiBold,
+    fontSize: 15,
+    lineHeight: 20,
+    color: Tint.navy,
   },
   bullet: {
     width: 4,
@@ -472,469 +591,429 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     backgroundColor: Serene.outlineVariant,
   },
-  aiCard: {
-    marginHorizontal: Space.gutter,
-    marginTop: 12,
-    borderRadius: Radius.xl,
-    backgroundColor: Serene.surfaceContainerLow,
+
+  // Cartes
+  card: {
     padding: 16,
-    overflow: 'hidden',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: Tint.border,
+    backgroundColor: Serene.surfaceContainerLowest,
+    shadowColor: Tint.navy,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.05,
+    shadowRadius: 16,
+    elevation: 2,
   },
-  aiBlob: {
-    position: 'absolute',
-    right: -24,
-    bottom: -24,
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: 'rgba(134,242,228,0.4)',
+  cardGap: {
+    gap: 14,
   },
-  aiRow: {
+  cardPressed: {
+    backgroundColor: Tint.soft,
+    transform: [{ scale: 0.995 }],
+  },
+  cardTitle: {
+    fontFamily: FontFamily.headingBold,
+    fontSize: 17,
+    lineHeight: 23,
+    color: Tint.navy,
+  },
+  muted: {
+    fontFamily: FontFamily.body,
+    fontSize: 14,
+    lineHeight: 20,
+    color: Serene.onSurfaceVariant,
+    marginTop: 2,
+  },
+  mutedInline: {
+    flexShrink: 1,
+    fontFamily: FontFamily.body,
+    fontSize: 14,
+    lineHeight: 20,
+    color: Serene.onSurfaceVariant,
+  },
+  stack: {
+    gap: 12,
+  },
+  rowTop: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 12,
   },
-  aiIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.secondaryContainer,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  flex: {
-    flex: 1,
-  },
-  flexMin: {
-    flex: 1,
-    minWidth: 0,
-  },
-  aiLabelRow: {
+  rowCenter: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 2,
-  },
-  aiLabel: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 11,
-    lineHeight: 14,
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
-    color: Serene.secondary,
-  },
-  title: {
-    fontFamily: FontFamily.heading,
-    fontSize: 16,
-    lineHeight: 22,
-    color: Serene.onSurface,
-  },
-  aiBody: {
-    fontFamily: FontFamily.body,
-    fontSize: 12,
-    lineHeight: 16,
-    color: Serene.onSurfaceVariant,
-    marginTop: 2,
-  },
-  aiAmount: {
-    fontFamily: FontFamily.bodySemiBold,
-    color: Serene.onSurface,
-  },
-  aiActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 14,
-  },
-  primaryButton: {
-    flex: 1,
-    height: 36,
-    borderRadius: Radius.md,
-    backgroundColor: Serene.primary,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-  },
-  primaryButtonText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onPrimary,
-  },
-  ghostButton: {
-    height: 36,
-    paddingHorizontal: 14,
-    borderRadius: Radius.md,
-    backgroundColor: Serene.surfaceContainerHighest,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  ghostButtonText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurfaceVariant,
-  },
-  quickScroll: {
-    marginTop: 16,
-  },
-  quickRow: {
-    paddingHorizontal: Space.gutter,
-    paddingVertical: 4,
-    gap: 8,
-  },
-  quickAction: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    height: 40,
-    paddingHorizontal: 14,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.surfaceContainerLowest,
-    ...Shadow.card,
-  },
-  quickIcon: {
-    width: 24,
-    height: 24,
-    borderRadius: Radius.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  quickLabel: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurface,
-  },
-  koraButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    height: 40,
-    paddingHorizontal: 14,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.primary,
-    ...Shadow.card,
-  },
-  koraButtonText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onPrimary,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 24,
-    marginBottom: 12,
-    paddingHorizontal: Space.gutter,
-  },
-  sectionTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  sectionTitle: {
-    ...Typography.headlineSm,
-    color: Serene.onSurface,
-  },
-  countPill: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.surfaceContainerHigh,
-  },
-  countText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 11,
-    lineHeight: 14,
-    color: Serene.onSurfaceVariant,
-  },
-  sectionAction: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.secondary,
-  },
-  stack: {
-    paddingHorizontal: Space.gutter,
-    gap: 10,
-  },
-  card: {
-    borderRadius: Radius.xl,
-    backgroundColor: Serene.surfaceContainerLowest,
-    padding: 14,
     gap: 12,
-    ...Shadow.card,
   },
   rowBetween: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 12,
-  },
-  priorityTop: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
     gap: 8,
   },
-  priorityLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    minWidth: 0,
-  },
-  priorityIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: Radius.md,
+  rowIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  muted: {
-    fontFamily: FontFamily.body,
-    fontSize: 12,
-    lineHeight: 16,
-    color: Serene.onSurfaceVariant,
-    marginTop: 2,
+  iconTeal: {
+    backgroundColor: Serene.secondaryContainer,
   },
-  mutedNoMargin: {
-    fontFamily: FontFamily.body,
-    fontSize: 12,
-    lineHeight: 16,
-    color: Serene.onSurfaceVariant,
+  iconSoft: {
+    backgroundColor: Tint.soft,
+    borderWidth: 1,
+    borderColor: Tint.border,
   },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    marginTop: 2,
+    minWidth: 0,
   },
   metaStrong: {
+    flexShrink: 0,
     fontFamily: FontFamily.bodySemiBold,
-    fontSize: 11,
-    lineHeight: 14,
-    color: Serene.onSurfaceVariant,
+    fontSize: 14,
+    lineHeight: 20,
+    color: Tint.navy,
   },
   metaTeal: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.secondary,
+    flexShrink: 0,
+    fontFamily: FontFamily.bodyBold,
+    fontSize: 14,
+    lineHeight: 20,
+    color: Tint.primary,
   },
+
+  // Suggestion IA
+  blackButtonPressed: {
+    backgroundColor: Tint.blackPressed,
+    transform: [{ scale: 0.99 }],
+  },
+  outlinePressed: {
+    backgroundColor: Tint.soft,
+  },
+
+  // Actions rapides
+  quickScroll: {
+    marginTop: Space.md,
+    marginHorizontal: -Space.gutter,
+  },
+  quickRow: {
+    gap: 10,
+    paddingHorizontal: Space.gutter,
+  },
+  quickAction: {
+    height: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingLeft: 8,
+    paddingRight: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Tint.border,
+    backgroundColor: Serene.surfaceContainerLowest,
+  },
+  quickIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickLabel: {
+    fontFamily: FontFamily.bodySemiBold,
+    fontSize: 15,
+    lineHeight: 20,
+    color: Tint.navy,
+  },
+  koraButton: {
+    height: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    backgroundColor: Tint.black,
+  },
+  koraButtonText: {
+    fontFamily: FontFamily.bodySemiBold,
+    fontSize: 15,
+    lineHeight: 20,
+    color: Serene.onPrimary,
+  },
+
+  // En-têtes de section
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginTop: 28,
+    marginBottom: 12,
+  },
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+    flex: 1,
+    minWidth: 0,
+  },
+  sectionTitle: {
+    flexShrink: 1,
+    fontFamily: FontFamily.headingBold,
+    fontSize: 20,
+    lineHeight: 26,
+    letterSpacing: -0.3,
+    color: Tint.navy,
+  },
+  countPill: {
+    minWidth: 26,
+    height: 24,
+    paddingHorizontal: 8,
+    borderRadius: Radius.full,
+    backgroundColor: Tint.soft,
+    borderWidth: 1,
+    borderColor: Tint.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  countText: {
+    fontFamily: FontFamily.bodyBold,
+    fontSize: 13,
+    lineHeight: 17,
+    color: Tint.navy,
+  },
+  linkText: {
+    fontFamily: FontFamily.bodySemiBold,
+    fontSize: 15,
+    lineHeight: 20,
+    color: Tint.primary,
+  },
+  linkPressed: {
+    opacity: 0.65,
+  },
+
+  // Priorités
   urgentBadge: {
     paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: Radius.sm,
+    paddingVertical: 4,
+    borderRadius: 8,
     backgroundColor: Serene.errorContainer,
   },
   urgentBadgeText: {
-    fontFamily: FontFamily.bodyBold,
-    fontSize: 11,
-    lineHeight: 14,
+    fontFamily: FontFamily.bodySemiBold,
+    fontSize: 13,
+    lineHeight: 17,
     color: Serene.onErrorContainer,
   },
   priorityBottom: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 8,
+    marginTop: 14,
   },
   highRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
   },
   highDot: {
-    width: 6,
-    height: 6,
+    width: 8,
+    height: 8,
     borderRadius: Radius.full,
     backgroundColor: Serene.error,
   },
   highText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 11,
-    lineHeight: 14,
+    fontFamily: FontFamily.bodySemiBold,
+    fontSize: 14,
+    lineHeight: 19,
     color: Serene.error,
   },
   tealButton: {
-    height: 32,
-    paddingHorizontal: 12,
-    borderRadius: Radius.md,
-    backgroundColor: Serene.secondary,
+    height: 44,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    ...Shadow.card,
+    gap: 8,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    backgroundColor: Tint.primary,
+  },
+  tealButtonPressed: {
+    opacity: 0.88,
+    transform: [{ scale: 0.99 }],
   },
   tealButtonText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 13,
-    lineHeight: 18,
+    fontFamily: FontFamily.bodySemiBold,
+    fontSize: 15,
+    lineHeight: 20,
     color: Serene.onSecondary,
   },
   squareButton: {
-    width: 32,
-    height: 32,
-    borderRadius: Radius.md,
-    backgroundColor: Serene.surfaceContainerLow,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Tint.border,
+    backgroundColor: Serene.surfaceContainerLowest,
     alignItems: 'center',
     justifyContent: 'center',
   },
   statusPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: Radius.md,
-    backgroundColor: Serene.surfaceContainerLow,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: Tint.soft,
+    borderWidth: 1,
+    borderColor: Tint.border,
   },
   statusPillText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 11,
-    lineHeight: 14,
-    color: Serene.onSurface,
+    fontFamily: FontFamily.bodySemiBold,
+    fontSize: 13,
+    lineHeight: 17,
+    color: Tint.navy,
   },
+
+  // Rendez-vous et échéances
   eyebrow: {
     fontFamily: FontFamily.bodySemiBold,
-    fontSize: 11,
-    lineHeight: 14,
-    letterSpacing: 0.6,
+    fontSize: 13,
+    lineHeight: 18,
+    letterSpacing: 0.4,
     textTransform: 'uppercase',
     color: Serene.onSurfaceVariant,
   },
   jBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: Radius.full,
-    backgroundColor: Serene.secondaryFixed,
+    backgroundColor: Serene.secondaryContainer,
   },
   jBadgeText: {
     fontFamily: FontFamily.bodyBold,
-    fontSize: 11,
-    lineHeight: 14,
-    color: Serene.onSecondaryFixed,
+    fontSize: 13,
+    lineHeight: 17,
+    color: Serene.onSecondaryContainer,
   },
   timePill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: Serene.surfaceContainerLow,
-    padding: 8,
-    borderRadius: Radius.lg,
+    paddingHorizontal: 14,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: Tint.soft,
   },
   timeText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurface,
+    fontFamily: FontFamily.bodySemiBold,
+    fontSize: 15,
+    lineHeight: 20,
+    color: Tint.navy,
   },
   actionRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 10,
   },
   smallButton: {
     flex: 1,
-    height: 32,
-    borderRadius: Radius.md,
-    backgroundColor: Serene.surfaceContainerHigh,
+    height: 44,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: 8,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Tint.border,
+    backgroundColor: Serene.surfaceContainerLowest,
   },
   smallButtonText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurface,
+    fontFamily: FontFamily.bodySemiBold,
+    fontSize: 15,
+    lineHeight: 20,
+    color: Tint.navy,
   },
   neutralPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: Radius.full,
-    backgroundColor: Serene.surfaceContainerHigh,
+    backgroundColor: Tint.soft,
+    borderWidth: 1,
+    borderColor: Tint.border,
   },
   neutralPillText: {
     fontFamily: FontFamily.bodySemiBold,
-    fontSize: 11,
-    lineHeight: 14,
-    color: Serene.onSurface,
+    fontSize: 13,
+    lineHeight: 17,
+    color: Tint.navy,
   },
   progressBlock: {
-    gap: 6,
+    gap: 8,
   },
   progressLabel: {
     fontFamily: FontFamily.bodyMedium,
-    fontSize: 11,
-    lineHeight: 14,
+    fontSize: 14,
+    lineHeight: 19,
     color: Serene.onSurfaceVariant,
   },
   progressValue: {
     fontFamily: FontFamily.bodyBold,
-    fontSize: 11,
-    lineHeight: 14,
-    color: Serene.secondary,
+    fontSize: 14,
+    lineHeight: 19,
+    color: Tint.primary,
   },
   progressTrack: {
     height: 8,
     borderRadius: Radius.full,
-    backgroundColor: Serene.surfaceContainerHigh,
+    backgroundColor: Tint.soft,
     overflow: 'hidden',
   },
   progressFill: {
-    height: '100%',
     width: '75%',
+    height: '100%',
     borderRadius: Radius.full,
-    backgroundColor: Serene.secondary,
+    backgroundColor: Tint.primary,
   },
-  docIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.surfaceContainerHigh,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+
+  // Foyer
   householdCard: {
-    marginHorizontal: Space.gutter,
-    marginTop: 24,
-    marginBottom: 8,
-    padding: 14,
-    borderRadius: Radius.xl,
-    backgroundColor: Serene.surfaceContainer,
+    marginTop: 28,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     gap: 12,
-  },
-  householdLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    flex: 1,
-    minWidth: 0,
+    padding: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: Tint.border,
+    backgroundColor: Tint.lavender,
   },
   householdIcon: {
-    width: 32,
-    height: 32,
+    width: 44,
+    height: 44,
     borderRadius: Radius.full,
-    backgroundColor: Serene.primary,
+    backgroundColor: Tint.black,
     alignItems: 'center',
     justifyContent: 'center',
   },
   exploreButton: {
-    height: 32,
-    paddingHorizontal: 12,
-    borderRadius: Radius.md,
+    height: 44,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Tint.border,
     backgroundColor: Serene.surfaceContainerLowest,
     alignItems: 'center',
     justifyContent: 'center',
-    ...Shadow.card,
   },
   exploreButtonText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurface,
+    fontFamily: FontFamily.bodySemiBold,
+    fontSize: 15,
+    lineHeight: 20,
+    color: Tint.navy,
   },
 });

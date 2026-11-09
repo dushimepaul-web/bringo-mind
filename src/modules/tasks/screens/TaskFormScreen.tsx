@@ -1,5 +1,5 @@
 // S-10 - Création / édition de tâche | Module M04 Tâches | Phase S4
-import { router, usePathname } from 'expo-router';
+import { router, useLocalSearchParams, usePathname } from 'expo-router';
 import { useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -12,613 +12,855 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icon';
-import { FontFamily, Radius, Serene, Shadow, Space, Typography } from '@/constants/design';
+import { FontFamily, Radius, Serene, Space, Tint } from '@/constants/design';
 
-type Priority = 'Basse' | 'Moyenne' | 'Haute';
+import { Chip, PrimaryButton, PRIORITY_COLORS, TopBar, taskStyles } from '../components/task-ui';
+import {
+  CATEGORIES,
+  CATEGORY_ICONS,
+  DEMO_TODAY,
+  HOUSEHOLD,
+  PRIORITY_LABELS,
+  addDays,
+  atTime,
+  dayOffset,
+  formatDueLong,
+  formatTime,
+  startOfDay,
+} from '../data';
+import { taskActions, useTask } from '../store';
+import type { Task, TaskCategory, TaskDraft, TaskPriority } from '../types';
 
-const CATEGORIES = ['Logement', 'Santé', 'Impôts', 'Famille', 'Véhicule', 'Autre'];
-const PRIORITIES: Priority[] = ['Basse', 'Moyenne', 'Haute'];
+const TITLE_MAX = 255;
+const DESCRIPTION_MAX = 5000;
+const PRIORITIES: TaskPriority[] = [1, 2, 3, 4];
+const TIMES: { label: string; hours: number | null }[] = [
+  { label: 'Sans heure', hours: null },
+  { label: '09h00', hours: 9 },
+  { label: '12h00', hours: 12 },
+  { label: '17h00', hours: 17 },
+  { label: '20h00', hours: 20 },
+];
+
+/** Démo : formulaire de création prérempli (exemple du dossier directeur). */
+function demoDraft(): TaskDraft {
+  return {
+    title: 'Acheter les fournitures scolaires',
+    description: 'Liste de la rentrée : cahiers, trousse, calculatrice et agenda.',
+    priority: 2,
+    dueAt: atTime(addDays(DEMO_TODAY, 1), 17),
+    hasTime: true,
+    category: 'Famille',
+    // Personnel par défaut : le partage avec le foyer est toujours un choix explicite.
+    household: null,
+    sharedWith: [],
+    reminder: true,
+  };
+}
+
+function draftOf(task: Task): TaskDraft {
+  return {
+    title: task.title,
+    description: task.description,
+    priority: task.priority,
+    dueAt: task.dueAt,
+    hasTime: task.hasTime,
+    category: task.category,
+    household: task.household,
+    sharedWith: task.sharedWith,
+    reminder: task.reminder,
+  };
+}
+
+/** Raccourcis de date : aujourd'hui, demain, samedi prochain, lundi prochain. */
+function quickDates() {
+  const today = startOfDay(DEMO_TODAY);
+  const toSaturday = (6 - today.getDay() + 7) % 7 || 7;
+  const toMonday = (1 - today.getDay() + 7) % 7 || 7;
+  return [
+    { label: 'Aujourd’hui', date: today },
+    { label: 'Demain', date: addDays(today, 1) },
+    { label: 'Ce week-end', date: addDays(today, toSaturday) },
+    { label: 'Semaine prochaine', date: addDays(today, toMonday) },
+  ];
+}
+
+const DAY_SHORT = ['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.'];
+
+/** Choix libre de l'heure : toutes les heures, minutes par pas de 5. */
+const HOURS = Array.from({ length: 24 }, (_, hour) => hour);
+const MINUTES = Array.from({ length: 12 }, (_, index) => index * 5);
+const pad = (value: number) => String(value).padStart(2, '0');
 
 export default function TaskFormScreen() {
   const pathname = usePathname();
+  const { id } = useLocalSearchParams<{ id?: string }>();
   const isEdit = pathname.includes('/edit');
+  const existing = useTask(isEdit ? id : '__new__');
+  const insets = useSafeAreaInsets();
 
-  const [title, setTitle] = useState(
-    isEdit ? 'Renvoyer attestation de domicile signée' : '',
-  );
-  const [description, setDescription] = useState(
-    isEdit
-      ? "Renvoyer l'attestation de domicile signée au bailleur avant 17h. Le document est déjà scanné et signé électroniquement."
-      : '',
-  );
-  const [priority, setPriority] = useState<Priority>(isEdit ? 'Haute' : 'Moyenne');
-  const [category, setCategory] = useState(isEdit ? 'Logement' : 'Logement');
-  const [reminder, setReminder] = useState(isEdit);
-  const [shareThomas, setShareThomas] = useState(isEdit);
+  const [draft, setDraft] = useState<TaskDraft>(() => (existing ? draftOf(existing) : demoDraft()));
+  const [focused, setFocused] = useState<'title' | 'description' | null>(null);
+  const [titleTouched, setTitleTouched] = useState(false);
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
 
-  const canSave = title.trim().length > 0;
+  const set = <K extends keyof TaskDraft>(key: K, value: TaskDraft[K]) =>
+    setDraft((current) => ({ ...current, [key]: value }));
+
+  const titleError = titleTouched && draft.title.trim().length === 0;
+  const canSave = draft.title.trim().length > 0;
+  const shared = draft.household !== null;
+
+  const selectDay = (day: Date) => {
+    const hours = draft.hasTime ? draft.dueAt.getHours() : 12;
+    const minutes = draft.hasTime ? draft.dueAt.getMinutes() : 0;
+    set('dueAt', atTime(day, hours, minutes));
+  };
+
+  const selectTime = (hours: number | null, minutes = 0) => {
+    setDraft((current) => ({
+      ...current,
+      hasTime: hours !== null,
+      dueAt: atTime(current.dueAt, hours ?? 12, hours === null ? 0 : minutes),
+    }));
+  };
+
+  const currentHour = draft.dueAt.getHours();
+  const currentMinute = draft.dueAt.getMinutes();
+  // Heure libre : une heure qui ne fait pas partie des raccourcis.
+  const customTime =
+    draft.hasTime && !TIMES.some((time) => time.hours === currentHour && currentMinute === 0);
+
+  const toggleShare = (value: boolean) => {
+    setDraft((current) => ({
+      ...current,
+      household: value ? HOUSEHOLD.name : null,
+      sharedWith: value ? ['Thomas'] : [],
+    }));
+  };
 
   const handleSave = () => {
-    if (!canSave) return;
+    if (!canSave) {
+      setTitleTouched(true);
+      return;
+    }
+    const clean = { ...draft, title: draft.title.trim(), description: draft.description.trim() };
+    if (isEdit && existing) {
+      taskActions.save(existing.id, clean);
+      router.back();
+      return;
+    }
+    const newId = taskActions.create(clean);
+    taskActions.setFlash({ text: `« ${clean.title} » créée.`, undo: taskActions.remove.bind(null, newId) });
     router.replace('/tasks');
   };
 
-  return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
-        <Pressable
-          style={styles.headerButton}
-          accessibilityRole="button"
-          accessibilityLabel="Annuler"
-          onPress={() => router.back()}>
-          <Icon name="close" size={22} color={Serene.onSurface} />
-        </Pressable>
-        <Text style={styles.headerTitle}>
-          {isEdit ? 'Modifier la tâche' : 'Nouvelle tâche'}
-        </Text>
-        <Pressable
-          style={styles.saveButton}
-          accessibilityRole="button"
-          onPress={handleSave}
-          disabled={!canSave}>
-          <Text style={[styles.saveButtonText, !canSave && styles.saveButtonTextDisabled]}>
-            Enregistrer
-          </Text>
-        </Pressable>
-      </View>
+  const dates = quickDates();
+  const selectedOffset = dayOffset(draft.dueAt);
+  const calendarDays = Array.from({ length: 21 }, (_, index) => addDays(startOfDay(DEMO_TODAY), index));
+  const quickSelected = dates.some((entry) => dayOffset(entry.date) === selectedOffset);
 
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+  return (
+    <SafeAreaView style={taskStyles.safe} edges={['top']}>
+      <TopBar close title={isEdit ? 'Modifier la tâche' : 'Nouvelle tâche'} />
+
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={styles.content}
+          style={styles.flex}
+          contentContainerStyle={[taskStyles.content, styles.content]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled">
-          <Field label="Titre" required>
-            <TextInput
-              style={styles.textInput}
-              placeholder="Ex. Renvoyer l'attestation de domicile"
-              placeholderTextColor={Serene.onSurfaceVariant}
-              value={title}
-              onChangeText={setTitle}
-              returnKeyType="next"
-              selectionColor={Serene.secondary}
-            />
-          </Field>
+          {/* Titre */}
+          <View style={styles.labelRow}>
+            <Text style={taskStyles.label}>
+              Titre <Text style={styles.required}>*</Text>
+            </Text>
+            <Text style={styles.counter}>
+              {draft.title.length}/{TITLE_MAX}
+            </Text>
+          </View>
+          <TextInput
+            style={[
+              taskStyles.input,
+              focused === 'title' && taskStyles.inputFocused,
+              titleError && taskStyles.inputError,
+            ]}
+            value={draft.title}
+            onChangeText={(value) => set('title', value.slice(0, TITLE_MAX))}
+            onFocus={() => setFocused('title')}
+            onBlur={() => {
+              setFocused(null);
+              setTitleTouched(true);
+            }}
+            placeholder="Ex. Renvoyer l’attestation de domicile"
+            placeholderTextColor={Serene.onSurfaceVariant}
+            selectionColor={Tint.primary}
+            returnKeyType="next"
+            accessibilityLabel="Titre de la tâche"
+            aria-invalid={titleError}
+          />
+          {titleError ? (
+            <View style={styles.errorRow} accessibilityLiveRegion="polite">
+              <Icon name="error" size={16} color={Serene.error} />
+              <Text style={styles.errorText}>Donnez un titre à la tâche.</Text>
+            </View>
+          ) : null}
 
-          <Field label="Description">
-            <TextInput
-              style={[styles.textInput, styles.textArea]}
-              placeholder="Ajoutez les détails utiles..."
-              placeholderTextColor={Serene.onSurfaceVariant}
-              value={description}
-              onChangeText={setDescription}
-              multiline
-              textAlignVertical="top"
-              selectionColor={Serene.secondary}
-            />
-          </Field>
+          {/* Description */}
+          <View style={[styles.labelRow, styles.spaced]}>
+            <Text style={taskStyles.label}>Description</Text>
+            <Text style={styles.counter}>facultatif</Text>
+          </View>
+          <TextInput
+            style={[
+              taskStyles.input,
+              styles.textarea,
+              focused === 'description' && taskStyles.inputFocused,
+            ]}
+            value={draft.description}
+            onChangeText={(value) => set('description', value.slice(0, DESCRIPTION_MAX))}
+            onFocus={() => setFocused('description')}
+            onBlur={() => setFocused(null)}
+            placeholder="Ajoutez les détails utiles…"
+            placeholderTextColor={Serene.onSurfaceVariant}
+            selectionColor={Tint.primary}
+            multiline
+            textAlignVertical="top"
+            accessibilityLabel="Description"
+          />
 
-          <Field label="Priorité">
-            <View style={styles.priorityRow}>
-              {PRIORITIES.map((value) => {
-                const active = priority === value;
+          {/* Priorité */}
+          <Text style={[taskStyles.label, styles.spaced, styles.labelGap]}>Priorité</Text>
+          <View style={styles.priorities}>
+            {PRIORITIES.map((priority) => {
+              const selected = draft.priority === priority;
+              const colors = PRIORITY_COLORS[priority];
+              return (
+                <Pressable
+                  key={priority}
+                  style={({ pressed }) => [
+                    styles.priority,
+                    selected && { backgroundColor: colors.bg, borderColor: colors.dot },
+                    pressed && !selected && styles.pressedSoft,
+                  ]}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected }}
+                  onPress={() => set('priority', priority)}>
+                  <View style={[styles.priorityDot, { backgroundColor: colors.dot }]} />
+                  <Text style={[styles.priorityText, selected && { color: colors.fg }]}>
+                    {PRIORITY_LABELS[priority]}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
 
+          {/* Échéance */}
+          <Text style={[taskStyles.label, styles.spaced, styles.labelGap]}>Échéance</Text>
+          <View style={[taskStyles.card, styles.dueCard]}>
+            <View style={styles.dueSummary}>
+              <View style={styles.dueIcon}>
+                <Icon name="event" size={22} color={Tint.primary} />
+              </View>
+              <View style={styles.flexMin}>
+                <Text style={styles.dueTitle}>{formatDueLong(draft)}</Text>
+                <Text style={taskStyles.muted}>
+                  {draft.hasTime ? `Heure : ${formatTime(draft.dueAt)}` : 'Toute la journée'}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.wrap}>
+              {dates.map((entry) => (
+                <Chip
+                  key={entry.label}
+                  label={entry.label}
+                  selected={dayOffset(entry.date) === selectedOffset}
+                  onPress={() => {
+                    setShowCalendar(false);
+                    selectDay(entry.date);
+                  }}
+                />
+              ))}
+              <Chip
+                label="Autre date"
+                icon="calendar_month"
+                selected={showCalendar || !quickSelected}
+                onPress={() => setShowCalendar((value) => !value)}
+              />
+            </View>
+
+            {showCalendar ? (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.days}>
+                {calendarDays.map((day) => {
+                  const selected = dayOffset(day) === selectedOffset;
+                  return (
+                    <Pressable
+                      key={day.toISOString()}
+                      style={[styles.day, selected && styles.daySelected]}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                      onPress={() => selectDay(day)}>
+                      <Text style={[styles.dayName, selected && styles.dayTextSelected]}>
+                        {DAY_SHORT[day.getDay()]}
+                      </Text>
+                      <Text style={[styles.dayNumber, selected && styles.dayTextSelected]}>
+                        {day.getDate()}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            ) : null}
+
+            <Text style={styles.subLabel}>Heure</Text>
+            <View style={styles.wrap}>
+              {TIMES.map((time) => {
+                const selected =
+                  time.hours === null
+                    ? !draft.hasTime
+                    : draft.hasTime &&
+                      draft.dueAt.getHours() === time.hours &&
+                      draft.dueAt.getMinutes() === 0;
                 return (
-                  <Pressable
-                    key={value}
-                    style={[
-                      styles.priorityOption,
-                      active && priorityActiveStyle(value),
-                    ]}
-                    onPress={() => setPriority(value)}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: active }}>
-                    <Text
-                      style={[
-                        styles.priorityOptionText,
-                        active && priorityActiveTextStyle(value),
-                      ]}>
-                      {value}
-                    </Text>
-                    {value === 'Haute' ? (
-                      <View style={[styles.priorityDot, active && styles.priorityDotActive]} />
-                    ) : null}
-                  </Pressable>
+                  <Chip
+                    key={time.label}
+                    label={time.label}
+                    selected={selected && !showTimePicker}
+                    onPress={() => {
+                      setShowTimePicker(false);
+                      selectTime(time.hours);
+                    }}
+                  />
                 );
               })}
+              <Chip
+                label={customTime ? formatTime(draft.dueAt) : 'Autre heure'}
+                icon="schedule"
+                selected={showTimePicker || customTime}
+                onPress={() => {
+                  if (!draft.hasTime) selectTime(10, 0);
+                  setShowTimePicker((value) => !value);
+                }}
+              />
             </View>
-          </Field>
 
-          <Field label="Échéance">
-            <Pressable
-              style={styles.selectRow}
-              accessibilityRole="button"
-              onPress={() => router.push('/calendar/add')}>
-              <View style={styles.selectLeft}>
-                <View style={styles.selectIcon}>
-                  <Icon name="event" size={18} color={Serene.secondary} />
+            {showTimePicker ? (
+              <View style={styles.timePicker}>
+                <View style={styles.timePickerHeader}>
+                  <Text style={styles.subLabel}>Choisir l’heure</Text>
+                  <Text style={styles.timeValue} accessibilityLiveRegion="polite">
+                    {formatTime(draft.dueAt)}
+                  </Text>
                 </View>
-                <View>
-                  <Text style={styles.selectValue}>Aujourd&apos;hui • 17h00</Text>
-                  <Text style={styles.selectHint}>Date et heure d&apos;échéance</Text>
+                <Text style={styles.timeColumnLabel}>Heures</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.timeRow}>
+                  {HOURS.map((hour) => {
+                    const selected = draft.hasTime && currentHour === hour;
+                    return (
+                      <Pressable
+                        key={hour}
+                        style={[styles.timeCell, selected && styles.timeCellSelected]}
+                        accessibilityRole="button"
+                        accessibilityLabel={pad(hour) + ' heures'}
+                        accessibilityState={{ selected }}
+                        onPress={() => selectTime(hour, currentMinute)}>
+                        <Text style={[styles.timeCellText, selected && styles.timeCellTextSelected]}>
+                          {pad(hour)}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+                <Text style={styles.timeColumnLabel}>Minutes</Text>
+                <View style={styles.minutesGrid}>
+                  {MINUTES.map((minute) => {
+                    const selected = draft.hasTime && currentMinute === minute;
+                    return (
+                      <Pressable
+                        key={minute}
+                        style={[styles.minuteCell, selected && styles.timeCellSelected]}
+                        accessibilityRole="button"
+                        accessibilityLabel={pad(minute) + ' minutes'}
+                        accessibilityState={{ selected }}
+                        onPress={() => selectTime(currentHour, minute)}>
+                        <Text style={[styles.timeCellText, selected && styles.timeCellTextSelected]}>
+                          {pad(minute)}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
                 </View>
+                <Pressable
+                  style={({ pressed }) => [styles.timeDone, pressed && styles.pressedSoft]}
+                  accessibilityRole="button"
+                  onPress={() => setShowTimePicker(false)}>
+                  <Icon name="check" size={18} color={Tint.primary} />
+                  <Text style={styles.timeDoneText}>Valider {formatTime(draft.dueAt)}</Text>
+                </Pressable>
               </View>
-              <Icon name="chevron_right" size={20} color={Serene.outlineVariant} />
-            </Pressable>
-          </Field>
+            ) : null}
+          </View>
 
-          <Field label="Catégorie">
-            <View style={styles.chipsWrap}>
-              {CATEGORIES.map((value) => {
-                const active = category === value;
+          {/* Catégorie */}
+          <Text style={[taskStyles.label, styles.spaced, styles.labelGap]}>Catégorie</Text>
+          <View style={styles.wrap}>
+            {CATEGORIES.map((category: TaskCategory) => (
+              <Chip
+                key={category}
+                label={category}
+                icon={CATEGORY_ICONS[category]}
+                selected={draft.category === category}
+                onPress={() => set('category', category)}
+              />
+            ))}
+          </View>
 
-                return (
-                  <Pressable
-                    key={value}
-                    style={[styles.chip, active && styles.chipActive]}
-                    onPress={() => setCategory(value)}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: active }}>
-                    <Text style={[styles.chipText, active && styles.chipTextActive]}>
-                      {value}
-                    </Text>
-                  </Pressable>
-                );
-              })}
+          {/* Rappel */}
+          <View style={[taskStyles.card, styles.toggleCard, styles.spaced]}>
+            <View style={styles.toggleIcon}>
+              <Icon name="notifications_active" size={22} color={Tint.primary} />
             </View>
-          </Field>
-
-          <Field label="Foyer">
-            <Pressable
-              style={styles.selectRow}
-              accessibilityRole="button"
-              onPress={() => router.push('/household')}>
-              <View style={styles.selectLeft}>
-                <View style={styles.selectIcon}>
-                  <Icon name="family_restroom" size={18} color={Serene.secondary} />
-                </View>
-                <View>
-                  <Text style={styles.selectValue}>Foyer Martin</Text>
-                  <Text style={styles.selectHint}>Partagée avec 2 membres</Text>
-                </View>
-              </View>
-              <Icon name="chevron_right" size={20} color={Serene.outlineVariant} />
-            </Pressable>
-          </Field>
-
-          <View style={styles.toggleCard}>
-            <View style={styles.toggleLeft}>
-              <View style={styles.toggleIcon}>
-                <Icon name="notifications_active" size={18} color={Serene.secondary} />
-              </View>
-              <View style={styles.toggleTextBlock}>
-                <Text style={styles.toggleTitle}>Rappel automatique</Text>
-                <Text style={styles.toggleHint}>Notifier 1h avant l&apos;échéance</Text>
-              </View>
+            <View style={styles.flexMin}>
+              <Text style={styles.toggleTitle}>Rappel automatique</Text>
+              <Text style={taskStyles.muted}>Notification 1 h avant l’échéance</Text>
             </View>
-            <Switch
-              value={reminder}
-              onValueChange={setReminder}
-              trackColor={{ false: Serene.surfaceContainerHigh, true: Serene.secondary }}
-              thumbColor={Serene.surfaceContainerLowest}
+            <DemoSwitch
+              value={draft.reminder}
+              onValueChange={(value) => set('reminder', value)}
+              label="Rappel automatique"
             />
           </View>
 
-          <Field label="Partager avec">
-            <View style={styles.chipsWrap}>
-              <View style={[styles.memberChip, styles.memberChipFixed]}>
-                <View style={[styles.memberAvatar, styles.memberAvatarPrimary]}>
-                  <Text style={styles.memberInitial}>C</Text>
-                </View>
-                <Text style={styles.memberName}>Claire (vous)</Text>
+          {/* Partage — personnel par défaut */}
+          <View style={[taskStyles.card, styles.shareCard]}>
+            <View style={styles.toggleCardRow}>
+              <View style={[styles.toggleIcon, shared && styles.toggleIconOn]}>
+                <Icon
+                  name={shared ? 'group' : 'lock'}
+                  size={22}
+                  color={shared ? Serene.onSecondaryContainer : Tint.navy}
+                />
               </View>
-              <Pressable
-                style={[styles.memberChip, shareThomas && styles.memberChipActive]}
-                onPress={() => setShareThomas((value) => !value)}
-                accessibilityRole="button"
-                accessibilityState={{ selected: shareThomas }}>
-                <View style={[styles.memberAvatar, styles.memberAvatarSecondary]}>
-                  <Text style={styles.memberInitial}>T</Text>
-                </View>
-                <Text style={styles.memberName}>Thomas</Text>
-                {shareThomas ? (
-                  <Icon name="check_circle" size={16} color={Serene.secondary} />
-                ) : (
-                  <Icon name="add_circle" size={16} color={Serene.onSurfaceVariant} />
-                )}
-              </Pressable>
+              <View style={styles.flexMin}>
+                <Text style={styles.toggleTitle}>Partager avec le foyer</Text>
+                <Text style={taskStyles.muted}>
+                  {shared ? `Visible par les membres de ${HOUSEHOLD.name}` : 'Tâche personnelle, visible par vous seule'}
+                </Text>
+              </View>
+              <DemoSwitch value={shared} onValueChange={toggleShare} label="Partager avec le foyer" />
             </View>
-          </Field>
 
-          <View style={styles.helpCard}>
-            <Icon name="info" size={16} color={Serene.onSurfaceVariant} />
-            <Text style={styles.helpText}>
-              Une tâche partagée est visible uniquement par les membres du foyer autorisés.
-            </Text>
+            {shared ? (
+              <View style={styles.shareDetails}>
+                <Text style={styles.subLabel}>Membres qui la verront</Text>
+                <View style={styles.wrap}>
+                  <View style={styles.meChip}>
+                    <View style={styles.avatar}>
+                      <Text style={styles.avatarText}>C</Text>
+                    </View>
+                    <Text style={styles.meText}>Claire (vous)</Text>
+                  </View>
+                  {HOUSEHOLD.members
+                    .filter((name) => name !== 'Claire')
+                    .map((name) => {
+                      const selected = draft.sharedWith.includes(name);
+                      return (
+                        <Chip
+                          key={name}
+                          label={name}
+                          icon={selected ? 'check' : 'add'}
+                          selected={selected}
+                          onPress={() =>
+                            set(
+                              'sharedWith',
+                              selected
+                                ? draft.sharedWith.filter((member) => member !== name)
+                                : [...draft.sharedWith, name],
+                            )
+                          }
+                        />
+                      );
+                    })}
+                </View>
+                <View style={styles.note}>
+                  <Icon name="shield" size={18} color={Serene.onSurfaceVariant} />
+                  <Text style={styles.noteText}>
+                    Seule cette tâche est partagée. Vos autres tâches et vos notes restent privées.
+                  </Text>
+                </View>
+              </View>
+            ) : null}
           </View>
-
-          <Pressable
-            style={[styles.submitButton, !canSave && styles.submitButtonDisabled]}
-            onPress={handleSave}
-            disabled={!canSave}
-            accessibilityRole="button">
-            <Icon
-              name={isEdit ? 'save' : 'add_task'}
-              size={18}
-              color={Serene.onPrimary}
-            />
-            <Text style={styles.submitButtonText}>
-              {isEdit ? 'Enregistrer les modifications' : 'Créer la tâche'}
-            </Text>
-          </Pressable>
-
-          <Pressable style={styles.cancelButton} onPress={() => router.back()}>
-            <Text style={styles.cancelButtonText}>Annuler</Text>
-          </Pressable>
         </ScrollView>
+
+        <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, Space.md) }]}>
+          <PrimaryButton
+            label={isEdit ? 'Enregistrer les modifications' : 'Créer la tâche'}
+            icon={isEdit ? 'check' : 'add_task'}
+            disabled={!canSave}
+            onPress={handleSave}
+            style={styles.footerButton}
+          />
+        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
-function Field({
+function DemoSwitch({
+  value,
+  onValueChange,
   label,
-  required,
-  children,
 }: {
+  value: boolean;
+  onValueChange: (value: boolean) => void;
   label: string;
-  required?: boolean;
-  children: React.ReactNode;
 }) {
   return (
-    <View style={styles.field}>
-      <Text style={styles.fieldLabel}>
-        {label}
-        {required ? <Text style={styles.required}> *</Text> : null}
-      </Text>
-      {children}
-    </View>
+    <Switch
+      value={value}
+      onValueChange={onValueChange}
+      trackColor={{ false: Tint.border, true: Tint.primary }}
+      thumbColor={Serene.surfaceContainerLowest}
+      {...(Platform.OS === 'web' ? { activeThumbColor: Serene.surfaceContainerLowest } : {})}
+      ios_backgroundColor={Tint.border}
+      accessibilityLabel={label}
+    />
   );
 }
 
-function priorityActiveStyle(priority: Priority) {
-  if (priority === 'Haute') return styles.priorityHighActive;
-  if (priority === 'Moyenne') return styles.priorityMediumActive;
-  return styles.priorityLowActive;
-}
-
-function priorityActiveTextStyle(priority: Priority) {
-  if (priority === 'Haute') return styles.priorityHighTextActive;
-  if (priority === 'Moyenne') return styles.priorityMediumTextActive;
-  return styles.priorityLowTextActive;
-}
-
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: Serene.surface,
-  },
   flex: {
     flex: 1,
   },
-  header: {
-    height: 56,
-    paddingHorizontal: Space.gutter,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Serene.surface,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Serene.surfaceContainerHigh,
-  },
-  headerButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: -8,
-  },
-  headerTitle: {
+  flexMin: {
     flex: 1,
-    ...Typography.titleMd,
-    color: Serene.onSurface,
-    marginLeft: 4,
-  },
-  saveButton: {
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-  },
-  saveButtonText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.secondary,
-  },
-  saveButtonTextDisabled: {
-    color: Serene.outlineVariant,
-  },
-  scroll: {
-    flex: 1,
+    minWidth: 0,
   },
   content: {
-    paddingHorizontal: Space.gutter,
-    paddingTop: Space.md,
-    paddingBottom: Space.lg,
-    gap: Space.md,
+    paddingTop: 8,
+    paddingBottom: 32,
   },
-  field: {
-    gap: 6,
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    marginBottom: 10,
   },
-  fieldLabel: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 11,
-    lineHeight: 14,
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
-    color: Serene.onSurfaceVariant,
+  labelGap: {
+    marginBottom: 10,
+  },
+  spaced: {
+    marginTop: 22,
   },
   required: {
     color: Serene.error,
   },
-  textInput: {
-    minHeight: 44,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.surfaceContainerLowest,
+  counter: {
     fontFamily: FontFamily.body,
-    fontSize: 14,
-    lineHeight: 20,
-    color: Serene.onSurface,
-    ...Shadow.card,
-  },
-  textArea: {
-    minHeight: 96,
-  },
-  priorityRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  priorityOption: {
-    flex: 1,
-    height: 40,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.surfaceContainerLowest,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 5,
-    ...Shadow.card,
-  },
-  priorityHighActive: {
-    backgroundColor: Serene.errorContainer,
-  },
-  priorityMediumActive: {
-    backgroundColor: Serene.secondaryContainer,
-  },
-  priorityLowActive: {
-    backgroundColor: Serene.surfaceContainerHigh,
-  },
-  priorityOptionText: {
-    fontFamily: FontFamily.bodyMedium,
     fontSize: 13,
     lineHeight: 18,
     color: Serene.onSurfaceVariant,
   },
-  priorityHighTextActive: {
-    color: Serene.onErrorContainer,
-    fontFamily: FontFamily.bodySemiBold,
+  textarea: {
+    minHeight: 110,
   },
-  priorityMediumTextActive: {
-    color: Serene.onSecondaryContainer,
-    fontFamily: FontFamily.bodySemiBold,
+  errorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
   },
-  priorityLowTextActive: {
-    color: Serene.onSurface,
-    fontFamily: FontFamily.bodySemiBold,
+  errorText: {
+    fontFamily: FontFamily.bodyMedium,
+    fontSize: 13,
+    lineHeight: 18,
+    color: Serene.error,
   },
-  priorityDot: {
-    width: 6,
-    height: 6,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.outlineVariant,
+  priorities: {
+    flexDirection: 'row',
+    gap: 8,
   },
-  priorityDotActive: {
-    backgroundColor: Serene.error,
-  },
-  selectRow: {
-    minHeight: 56,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: Radius.lg,
+  priority: {
+    flex: 1,
+    height: 48,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: Tint.border,
     backgroundColor: Serene.surfaceContainerLowest,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-    ...Shadow.card,
+    justifyContent: 'center',
+    gap: 6,
   },
-  selectLeft: {
+  pressedSoft: {
+    backgroundColor: Tint.soft,
+  },
+  priorityDot: {
+    width: 8,
+    height: 8,
+    borderRadius: Radius.full,
+  },
+  priorityText: {
+    fontFamily: FontFamily.bodySemiBold,
+    fontSize: 14,
+    lineHeight: 19,
+    color: Tint.navy,
+  },
+  dueCard: {
+    gap: 14,
+  },
+  dueSummary: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    flex: 1,
-    minWidth: 0,
+    gap: 12,
   },
-  selectIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: Radius.md,
-    backgroundColor: Serene.surfaceContainerLow,
+  dueIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: Serene.secondaryContainer,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  selectValue: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 14,
-    lineHeight: 18,
-    color: Serene.onSurface,
+  dueTitle: {
+    fontFamily: FontFamily.headingBold,
+    fontSize: 17,
+    lineHeight: 23,
+    color: Tint.navy,
   },
-  selectHint: {
-    fontFamily: FontFamily.body,
-    fontSize: 12,
-    lineHeight: 16,
-    color: Serene.onSurfaceVariant,
-  },
-  chipsWrap: {
+  wrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
   },
-  chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: Radius.full,
+  days: {
+    gap: 8,
+  },
+  day: {
+    width: 52,
+    height: 64,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Tint.border,
     backgroundColor: Serene.surfaceContainerLowest,
-    ...Shadow.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
   },
-  chipActive: {
-    backgroundColor: Serene.primary,
+  daySelected: {
+    backgroundColor: Tint.black,
+    borderColor: Tint.black,
   },
-  chipText: {
+  dayName: {
+    fontFamily: FontFamily.body,
+    fontSize: 13,
+    lineHeight: 17,
+    color: Serene.onSurfaceVariant,
+  },
+  dayNumber: {
+    fontFamily: FontFamily.headingBold,
+    fontSize: 18,
+    lineHeight: 23,
+    color: Tint.navy,
+  },
+  dayTextSelected: {
+    color: Serene.onPrimary,
+  },
+  timePicker: {
+    gap: 10,
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Tint.border,
+    backgroundColor: Tint.softer,
+  },
+  timePickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  timeValue: {
+    fontFamily: FontFamily.headingBold,
+    fontSize: 22,
+    lineHeight: 28,
+    color: Tint.navy,
+    fontVariant: ['tabular-nums'],
+  },
+  timeColumnLabel: {
     fontFamily: FontFamily.bodyMedium,
     fontSize: 13,
     lineHeight: 18,
     color: Serene.onSurfaceVariant,
   },
-  chipTextActive: {
+  timeRow: {
+    gap: 8,
+  },
+  timeCell: {
+    width: 52,
+    height: 48,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Tint.border,
+    backgroundColor: Serene.surfaceContainerLowest,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  minutesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  minuteCell: {
+    width: 52,
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Tint.border,
+    backgroundColor: Serene.surfaceContainerLowest,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timeCellSelected: {
+    backgroundColor: Tint.black,
+    borderColor: Tint.black,
+  },
+  timeCellText: {
+    fontFamily: FontFamily.bodySemiBold,
+    fontSize: 16,
+    lineHeight: 21,
+    color: Tint.navy,
+    fontVariant: ['tabular-nums'],
+  },
+  timeCellTextSelected: {
     color: Serene.onPrimary,
+  },
+  timeDone: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    height: 44,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Tint.border,
+    backgroundColor: Serene.surfaceContainerLowest,
+  },
+  timeDoneText: {
+    fontFamily: FontFamily.bodySemiBold,
+    fontSize: 15,
+    lineHeight: 20,
+    color: Tint.primary,
+  },
+  subLabel: {
+    fontFamily: FontFamily.bodySemiBold,
+    fontSize: 14,
+    lineHeight: 19,
+    color: Serene.onSurfaceVariant,
   },
   toggleCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     gap: 12,
-    padding: 12,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.surfaceContainerLowest,
-    ...Shadow.card,
   },
-  toggleLeft: {
+  toggleCardRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    flex: 1,
-    minWidth: 0,
+    gap: 12,
   },
   toggleIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: Radius.md,
-    backgroundColor: Serene.surfaceContainerLow,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: Tint.soft,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  toggleTextBlock: {
-    flex: 1,
-    minWidth: 0,
+  toggleIconOn: {
+    backgroundColor: Serene.secondaryContainer,
   },
   toggleTitle: {
     fontFamily: FontFamily.bodySemiBold,
-    fontSize: 14,
-    lineHeight: 18,
-    color: Serene.onSurface,
+    fontSize: 16,
+    lineHeight: 21,
+    color: Tint.navy,
   },
-  toggleHint: {
-    fontFamily: FontFamily.body,
-    fontSize: 12,
-    lineHeight: 16,
-    color: Serene.onSurfaceVariant,
+  shareCard: {
+    marginTop: 12,
   },
-  memberChip: {
+  shareDetails: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Tint.border,
+    gap: 10,
+  },
+  meChip: {
+    height: 40,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
+    gap: 8,
+    paddingLeft: 6,
+    paddingRight: 14,
     borderRadius: Radius.full,
-    backgroundColor: Serene.surfaceContainerLowest,
-    ...Shadow.card,
+    backgroundColor: Tint.soft,
   },
-  memberChipFixed: {
-    backgroundColor: Serene.surfaceContainerLow,
-  },
-  memberChipActive: {
-    backgroundColor: Serene.secondaryContainer,
-  },
-  memberAvatar: {
-    width: 22,
-    height: 22,
+  avatar: {
+    width: 28,
+    height: 28,
     borderRadius: Radius.full,
+    backgroundColor: Tint.black,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  memberAvatarPrimary: {
-    backgroundColor: Serene.primary,
-  },
-  memberAvatarSecondary: {
-    backgroundColor: Serene.secondary,
-  },
-  memberInitial: {
+  avatarText: {
     fontFamily: FontFamily.bodyBold,
-    fontSize: 10,
-    lineHeight: 12,
+    fontSize: 13,
+    lineHeight: 17,
     color: Serene.onPrimary,
   },
-  memberName: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurface,
+  meText: {
+    fontFamily: FontFamily.bodySemiBold,
+    fontSize: 14,
+    lineHeight: 19,
+    color: Tint.navy,
   },
-  helpCard: {
+  note: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 8,
     padding: 12,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.surfaceContainerLow,
+    borderRadius: 14,
+    backgroundColor: Tint.soft,
   },
-  helpText: {
+  noteText: {
     flex: 1,
     fontFamily: FontFamily.body,
-    fontSize: 12,
-    lineHeight: 16,
-    color: Serene.onSurfaceVariant,
-  },
-  submitButton: {
-    height: 48,
-    marginTop: Space.sm,
-    borderRadius: Radius.xl,
-    backgroundColor: Serene.primary,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    ...Shadow.floating,
-  },
-  submitButtonDisabled: {
-    backgroundColor: Serene.surfaceDim,
-  },
-  submitButtonText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 14,
-    lineHeight: 20,
-    color: Serene.onPrimary,
-  },
-  cancelButton: {
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cancelButtonText: {
-    fontFamily: FontFamily.bodyMedium,
     fontSize: 13,
-    lineHeight: 18,
+    lineHeight: 19,
     color: Serene.onSurfaceVariant,
+  },
+  footer: {
+    paddingTop: 12,
+    paddingHorizontal: Space.gutter,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Tint.border,
+    backgroundColor: Tint.softer,
+    alignItems: 'center',
+  },
+  footerButton: {
+    width: '100%',
+    maxWidth: 528,
   },
 });

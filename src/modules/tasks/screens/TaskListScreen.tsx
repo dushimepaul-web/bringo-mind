@@ -1,588 +1,794 @@
 // S-08 - Liste des tâches | Module M04 Tâches | Phase S4
-import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useMemo, useState } from 'react';
+import {
+  Platform,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppHeader } from '@/components/app-header';
 import { Icon } from '@/components/icon';
-import { FontFamily, Radius, Serene, Shadow, Space, Typography } from '@/constants/design';
+import { FontFamily, Radius, Serene, Space, Tint } from '@/constants/design';
 
-type Group = 'late' | 'today' | 'upcoming' | 'done';
-type Priority = 'Haute' | 'Moyenne' | 'Basse';
+import {
+  BottomSheet,
+  CheckCircle,
+  Chip,
+  PrimaryButton,
+  PriorityBadge,
+  SecondaryButton,
+  SwipeRow,
+  Tag,
+  UndoToast,
+  taskStyles,
+} from '../components/task-ui';
+import {
+  CATEGORIES,
+  CATEGORY_ICONS,
+  GROUP_LABELS,
+  PRIORITY_LABELS,
+  formatDay,
+  formatDue,
+  groupOf,
+  lateDays,
+} from '../data';
+import { taskActions, useFlash, useTasks } from '../store';
+import type { Task, TaskCategory, TaskGroup, TaskPriority } from '../types';
 
-type Task = {
-  id: string;
-  title: string;
-  group: Group;
-  priority: Priority;
-  due: string;
-  category: string;
-  shared?: boolean;
-};
+type FilterKey = 'all' | 'late' | 'today' | 'upcoming' | 'shared' | 'done' | 'archived';
 
-const FILTERS = [
+const FILTERS: { key: FilterKey; label: string }[] = [
   { key: 'all', label: 'Toutes' },
   { key: 'late', label: 'En retard' },
-  { key: 'today', label: "Aujourd'hui" },
+  { key: 'today', label: 'Aujourd’hui' },
   { key: 'upcoming', label: 'À venir' },
+  { key: 'shared', label: 'Partagées' },
   { key: 'done', label: 'Terminées' },
-] as const;
-
-const GROUP_LABELS: Record<Group, string> = {
-  late: 'En retard',
-  today: "Aujourd'hui",
-  upcoming: 'À venir',
-  done: 'Terminées',
-};
-
-const GROUP_ORDER: Group[] = ['late', 'today', 'upcoming', 'done'];
-
-const TASKS: Task[] = [
-  {
-    id: 'attestation',
-    title: 'Renvoyer attestation de domicile signée',
-    group: 'late',
-    priority: 'Haute',
-    due: "Aujourd'hui 17h",
-    category: 'Logement',
-  },
-  {
-    id: 'controle-technique',
-    title: 'Contrôle technique Peugeot 208',
-    group: 'today',
-    priority: 'Moyenne',
-    due: 'Demain • 09h00',
-    category: 'Véhicule',
-  },
-  {
-    id: 'remboursement-dentaire',
-    title: 'Suivre le remboursement soins dentaires',
-    group: 'today',
-    priority: 'Basse',
-    due: '17 mai',
-    category: 'Santé',
-    shared: true,
-  },
-  {
-    id: 'ophtalmo',
-    title: 'Contrôle ophtalmologique',
-    group: 'upcoming',
-    priority: 'Moyenne',
-    due: 'Jeudi 16 mai • 14h30',
-    category: 'Santé',
-  },
-  {
-    id: 'impots',
-    title: 'Finaliser la déclaration de revenus 2023',
-    group: 'upcoming',
-    priority: 'Haute',
-    due: '27 mai',
-    category: 'Impôts',
-  },
-  {
-    id: 'inscription-leo',
-    title: 'Renouvellement inscription scolaire de Léo',
-    group: 'upcoming',
-    priority: 'Moyenne',
-    due: '25 mai',
-    category: 'Famille',
-    shared: true,
-  },
-  {
-    id: 'cantine',
-    title: 'Règlement cantine scolaire 2ème trimestre',
-    group: 'done',
-    priority: 'Basse',
-    due: 'Clôturé le 12 mai',
-    category: 'Famille',
-  },
-  {
-    id: 'dentiste',
-    title: 'Prendre rendez-vous chez le dentiste pour Léo',
-    group: 'done',
-    priority: 'Moyenne',
-    due: 'Clôturé le 10 mai',
-    category: 'Santé',
-  },
+  { key: 'archived', label: 'Archivées' },
 ];
 
+/** Ordre d'affichage des sections dans la vue « Toutes ». */
+const SECTION_ORDER: TaskGroup[] = ['late', 'today', 'upcoming', 'done'];
+
+const PRIORITIES: TaskPriority[] = [4, 3, 2, 1];
+
+type Toast = { text: string; undo?: () => void };
+
 export default function TaskListScreen() {
-  const [selectedFilter, setSelectedFilter] =
-    useState<(typeof FILTERS)[number]['key']>('all');
+  const tasks = useTasks();
+  const flash = useFlash();
+  const [filter, setFilter] = useState<FilterKey>('all');
   const [query, setQuery] = useState('');
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [priorities, setPriorities] = useState<TaskPriority[]>([]);
+  const [categories, setCategories] = useState<TaskCategory[]>([]);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [toast, setToast] = useState<Toast | null>(null);
+  const [showHint, setShowHint] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const visibleTasks = useMemo(() => {
+  // Message laissé par un autre écran (tâche créée, supprimée…).
+  useFocusEffect(
+    useCallback(() => {
+      if (flash) {
+        setToast(flash);
+        taskActions.setFlash(null);
+      }
+    }, [flash]),
+  );
+
+  const counts = useMemo(() => {
+    const result: Record<FilterKey, number> = {
+      all: 0,
+      late: 0,
+      today: 0,
+      upcoming: 0,
+      shared: 0,
+      done: 0,
+      archived: 0,
+    };
+    for (const task of tasks) {
+      const group = groupOf(task);
+      result[group] += 1;
+      if (group !== 'archived') result.all += 1;
+      if (task.household && task.status === 'open') result.shared += 1;
+    }
+    return result;
+  }, [tasks]);
+
+  const visible = useMemo(() => {
     const term = query.trim().toLowerCase();
-
-    return TASKS.filter((task) => {
-      const matchesFilter = selectedFilter === 'all' || task.group === selectedFilter;
-      const matchesQuery =
+    return tasks.filter((task) => {
+      const group = groupOf(task);
+      const inFilter =
+        filter === 'all'
+          ? group !== 'archived'
+          : filter === 'shared'
+            ? task.household !== null && task.status === 'open'
+            : group === filter;
+      const inQuery =
         !term ||
         task.title.toLowerCase().includes(term) ||
-        task.category.toLowerCase().includes(term);
-
-      return matchesFilter && matchesQuery;
+        task.category.toLowerCase().includes(term) ||
+        task.context.toLowerCase().includes(term);
+      const inPriority = priorities.length === 0 || priorities.includes(task.priority);
+      const inCategory = categories.length === 0 || categories.includes(task.category);
+      return inFilter && inQuery && inPriority && inCategory;
     });
-  }, [selectedFilter, query]);
+  }, [tasks, filter, query, priorities, categories]);
 
-  const activeCount = TASKS.filter((task) => task.group !== 'done').length;
+  const sections = useMemo(() => {
+    const order: TaskGroup[] =
+      filter === 'archived' ? ['archived'] : filter === 'shared' ? ['late', 'today', 'upcoming'] : SECTION_ORDER;
+    return order
+      .map((group) => ({
+        group,
+        items: visible
+          .filter((task) => groupOf(task) === group)
+          .sort((a, b) =>
+            group === 'done'
+              ? (b.completedAt?.getTime() ?? 0) - (a.completedAt?.getTime() ?? 0)
+              : a.dueAt.getTime() - b.dueAt.getTime(),
+          ),
+      }))
+      .filter((section) => section.items.length > 0);
+  }, [visible, filter]);
+
+  const advancedCount = priorities.length + categories.length;
+  const activeCount = counts.late + counts.today + counts.upcoming;
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    setTimeout(() => setRefreshing(false), 900);
+  }, []);
+
+  const complete = (task: Task) => {
+    taskActions.complete(task.id);
+    setToast({ text: `« ${task.title} » terminée.`, undo: () => taskActions.reopen(task.id) });
+  };
+  const reopen = (task: Task) => {
+    taskActions.reopen(task.id);
+    setToast({ text: 'Tâche rouverte.', undo: () => taskActions.complete(task.id) });
+  };
+  const postpone = (task: Task) => {
+    taskActions.postpone(task.id, 1);
+    setToast({ text: 'Échéance reportée d’un jour.', undo: () => taskActions.postpone(task.id, -1) });
+  };
+  const restore = (task: Task) => {
+    taskActions.restore(task.id);
+    setToast({ text: 'Tâche restaurée.', undo: () => taskActions.archive(task.id) });
+  };
+
+  const resetFilters = () => {
+    setFilter('all');
+    setQuery('');
+    setPriorities([]);
+    setCategories([]);
+  };
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <SafeAreaView style={taskStyles.safe} edges={['top']}>
       <AppHeader />
 
       <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.content}
+        style={styles.flex}
+        contentContainerStyle={[taskStyles.content, styles.content]}
         showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled">
+        keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={Tint.primary}
+            colors={[Tint.primary]}
+          />
+        }>
         <View style={styles.titleRow}>
-          <View style={styles.titleTextBlock}>
+          <View style={styles.flex}>
             <Text style={styles.eyebrow}>Mon espace</Text>
-            <Text style={styles.title}>Tâches</Text>
+            <Text style={styles.pageTitle}>Tâches</Text>
           </View>
-          <View style={styles.activePill}>
-            <Text style={styles.activePillText}>{activeCount} actives</Text>
-          </View>
+          <Tag label={`${activeCount} actives`} />
         </View>
 
         <View style={styles.searchRow}>
-          <View style={styles.searchBox}>
-            <Icon name="search" size={18} color={Serene.onSurfaceVariant} />
+          <View style={[styles.search, searchFocused && taskStyles.inputFocused]}>
+            <Icon
+              name="search"
+              size={22}
+              color={searchFocused ? Tint.primary : Serene.onSurfaceVariant}
+            />
             <TextInput
               style={styles.searchInput}
-              placeholder="Rechercher une tâche..."
+              placeholder="Rechercher une tâche…"
               placeholderTextColor={Serene.onSurfaceVariant}
+              selectionColor={Tint.primary}
               value={query}
               onChangeText={setQuery}
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => setSearchFocused(false)}
               returnKeyType="search"
-              selectionColor={Serene.secondary}
+              accessibilityLabel="Rechercher une tâche"
             />
+            {query ? (
+              <Pressable
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel="Effacer la recherche"
+                onPress={() => setQuery('')}>
+                <Icon name="cancel" size={20} color={Serene.onSurfaceVariant} filled />
+              </Pressable>
+            ) : null}
           </View>
-          <Pressable style={styles.filterButton} accessibilityLabel="Filtres avancés">
-            <Icon name="tune" size={20} color={Serene.onSurfaceVariant} />
+          <Pressable
+            style={({ pressed }) => [
+              styles.filterButton,
+              advancedCount > 0 && styles.filterButtonActive,
+              pressed && styles.pressed,
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel={`Filtres avancés${advancedCount ? `, ${advancedCount} actifs` : ''}`}
+            onPress={() => setSheetOpen(true)}>
+            <Icon name="tune" size={22} color={advancedCount > 0 ? Serene.onPrimary : Tint.navy} />
+            {advancedCount > 0 ? (
+              <View style={styles.filterBadge}>
+                <Text style={styles.filterBadgeText}>{advancedCount}</Text>
+              </View>
+            ) : null}
           </Pressable>
         </View>
 
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          style={styles.filtersScroll}
-          contentContainerStyle={styles.filtersRow}>
-          {FILTERS.map((filter) => {
-            const active = filter.key === selectedFilter;
-
-            return (
-              <Pressable
-                key={filter.key}
-                onPress={() => setSelectedFilter(filter.key)}
-                style={[styles.filterChip, active && styles.filterChipActive]}
-                accessibilityRole="button"
-                accessibilityState={{ selected: active }}>
-                <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
-                  {filter.label}
-                </Text>
-              </Pressable>
-            );
-          })}
+          style={styles.chipsScroll}
+          contentContainerStyle={styles.chipsRow}>
+          {FILTERS.map((entry) => (
+            <Chip
+              key={entry.key}
+              label={entry.label}
+              selected={filter === entry.key}
+              count={entry.key === 'all' ? undefined : counts[entry.key] || undefined}
+              onPress={() => setFilter(entry.key)}
+            />
+          ))}
         </ScrollView>
 
-        {GROUP_ORDER.map((group) => {
-          const groupTasks = visibleTasks.filter((task) => task.group === group);
-          if (groupTasks.length === 0) return null;
+        {showHint && filter === 'all' ? (
+          <View style={styles.hint}>
+            <Icon name="swipe" size={22} color={Tint.primary} />
+            <Text style={styles.hintText}>
+              Glissez une tâche vers la droite pour la terminer, vers la gauche pour la reporter.
+            </Text>
+            <Pressable
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel="Masquer l’astuce"
+              onPress={() => setShowHint(false)}>
+              <Icon name="close" size={20} color={Serene.onSurfaceVariant} />
+            </Pressable>
+          </View>
+        ) : null}
 
-          return (
-            <View key={group} style={styles.group}>
-              <View style={styles.groupHeader}>
-                <Text style={styles.groupTitle}>{GROUP_LABELS[group]}</Text>
-                <View style={styles.groupCount}>
-                  <Text style={styles.groupCountText}>{groupTasks.length}</Text>
+        {sections.length === 0 ? (
+          <View style={[taskStyles.card, styles.empty]}>
+            <View style={styles.emptyIcon}>
+              <Icon
+                name={filter === 'done' ? 'task_alt' : filter === 'archived' ? 'inventory_2' : 'search_off'}
+                size={30}
+                color={Tint.primary}
+              />
+            </View>
+            <Text style={styles.emptyTitle}>
+              {query || advancedCount
+                ? 'Aucune tâche ne correspond'
+                : filter === 'late'
+                  ? 'Aucune tâche en retard'
+                  : filter === 'archived'
+                    ? 'Aucune tâche archivée'
+                    : 'Rien à faire ici'}
+            </Text>
+            <Text style={styles.emptyText}>
+              {query || advancedCount
+                ? 'Essayez un autre mot-clé ou retirez des filtres.'
+                : 'Profitez-en, ou ajoutez une nouvelle tâche.'}
+            </Text>
+            {query || advancedCount || filter !== 'all' ? (
+              <SecondaryButton label="Réinitialiser les filtres" icon="restart_alt" onPress={resetFilters} />
+            ) : null}
+          </View>
+        ) : (
+          sections.map((section) => (
+            <View key={section.group} style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Text
+                  style={[taskStyles.sectionTitle, section.group === 'late' && styles.lateTitle]}>
+                  {GROUP_LABELS[section.group]}
+                </Text>
+                <View style={[styles.countPill, section.group === 'late' && styles.countPillLate]}>
+                  <Text
+                    style={[styles.countText, section.group === 'late' && styles.countTextLate]}>
+                    {section.items.length}
+                  </Text>
                 </View>
               </View>
-
-              <View style={styles.groupList}>
-                {groupTasks.map((task) => (
-                  <TaskRow key={task.id} task={task} />
+              <View style={styles.stack}>
+                {section.items.map((task) => (
+                  <TaskRow
+                    key={task.id}
+                    task={task}
+                    onToggle={() => (task.status === 'open' ? complete(task) : reopen(task))}
+                    onPostpone={() => postpone(task)}
+                    onRestore={() => restore(task)}
+                  />
                 ))}
               </View>
             </View>
-          );
-        })}
-
-        {visibleTasks.length === 0 ? (
-          <View style={styles.emptyState}>
-            <View style={styles.emptyIcon}>
-              <Icon name="task_alt" size={28} color={Serene.secondary} />
-            </View>
-            <Text style={styles.emptyTitle}>Aucune tâche trouvée</Text>
-            <Text style={styles.emptyText}>
-              Modifiez vos filtres ou créez une nouvelle tâche.
-            </Text>
-          </View>
-        ) : null}
+          ))
+        )}
       </ScrollView>
 
-      <View style={styles.footer}>
-        <Pressable
-          style={styles.addButton}
-          accessibilityRole="button"
-          onPress={() => router.push('/tasks/add')}>
-          <Icon name="add" size={22} color={Serene.secondaryFixed} />
-          <Text style={styles.addButtonText}>Nouvelle tâche</Text>
-        </Pressable>
+      <View style={styles.fabWrap} pointerEvents="box-none">
+        <PrimaryButton
+          label="Nouvelle tâche"
+          icon="add"
+          onPress={() => router.push('/tasks/add')}
+          style={styles.fab}
+        />
       </View>
+
+      {toast ? (
+        <UndoToast
+          key={toast.text}
+          text={toast.text}
+          onUndo={toast.undo}
+          onHide={() => setToast(null)}
+          bottom={84}
+        />
+      ) : null}
+
+      <BottomSheet
+        visible={sheetOpen}
+        title="Filtres avancés"
+        subtitle="Affinez la liste par priorité et par catégorie."
+        onClose={() => setSheetOpen(false)}>
+        <Text style={taskStyles.label}>Priorité</Text>
+        <View style={styles.wrap}>
+          {PRIORITIES.map((priority) => (
+            <Chip
+              key={priority}
+              label={PRIORITY_LABELS[priority]}
+              selected={priorities.includes(priority)}
+              onPress={() =>
+                setPriorities((list) =>
+                  list.includes(priority) ? list.filter((p) => p !== priority) : [...list, priority],
+                )
+              }
+            />
+          ))}
+        </View>
+        <Text style={[taskStyles.label, styles.sheetLabel]}>Catégorie</Text>
+        <View style={styles.wrap}>
+          {CATEGORIES.map((category) => (
+            <Chip
+              key={category}
+              label={category}
+              icon={CATEGORY_ICONS[category]}
+              selected={categories.includes(category)}
+              onPress={() =>
+                setCategories((list) =>
+                  list.includes(category) ? list.filter((c) => c !== category) : [...list, category],
+                )
+              }
+            />
+          ))}
+        </View>
+        <View style={styles.sheetActions}>
+          <SecondaryButton
+            label="Réinitialiser"
+            style={styles.flex}
+            onPress={() => {
+              setPriorities([]);
+              setCategories([]);
+            }}
+          />
+          <PrimaryButton
+            label={`Voir ${visible.length} tâche${visible.length > 1 ? 's' : ''}`}
+            style={styles.sheetPrimary}
+            onPress={() => setSheetOpen(false)}
+          />
+        </View>
+      </BottomSheet>
     </SafeAreaView>
   );
 }
 
-function TaskRow({ task }: { task: Task }) {
-  const [checked, setChecked] = useState(task.group === 'done');
+function TaskRow({
+  task,
+  onToggle,
+  onPostpone,
+  onRestore,
+}: {
+  task: Task;
+  onToggle: () => void;
+  onPostpone: () => void;
+  onRestore: () => void;
+}) {
+  const done = task.status === 'done';
+  const archived = task.status === 'archived';
+  const late = lateDays(task);
+  const doneSubtasks = task.subtasks.filter((sub) => sub.done).length;
 
-  const priorityStyle =
-    task.priority === 'Haute'
-      ? styles.priorityHigh
-      : task.priority === 'Moyenne'
-        ? styles.priorityMedium
-        : styles.priorityLow;
+  const dueLabel = done
+    ? `Terminée le ${formatDay(task.completedAt ?? task.dueAt)}`
+    : archived
+      ? 'Archivée'
+      : late > 0
+        ? `En retard • ${formatDue(task)}`
+        : formatDue(task);
 
-  const priorityTextStyle =
-    task.priority === 'Haute'
-      ? styles.priorityTextHigh
-      : task.priority === 'Moyenne'
-        ? styles.priorityTextMedium
-        : styles.priorityTextLow;
-
-  return (
+  const card = (
     <Pressable
-      style={styles.taskCard}
-      onPress={() => router.push('/tasks/detail')}
-      accessibilityRole="button">
-      <Pressable
-        style={[styles.checkbox, checked && styles.checkboxChecked]}
-        onPress={() => setChecked((value) => !value)}
-        accessibilityRole="checkbox"
-        accessibilityState={{ checked }}
-        hitSlop={8}>
-        {checked ? <Icon name="check" size={13} color={Serene.onPrimary} /> : null}
-      </Pressable>
-
-      <View style={styles.taskBody}>
-        <View style={styles.taskTopRow}>
-          <View style={[styles.priorityPill, priorityStyle]}>
-            <Text style={[styles.priorityText, priorityTextStyle]}>{task.priority}</Text>
-          </View>
-          <Text style={styles.taskDue} numberOfLines={1}>
-            {task.due}
+      style={({ pressed }) => [taskStyles.card, styles.row, pressed && taskStyles.cardPressed]}
+      // Sur le web, un rôle « button » produirait un <button> contenant la case à cocher.
+      accessibilityRole={Platform.OS === 'web' ? undefined : 'button'}
+      accessibilityLabel={`${task.title}, ${dueLabel}`}
+      onPress={() => router.push({ pathname: '/tasks/detail', params: { id: task.id } })}>
+      {archived ? (
+        <View style={styles.archivedIcon}>
+          <Icon name="inventory_2" size={18} color={Serene.onSurfaceVariant} />
+        </View>
+      ) : (
+        <CheckCircle
+          checked={done}
+          onPress={onToggle}
+          label={done ? `Rouvrir ${task.title}` : `Terminer ${task.title}`}
+        />
+      )}
+      <View style={styles.rowBody}>
+        <View style={styles.rowTop}>
+          <PriorityBadge priority={task.priority} />
+          <Text
+            style={[styles.due, late > 0 && styles.dueLate, done && styles.dueDone]}
+            numberOfLines={1}>
+            {dueLabel}
           </Text>
         </View>
-
-        <Text
-          style={[styles.taskTitle, checked && styles.taskTitleChecked]}
-          numberOfLines={2}>
+        <Text style={[taskStyles.title, done && styles.titleDone]} numberOfLines={2}>
           {task.title}
         </Text>
-
-        <View style={styles.taskMetaRow}>
-          <View style={styles.taskMetaItem}>
-            <Icon name="folder" size={14} color={Serene.onSurfaceVariant} />
-            <Text style={styles.taskMetaText}>{task.category}</Text>
+        <View style={styles.meta}>
+          <View style={styles.metaItem}>
+            <Icon name={CATEGORY_ICONS[task.category]} size={16} color={Serene.onSurfaceVariant} />
+            <Text style={styles.metaText}>{task.category}</Text>
           </View>
-          {task.shared ? (
-            <View style={styles.taskMetaItem}>
-              <Icon name="group" size={14} color={Serene.onSurfaceVariant} />
-              <Text style={styles.taskMetaText}>Partagée</Text>
+          {task.household ? (
+            <View style={styles.metaItem}>
+              <Icon name="group" size={16} color={Tint.primary} />
+              <Text style={[styles.metaText, styles.metaShared]}>Partagée</Text>
+            </View>
+          ) : null}
+          {task.subtasks.length > 0 ? (
+            <View style={styles.metaItem}>
+              <Icon name="checklist" size={16} color={Serene.onSurfaceVariant} />
+              <Text style={styles.metaText}>
+                {doneSubtasks}/{task.subtasks.length}
+              </Text>
             </View>
           ) : null}
         </View>
       </View>
-
-      <Icon name="chevron_right" size={20} color={Serene.outlineVariant} />
+      {archived ? (
+        <Pressable
+          style={({ pressed }) => [styles.restore, pressed && styles.pressed]}
+          accessibilityRole="button"
+          onPress={onRestore}>
+          <Icon name="unarchive" size={18} color={Tint.primary} />
+          <Text style={taskStyles.link}>Restaurer</Text>
+        </Pressable>
+      ) : (
+        <Icon name="chevron_right" size={22} color={Serene.onSurfaceVariant} />
+      )}
     </Pressable>
+  );
+
+  if (task.status !== 'open') return card;
+
+  return (
+    <SwipeRow
+      onSwipeRight={onToggle}
+      onSwipeLeft={onPostpone}
+      rightLabel="Terminer"
+      leftLabel="Reporter">
+      {card}
+    </SwipeRow>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: {
+  flex: {
     flex: 1,
-    backgroundColor: Serene.surface,
   },
-  scroll: {
-    flex: 1,
+  pressed: {
+    opacity: 0.7,
   },
   content: {
-    paddingHorizontal: Space.gutter,
-    paddingTop: Space.sm,
-    paddingBottom: Space.md,
+    paddingBottom: 120,
   },
   titleRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    alignItems: 'flex-end',
     gap: 12,
-  },
-  titleTextBlock: {
-    flex: 1,
+    paddingTop: 16,
   },
   eyebrow: {
     fontFamily: FontFamily.bodySemiBold,
-    fontSize: 11,
-    lineHeight: 14,
+    fontSize: 13,
+    lineHeight: 18,
     letterSpacing: 0.5,
     textTransform: 'uppercase',
-    color: Serene.secondary,
+    color: Tint.primary,
   },
-  title: {
-    ...Typography.headlineMd,
-    color: Serene.onSurface,
-  },
-  activePill: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.surfaceContainerHigh,
-  },
-  activePillText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 11,
-    lineHeight: 14,
-    color: Serene.onSurfaceVariant,
+  pageTitle: {
+    fontFamily: FontFamily.headingBold,
+    fontSize: 30,
+    lineHeight: 36,
+    letterSpacing: -0.6,
+    color: Tint.navy,
   },
   searchRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+    gap: 10,
     marginTop: Space.md,
   },
-  searchBox: {
+  search: {
     flex: 1,
-    height: 44,
-    paddingHorizontal: 12,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.surfaceContainerLow,
+    height: 52,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
+    paddingHorizontal: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Tint.border,
+    backgroundColor: Serene.surfaceContainerLowest,
   },
   searchInput: {
     flex: 1,
-    height: 44,
+    minWidth: 0,
+    outlineWidth: 0,
     fontFamily: FontFamily.body,
-    fontSize: 14,
-    color: Serene.onSurface,
+    fontSize: 16,
+    color: Tint.navy,
+    paddingVertical: 0,
   },
   filterButton: {
-    width: 44,
-    height: 44,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.surfaceContainerLow,
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Tint.border,
+    backgroundColor: Serene.surfaceContainerLowest,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  filtersScroll: {
-    marginTop: 12,
+  filterButtonActive: {
+    backgroundColor: Tint.black,
+    borderColor: Tint.black,
+  },
+  filterBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 4,
+    borderRadius: Radius.full,
+    backgroundColor: Serene.secondaryFixed,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterBadgeText: {
+    fontFamily: FontFamily.bodyBold,
+    fontSize: 11,
+    lineHeight: 14,
+    color: Serene.onSecondaryFixed,
+  },
+  chipsScroll: {
+    marginTop: 14,
     marginHorizontal: -Space.gutter,
   },
-  filtersRow: {
-    paddingHorizontal: Space.gutter,
+  chipsRow: {
     gap: 8,
-    paddingVertical: 2,
+    paddingHorizontal: Space.gutter,
   },
-  filterChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
+  hint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 16,
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#99f6e4',
+    backgroundColor: '#f0fdfa',
+  },
+  hintText: {
+    flex: 1,
+    fontFamily: FontFamily.body,
+    fontSize: 14,
+    lineHeight: 20,
+    color: Tint.navy,
+  },
+  section: {
+    marginTop: 26,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  lateTitle: {
+    color: '#b91c1c',
+  },
+  countPill: {
+    minWidth: 26,
+    height: 24,
+    paddingHorizontal: 8,
     borderRadius: Radius.full,
-    backgroundColor: Serene.surfaceContainerLowest,
-    ...Shadow.card,
+    backgroundColor: Tint.soft,
+    borderWidth: 1,
+    borderColor: Tint.border,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  filterChipActive: {
-    backgroundColor: Serene.primary,
+  countPillLate: {
+    backgroundColor: '#fee2e2',
+    borderColor: '#fecaca',
   },
-  filterChipText: {
-    fontFamily: FontFamily.bodyMedium,
+  countText: {
+    fontFamily: FontFamily.bodyBold,
+    fontSize: 13,
+    lineHeight: 17,
+    color: Tint.navy,
+  },
+  countTextLate: {
+    color: '#b91c1c',
+  },
+  stack: {
+    gap: 12,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  rowBody: {
+    flex: 1,
+    minWidth: 0,
+    gap: 4,
+  },
+  rowTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  due: {
+    flexShrink: 1,
+    fontFamily: FontFamily.bodySemiBold,
     fontSize: 13,
     lineHeight: 18,
     color: Serene.onSurfaceVariant,
   },
-  filterChipTextActive: {
-    color: Serene.onPrimary,
+  dueLate: {
+    color: '#b91c1c',
   },
-  group: {
-    marginTop: Space.md,
+  dueDone: {
+    color: Serene.success,
   },
-  groupHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: Space.sm,
-  },
-  groupTitle: {
-    ...Typography.headlineSm,
-    color: Serene.onSurface,
-  },
-  groupCount: {
-    minWidth: 20,
-    height: 20,
-    paddingHorizontal: 5,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.surfaceContainerHigh,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  groupCountText: {
-    fontFamily: FontFamily.bodyBold,
-    fontSize: 11,
-    lineHeight: 14,
-    color: Serene.onSurfaceVariant,
-  },
-  groupList: {
-    gap: 10,
-  },
-  taskCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-    padding: 14,
-    borderRadius: Radius.xl,
-    backgroundColor: Serene.surfaceContainerLowest,
-    ...Shadow.card,
-  },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 6,
-    borderWidth: 1.5,
-    borderColor: Serene.outlineVariant,
-    backgroundColor: Serene.surfaceContainerLowest,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 2,
-    flexShrink: 0,
-  },
-  checkboxChecked: {
-    borderWidth: 0,
-    backgroundColor: Serene.secondary,
-  },
-  taskBody: {
-    flex: 1,
-    minWidth: 0,
-  },
-  taskTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-    marginBottom: 4,
-  },
-  priorityPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: Radius.full,
-  },
-  priorityHigh: {
-    backgroundColor: Serene.errorContainer,
-  },
-  priorityMedium: {
-    backgroundColor: Serene.secondaryContainer,
-  },
-  priorityLow: {
-    backgroundColor: Serene.surfaceContainerHigh,
-  },
-  priorityText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 10,
-    lineHeight: 14,
-  },
-  priorityTextHigh: {
-    color: Serene.onErrorContainer,
-  },
-  priorityTextMedium: {
-    color: Serene.onSecondaryContainer,
-  },
-  priorityTextLow: {
-    color: Serene.onSurfaceVariant,
-  },
-  taskDue: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 11,
-    lineHeight: 14,
-    color: Serene.onSurfaceVariant,
-    flexShrink: 1,
-    textAlign: 'right',
-  },
-  taskTitle: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 14,
-    lineHeight: 20,
-    color: Serene.onSurface,
-  },
-  taskTitleChecked: {
+  titleDone: {
     color: Serene.onSurfaceVariant,
     textDecorationLine: 'line-through',
   },
-  taskMetaRow: {
+  meta: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: 12,
-    marginTop: 6,
+    marginTop: 2,
   },
-  taskMetaItem: {
+  metaItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
   },
-  taskMetaText: {
-    fontFamily: FontFamily.body,
-    fontSize: 11,
-    lineHeight: 15,
-    color: Serene.onSurfaceVariant,
-  },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: Space.xl,
-    gap: 6,
-  },
-  emptyIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.surfaceContainerLow,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
-  },
-  emptyTitle: {
-    ...Typography.titleMd,
-    color: Serene.onSurface,
-  },
-  emptyText: {
+  metaText: {
     fontFamily: FontFamily.body,
     fontSize: 13,
     lineHeight: 18,
     color: Serene.onSurfaceVariant,
-    textAlign: 'center',
   },
-  footer: {
-    paddingHorizontal: Space.gutter,
-    paddingVertical: 10,
-    backgroundColor: Serene.surface,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Serene.surfaceContainerHigh,
+  metaShared: {
+    fontFamily: FontFamily.bodySemiBold,
+    color: Tint.primary,
   },
-  addButton: {
-    height: 48,
-    borderRadius: Radius.xl,
-    backgroundColor: Serene.primary,
-    flexDirection: 'row',
+  archivedIcon: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    backgroundColor: Tint.soft,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    ...Shadow.floating,
   },
-  addButtonText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 14,
-    lineHeight: 20,
-    color: Serene.onPrimary,
+  restore: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  empty: {
+    marginTop: 26,
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 28,
+  },
+  emptyIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    backgroundColor: Serene.secondaryContainer,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyTitle: {
+    fontFamily: FontFamily.headingBold,
+    fontSize: 18,
+    lineHeight: 24,
+    color: Tint.navy,
+    textAlign: 'center',
+  },
+  emptyText: {
+    fontFamily: FontFamily.body,
+    fontSize: 15,
+    lineHeight: 21,
+    color: Serene.onSurfaceVariant,
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  fabWrap: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 12,
+    paddingHorizontal: Space.gutter,
+    alignItems: 'center',
+  },
+  fab: {
+    width: '100%',
+    maxWidth: 528,
+  },
+  wrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  sheetLabel: {
+    marginTop: 8,
+  },
+  sheetActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 12,
+  },
+  sheetPrimary: {
+    flex: 1.4,
   },
 });

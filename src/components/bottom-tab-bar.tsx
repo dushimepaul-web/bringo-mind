@@ -18,14 +18,21 @@ type Tab = {
 const TABS: Tab[] = [
   { label: 'Accueil', icon: 'home', href: '/dashboard' },
   { label: 'Tâches', icon: 'checklist', href: '/tasks', badge: 3 },
-  { label: 'Assistant', icon: 'arrow_back_ios_new', href: '/assistant', center: true },
+  { label: 'Assistant', icon: 'auto_awesome', href: '/assistant', center: true },
   { label: 'Calendrier', icon: 'calendar_month', href: '/calendar' },
   { label: 'Documents', icon: 'folder', href: '/documents' },
 ];
 
+/** Écrans de saisie plein écran : la barre d'onglets est masquée. */
+const HIDDEN_ON = ['/tasks/add', '/tasks/edit'];
+
 export function BottomTabBar() {
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
+
+  if (HIDDEN_ON.includes(pathname)) {
+    return null;
+  }
 
   return (
     <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, Space.sm) }]}>
@@ -101,8 +108,8 @@ const styles = StyleSheet.create({
   },
   label: {
     fontFamily: FontFamily.bodyMedium,
-    fontSize: 10,
-    lineHeight: 14,
+    fontSize: 12,
+    lineHeight: 16,
     color: Serene.onSurfaceVariant,
   },
   labelActive: {
@@ -113,9 +120,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -4,
     right: -10,
-    minWidth: 14,
-    height: 14,
-    paddingHorizontal: 3,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 4,
     borderRadius: Radius.full,
     backgroundColor: Serene.secondaryContainer,
     alignItems: 'center',
@@ -123,8 +130,8 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     fontFamily: FontFamily.bodyBold,
-    fontSize: 9,
-    lineHeight: 12,
+    fontSize: 11,
+    lineHeight: 14,
     color: Serene.onSecondaryContainer,
   },
   centerSlot: {

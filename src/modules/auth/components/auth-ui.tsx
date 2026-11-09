@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { BrandLogo } from '@/components/brand-logo';
 import { Icon } from '@/components/icon';
 import { FontFamily, Radius, Serene, Space, Tint } from '@/constants/design';
 
@@ -80,20 +81,12 @@ export function BackButton() {
 /** Logo et nom de l'application. `compact` : petit carré seul. */
 export function AuthBrand({ compact, large }: { compact?: boolean; large?: boolean }) {
   if (compact) {
-    return (
-      <View style={[styles.logo, styles.logoCompact]}>
-        <Text style={[styles.logoLetter, styles.logoLetterCompact]}>K</Text>
-        <View style={[styles.logoSwoosh, styles.logoSwooshCompact]} />
-      </View>
-    );
+    return <BrandLogo size={40} />;
   }
 
   return (
     <View style={[styles.brandRow, large && styles.brandColumn]}>
-      <View style={[styles.logo, large && styles.logoLarge]}>
-        <Text style={[styles.logoLetter, large && styles.logoLetterLarge]}>K</Text>
-        <View style={[styles.logoSwoosh, large && styles.logoSwooshLarge]} />
-      </View>
+      <BrandLogo size={large ? 96 : 64} />
       <View style={large && styles.brandTextCentered}>
         <Text style={[styles.wordmark, large && styles.wordmarkLarge]}>
           Bringo <Text style={styles.accent}>Mind</Text>
@@ -445,68 +438,6 @@ const styles = StyleSheet.create({
   },
   brandTextCentered: {
     alignItems: 'center',
-  },
-  logo: {
-    width: 64,
-    height: 64,
-    borderRadius: 18,
-    backgroundColor: Tint.navy,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-    shadowColor: Tint.navy,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  logoLarge: {
-    width: 96,
-    height: 96,
-    borderRadius: 26,
-  },
-  logoCompact: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-  },
-  logoLetter: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 38,
-    lineHeight: 44,
-    color: Serene.onPrimary,
-  },
-  logoLetterLarge: {
-    fontSize: 56,
-    lineHeight: 64,
-  },
-  logoLetterCompact: {
-    fontSize: 22,
-    lineHeight: 28,
-  },
-  logoSwoosh: {
-    position: 'absolute',
-    bottom: 12,
-    right: 8,
-    width: 30,
-    height: 7,
-    borderRadius: Radius.full,
-    backgroundColor: Tint.primary,
-    transform: [{ rotate: '-18deg' }],
-  },
-  logoSwooshLarge: {
-    bottom: 18,
-    right: 12,
-    width: 44,
-    height: 10,
-  },
-  logoSwooshCompact: {
-    bottom: 7,
-    right: 5,
-    width: 18,
-    height: 4,
   },
   wordmark: {
     fontFamily: FontFamily.headingBold,

@@ -1,16 +1,15 @@
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { BrandLogo } from '@/components/brand-logo';
 import { Icon } from '@/components/icon';
-import { FontFamily, Radius, Serene, Space } from '@/constants/design';
+import { FontFamily, Radius, Serene, Space, Tint } from '@/constants/design';
 
 export function AppHeader() {
   return (
     <View style={styles.header}>
       <View style={styles.left}>
-        <View style={styles.logo}>
-          <Text style={styles.logoText}>K</Text>
-        </View>
+        <BrandLogo size={40} />
         <Pressable
           style={styles.selector}
           accessibilityRole="button"
@@ -41,7 +40,7 @@ export function AppHeader() {
           accessibilityRole="button"
           accessibilityLabel="Mon profil"
           onPress={() => router.push('/profile')}>
-          <Icon name="person" size={18} color={Serene.onPrimary} />
+          <Icon name="person" size={20} color={Serene.onPrimary} />
         </Pressable>
       </View>
     </View>
@@ -55,34 +54,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: Serene.surface,
+    backgroundColor: Tint.softer,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Serene.surfaceContainerHigh,
+    borderBottomColor: Tint.border,
   },
   left: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
   },
-  logo: {
-    width: 36,
-    height: 36,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoText: {
-    fontFamily: FontFamily.heading,
-    fontSize: 18,
-    lineHeight: 24,
-    color: Serene.onPrimary,
-  },
   selector: {
-    height: 36,
-    paddingHorizontal: 10,
-    borderRadius: Radius.md,
-    backgroundColor: Serene.surfaceContainerLow,
+    height: 40,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Tint.border,
+    backgroundColor: Serene.surfaceContainerLowest,
     justifyContent: 'center',
   },
   selectorRow: {
@@ -92,9 +79,9 @@ const styles = StyleSheet.create({
   },
   selectorTitle: {
     fontFamily: FontFamily.bodySemiBold,
-    fontSize: 13,
-    lineHeight: 16,
-    color: Serene.onSurface,
+    fontSize: 14,
+    lineHeight: 18,
+    color: Tint.navy,
   },
   selectorSubRow: {
     flexDirection: 'row',
@@ -110,9 +97,9 @@ const styles = StyleSheet.create({
   },
   selectorSub: {
     fontFamily: FontFamily.bodyMedium,
-    fontSize: 10,
-    lineHeight: 12,
-    color: Serene.secondary,
+    fontSize: 12,
+    lineHeight: 15,
+    color: Tint.primary,
   },
   right: {
     flexDirection: 'row',
@@ -134,13 +121,13 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     backgroundColor: Serene.secondary,
     borderWidth: 2,
-    borderColor: Serene.surface,
+    borderColor: Tint.softer,
   },
   avatar: {
-    width: 32,
-    height: 32,
+    width: 36,
+    height: 36,
     borderRadius: Radius.full,
-    backgroundColor: Serene.primary,
+    backgroundColor: Tint.black,
     alignItems: 'center',
     justifyContent: 'center',
   },

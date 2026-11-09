@@ -1,183 +1,366 @@
 // S-09 - Détail d'une tâche | Module M04 Tâches | Phase S4
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icon';
-import { FontFamily, Radius, Serene, Shadow, Space, Typography } from '@/constants/design';
+import { FontFamily, Radius, Serene, Space, Tint } from '@/constants/design';
+
+import {
+  BottomSheet,
+  CheckCircle,
+  ConfirmButton,
+  IconButton,
+  PrimaryButton,
+  PriorityBadge,
+  SecondaryButton,
+  SheetOption,
+  Tag,
+  TopBar,
+  UndoToast,
+  taskStyles,
+} from '../components/task-ui';
+import { CATEGORY_ICONS, formatDay, formatDueLong, formatLongDay, lateDays } from '../data';
+import { taskActions, useTask } from '../store';
+
+type Sheet = 'menu' | 'postpone' | 'delete' | null;
+type Toast = { text: string; undo?: () => void };
+
+const POSTPONE_OPTIONS = [
+  { days: 1, label: 'Demain', icon: 'today' },
+  { days: 3, label: 'Dans 3 jours', icon: 'date_range' },
+  { days: 7, label: 'La semaine prochaine', icon: 'next_week' },
+];
 
 export default function TaskDetailScreen() {
-  const [completed, setCompleted] = useState(false);
+  const { id } = useLocalSearchParams<{ id?: string }>();
+  const task = useTask(id);
+  const [sheet, setSheet] = useState<Sheet>(null);
+  const [toast, setToast] = useState<Toast | null>(null);
+
+  if (!task) {
+    return (
+      <SafeAreaView style={taskStyles.safe} edges={['top']}>
+        <TopBar title="Détail de la tâche" />
+        <View style={[taskStyles.content, styles.missing]}>
+          <View style={styles.missingIcon}>
+            <Icon name="search_off" size={30} color={Tint.primary} />
+          </View>
+          <Text style={styles.missingTitle}>Cette tâche n’existe plus</Text>
+          <Text style={styles.missingText}>Elle a peut-être été supprimée.</Text>
+          <PrimaryButton label="Voir mes tâches" onPress={() => router.replace('/tasks')} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const open = task.status === 'open';
+  const late = lateDays(task);
+  const doneSubtasks = task.subtasks.filter((sub) => sub.done).length;
+  const editHref = { pathname: '/tasks/edit', params: { id: task.id } } as const;
+
+  const status = !open
+    ? task.status === 'done'
+      ? { label: 'Terminée', tone: 'success' as const, icon: 'task_alt' }
+      : { label: 'Archivée', tone: 'neutral' as const, icon: 'inventory_2' }
+    : late > 0
+      ? { label: late === 1 ? 'En retard d’1 jour' : `En retard de ${late} jours`, tone: 'danger' as const, icon: 'warning' }
+      : { label: 'En cours', tone: 'neutral' as const, icon: 'pending' };
+
+  const postpone = (days: number) => {
+    setSheet(null);
+    taskActions.postpone(task.id, days);
+    setToast({
+      text: `Échéance reportée : ${formatDay(new Date(task.dueAt.getTime() + days * 86400000))}.`,
+      undo: () => taskActions.postpone(task.id, -days),
+    });
+  };
+
+  const archive = () => {
+    setSheet(null);
+    if (task.status === 'archived') {
+      taskActions.restore(task.id);
+      setToast({ text: 'Tâche restaurée.', undo: () => taskActions.archive(task.id) });
+    } else {
+      taskActions.archive(task.id);
+      setToast({ text: 'Tâche archivée.', undo: () => taskActions.restore(task.id) });
+    }
+  };
+
+  const remove = () => {
+    setSheet(null);
+    const undo = taskActions.remove(task.id);
+    taskActions.setFlash({ text: `« ${task.title} » supprimée.`, undo });
+    if (router.canGoBack()) router.back();
+    else router.replace('/tasks');
+  };
+
+  const toggleDone = () => {
+    if (open) {
+      taskActions.complete(task.id);
+      setToast({ text: 'Tâche terminée. Bravo !', undo: () => taskActions.reopen(task.id) });
+    } else {
+      taskActions.reopen(task.id);
+      setToast({ text: 'Tâche rouverte.', undo: () => taskActions.complete(task.id) });
+    }
+  };
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
-        <Pressable
-          style={styles.headerButton}
-          accessibilityRole="button"
-          accessibilityLabel="Retour aux tâches"
-          onPress={() => router.back()}>
-          <Icon name="arrow_back" size={22} color={Serene.onSurface} />
-        </Pressable>
-        <Text style={styles.headerTitle}>Détail de la tâche</Text>
-        <Pressable style={styles.headerButton} accessibilityLabel="Plus d'options">
-          <Icon name="more_vert" size={22} color={Serene.onSurfaceVariant} />
-        </Pressable>
-      </View>
+    <SafeAreaView style={taskStyles.safe} edges={['top']}>
+      <TopBar
+        title="Détail de la tâche"
+        right={<IconButton icon="more_vert" label="Plus d’actions" onPress={() => setSheet('menu')} />}
+      />
 
       <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.content}
+        style={styles.flex}
+        contentContainerStyle={[taskStyles.content, styles.content]}
         showsVerticalScrollIndicator={false}>
-        <View style={styles.pillsRow}>
-          <View style={styles.priorityPill}>
-            <View style={styles.priorityDot} />
-            <Text style={styles.priorityText}>Haute priorité</Text>
-          </View>
-          <View style={styles.statusPill}>
-            <Text style={styles.statusText}>{completed ? 'Terminée' : 'En cours'}</Text>
-          </View>
+        <View style={styles.badges}>
+          <PriorityBadge priority={task.priority} withDot />
+          <Tag icon={status.icon} label={status.label} tone={status.tone} />
+          <Tag
+            icon={task.household ? 'group' : 'person'}
+            label={task.household ? 'Partagée' : 'Personnelle'}
+            tone={task.household ? 'teal' : 'neutral'}
+          />
         </View>
 
-        <Text style={[styles.title, completed && styles.titleCompleted]}>
-          Renvoyer attestation de domicile signée
-        </Text>
-        <Text style={styles.subtitle}>Bailleur Foncia • Format PDF certifié</Text>
+        <Text style={[styles.title, !open && styles.titleDone]}>{task.title}</Text>
+        <Text style={styles.context}>{task.context}</Text>
 
-        <View style={styles.descriptionCard}>
-          <Text style={styles.descriptionLabel}>Description</Text>
-          <Text style={styles.description}>
-            Renvoyer l&apos;attestation de domicile signée au bailleur avant 17h. Le document est
-            déjà scanné, signé électroniquement et prêt à être joint.
-          </Text>
-        </View>
+        {task.description ? (
+          <View style={[taskStyles.card, styles.block]}>
+            <Text style={styles.blockLabel}>Description</Text>
+            <Text style={styles.description}>{task.description}</Text>
+          </View>
+        ) : null}
 
         <SectionTitle icon="info" title="Informations" />
-        <View style={styles.infoCard}>
-          <InfoRow icon="event" label="Échéance" value="Aujourd'hui à 17h00" valueAccent />
-          <View style={styles.divider} />
-          <InfoRow icon="folder" label="Catégorie" value="Logement" />
-          <View style={styles.divider} />
-          <View style={styles.infoRow}>
-            <View style={styles.infoLabel}>
-              <Icon name="person" size={16} color={Serene.onSurfaceVariant} />
-              <Text style={styles.infoLabelText}>Assigné à</Text>
-            </View>
-            <View style={styles.assignee}>
-              <View style={styles.assigneeAvatar}>
-                <Text style={styles.assigneeInitial}>C</Text>
-              </View>
-              <Text style={styles.infoValue}>Claire Martin</Text>
-            </View>
-          </View>
-          <View style={styles.divider} />
-          <InfoRow icon="family_restroom" label="Foyer" value="Foyer Martin" />
-          <View style={styles.divider} />
-          <InfoRow icon="notifications_active" label="Rappel" value="1h avant" />
-          <View style={styles.divider} />
-          <InfoRow icon="calendar_today" label="Créée le" value="12 mai 2024" />
-        </View>
-
-        <SectionTitle icon="checklist" title="Sous-tâches" trailing="2 / 3" />
-        <View style={styles.subtasksCard}>
-          <SubtaskRow title="Télécharger le formulaire" initialChecked />
-          <View style={styles.divider} />
-          <SubtaskRow title="Signer électroniquement" initialChecked />
-          <View style={styles.divider} />
-          <SubtaskRow title="Envoyer au bailleur" />
-        </View>
-
-        <SectionTitle icon="attachment" title="Document lié" />
-        <Pressable
-          style={styles.documentCard}
-          accessibilityRole="button"
-          onPress={() => router.push('/documents/detail')}>
-          <View style={styles.documentIcon}>
-            <Icon name="picture_as_pdf" size={22} color={Serene.secondary} />
-          </View>
-          <View style={styles.documentBody}>
-            <Text style={styles.documentTitle} numberOfLines={1}>
-              Attestation_domicile_2024.pdf
-            </Text>
-            <Text style={styles.documentMeta}>PDF • 248 Ko • Signé</Text>
-          </View>
-          <Icon name="chevron_right" size={20} color={Serene.outlineVariant} />
-        </Pressable>
-
-        <SectionTitle icon="group" title="Partagé avec" />
-        <View style={styles.shareCard}>
-          <View style={styles.shareMember}>
-            <View style={[styles.shareAvatar, styles.shareAvatarPrimary]}>
-              <Text style={styles.shareInitial}>C</Text>
-            </View>
-            <Text style={styles.shareName}>Claire (vous)</Text>
-          </View>
-          <View style={styles.shareMember}>
-            <View style={[styles.shareAvatar, styles.shareAvatarSecondary]}>
-              <Text style={styles.shareInitial}>T</Text>
-            </View>
-            <Text style={styles.shareName}>Thomas</Text>
-          </View>
-        </View>
-
-        <Pressable
-          style={[styles.completeButton, completed && styles.reopenButton]}
-          onPress={() => setCompleted((value) => !value)}
-          accessibilityRole="button">
-          <Icon
-            name={completed ? 'replay' : 'done_all'}
-            size={18}
-            color={completed ? Serene.onSurface : Serene.onSecondary}
+        <View style={[taskStyles.card, styles.infoCard]}>
+          <InfoRow
+            icon="event"
+            label="Échéance"
+            value={formatDueLong(task)}
+            danger={late > 0}
           />
-          <Text
-            style={[styles.completeButtonText, completed && styles.reopenButtonText]}>
-            {completed ? 'Rouvrir la tâche' : 'Marquer comme terminée'}
-          </Text>
-        </Pressable>
-
-        <View style={styles.secondaryActions}>
-          <Pressable
-            style={styles.secondaryButton}
-            accessibilityRole="button"
-            onPress={() => router.push('/tasks/edit')}>
-            <Icon name="edit" size={18} color={Serene.onSurface} />
-            <Text style={styles.secondaryButtonText}>Modifier</Text>
-          </Pressable>
-          <Pressable
-            style={styles.secondaryButton}
-            accessibilityRole="button"
-            onPress={() => router.push('/calendar/add')}>
-            <Icon name="schedule" size={18} color={Serene.onSurface} />
-            <Text style={styles.secondaryButtonText}>Reporter</Text>
-          </Pressable>
+          <InfoRow icon={CATEGORY_ICONS[task.category]} label="Catégorie" value={task.category} />
+          <InfoRow
+            icon="person"
+            label="Assignée à"
+            value={task.assignee === 'Claire' ? 'Claire Martin (vous)' : `${task.assignee} Martin`}
+            avatar={task.assignee.charAt(0)}
+          />
+          <InfoRow
+            icon={task.household ? 'family_restroom' : 'lock'}
+            label="Espace"
+            value={task.household ?? 'Personnel'}
+          />
+          <InfoRow
+            icon="notifications_active"
+            label="Rappel"
+            value={task.reminder ? '1 h avant l’échéance' : 'Aucun'}
+          />
+          <InfoRow
+            icon="calendar_add_on"
+            label="Créée le"
+            value={formatLongDay(task.createdAt)}
+            last
+          />
         </View>
 
-        <Pressable style={styles.deleteButton} accessibilityRole="button">
-          <Icon name="delete" size={16} color={Serene.error} />
-          <Text style={styles.deleteText}>Supprimer la tâche</Text>
-        </Pressable>
+        {task.subtasks.length > 0 ? (
+          <>
+            <SectionTitle
+              icon="checklist"
+              title="Sous-tâches"
+              aside={`${doneSubtasks}/${task.subtasks.length}`}
+            />
+            <View style={[taskStyles.card, styles.subtasks]}>
+              <View style={styles.progressTrack}>
+                <View
+                  style={[
+                    styles.progressFill,
+                    { width: `${(doneSubtasks / task.subtasks.length) * 100}%` },
+                  ]}
+                />
+              </View>
+              {task.subtasks.map((sub, index) => (
+                <Pressable
+                  key={sub.id}
+                  style={[styles.subRow, index > 0 && styles.subRowBorder]}
+                  // La case à cocher porte le rôle accessible ; la ligne élargit seulement la zone tactile.
+                  onPress={() => taskActions.toggleSubtask(task.id, sub.id)}>
+                  <CheckCircle
+                    square
+                    checked={sub.done}
+                    label={sub.title}
+                    onPress={() => taskActions.toggleSubtask(task.id, sub.id)}
+                  />
+                  <Text style={[styles.subText, sub.done && styles.subTextDone]}>{sub.title}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </>
+        ) : null}
+
+        {task.document ? (
+          <>
+            <SectionTitle icon="attach_file" title="Document lié" />
+            <Pressable
+              style={({ pressed }) => [taskStyles.card, styles.docRow, pressed && taskStyles.cardPressed]}
+              accessibilityRole="button"
+              onPress={() => router.push('/documents/detail')}>
+              <View style={styles.docIcon}>
+                <Icon name="picture_as_pdf" size={24} color={Tint.navy} />
+              </View>
+              <View style={styles.flexMin}>
+                <Text style={taskStyles.title} numberOfLines={1}>
+                  {task.document.name}
+                </Text>
+                <Text style={taskStyles.muted}>{task.document.meta}</Text>
+              </View>
+              <Icon name="chevron_right" size={22} color={Serene.onSurfaceVariant} />
+            </Pressable>
+          </>
+        ) : null}
+
+        {task.household ? (
+          <>
+            <SectionTitle icon="group" title="Partagée avec" />
+            <View style={[taskStyles.card, styles.people]}>
+              <Person name="Claire (vous)" initial="C" dark />
+              {task.sharedWith.map((name) => (
+                <Person key={name} name={name} initial={name.charAt(0)} />
+              ))}
+            </View>
+            <Text style={styles.privacy}>
+              Les membres voient cette tâche, mais jamais vos notes ni vos tâches personnelles.
+            </Text>
+          </>
+        ) : null}
+
+        <View style={styles.actions}>
+          {open ? (
+            <ConfirmButton label="Marquer comme terminée" icon="done_all" onPress={toggleDone} />
+          ) : task.status === 'done' ? (
+            <SecondaryButton label="Rouvrir la tâche" icon="undo" onPress={toggleDone} />
+          ) : (
+            <ConfirmButton label="Restaurer la tâche" icon="unarchive" onPress={archive} />
+          )}
+          <View style={styles.actionRow}>
+            <SecondaryButton
+              label="Modifier"
+              icon="edit"
+              style={styles.flex}
+              onPress={() => router.push(editHref)}
+            />
+            {open ? (
+              <SecondaryButton
+                label="Reporter"
+                icon="schedule"
+                style={styles.flex}
+                onPress={() => setSheet('postpone')}
+              />
+            ) : null}
+          </View>
+          <View style={styles.actionRow}>
+            {task.status !== 'archived' ? (
+              <SecondaryButton label="Archiver" icon="inventory_2" style={styles.flex} onPress={archive} />
+            ) : null}
+            <SecondaryButton
+              label="Supprimer"
+              icon="delete"
+              danger
+              style={styles.flex}
+              onPress={() => setSheet('delete')}
+            />
+          </View>
+        </View>
       </ScrollView>
+
+      {toast ? (
+        <UndoToast
+          key={toast.text}
+          text={toast.text}
+          onUndo={toast.undo}
+          onHide={() => setToast(null)}
+          bottom={96}
+        />
+      ) : null}
+
+      <BottomSheet visible={sheet === 'menu'} title="Actions" onClose={() => setSheet(null)}>
+        <SheetOption
+          icon="edit"
+          label="Modifier la tâche"
+          onPress={() => {
+            setSheet(null);
+            router.push(editHref);
+          }}
+        />
+        {open ? (
+          <SheetOption icon="schedule" label="Reporter l’échéance" onPress={() => setSheet('postpone')} />
+        ) : null}
+        <SheetOption
+          icon={task.status === 'archived' ? 'unarchive' : 'inventory_2'}
+          label={task.status === 'archived' ? 'Restaurer' : 'Archiver'}
+          hint="La tâche quitte vos listes actives sans être supprimée."
+          onPress={archive}
+        />
+        <SheetOption icon="delete" label="Supprimer" danger onPress={() => setSheet('delete')} />
+      </BottomSheet>
+
+      <BottomSheet
+        visible={sheet === 'postpone'}
+        title="Reporter l’échéance"
+        subtitle={`Actuellement : ${formatDueLong(task)}`}
+        onClose={() => setSheet(null)}>
+        {POSTPONE_OPTIONS.map((option) => (
+          <SheetOption
+            key={option.days}
+            icon={option.icon}
+            label={option.label}
+            hint={formatLongDay(new Date(task.dueAt.getTime() + option.days * 86400000))}
+            onPress={() => postpone(option.days)}
+          />
+        ))}
+        <SheetOption
+          icon="edit_calendar"
+          label="Choisir une date"
+          onPress={() => {
+            setSheet(null);
+            router.push(editHref);
+          }}
+        />
+      </BottomSheet>
+
+      <BottomSheet
+        visible={sheet === 'delete'}
+        title="Supprimer cette tâche ?"
+        subtitle="Elle sera retirée de toutes vos listes. Vous pourrez annuler pendant quelques secondes."
+        onClose={() => setSheet(null)}>
+        <View style={styles.deleteRow}>
+          <SecondaryButton label="Garder" style={styles.flex} onPress={() => setSheet(null)} />
+          <Pressable
+            style={({ pressed }) => [styles.deleteButton, pressed && styles.deletePressed]}
+            accessibilityRole="button"
+            onPress={remove}>
+            <Icon name="delete" size={20} color={Serene.onPrimary} />
+            <Text style={styles.deleteText}>Supprimer</Text>
+          </Pressable>
+        </View>
+      </BottomSheet>
     </SafeAreaView>
   );
 }
 
-function SectionTitle({
-  icon,
-  title,
-  trailing,
-}: {
-  icon: string;
-  title: string;
-  trailing?: string;
-}) {
+function SectionTitle({ icon, title, aside }: { icon: string; title: string; aside?: string }) {
   return (
-    <View style={styles.sectionHeader}>
-      <View style={styles.sectionTitleRow}>
-        <Icon name={icon} size={18} color={Serene.onSurface} />
-        <Text style={styles.sectionTitle}>{title}</Text>
-      </View>
-      {trailing ? <Text style={styles.sectionTrailing}>{trailing}</Text> : null}
+    <View style={styles.sectionTitle}>
+      <Icon name={icon} size={22} color={Tint.navy} />
+      <Text style={[taskStyles.sectionTitle, styles.flex]}>{title}</Text>
+      {aside ? <Text style={styles.aside}>{aside}</Text> : null}
     </View>
   );
 }
@@ -186,415 +369,304 @@ function InfoRow({
   icon,
   label,
   value,
-  valueAccent,
+  danger,
+  avatar,
+  last,
 }: {
   icon: string;
   label: string;
   value: string;
-  valueAccent?: boolean;
+  danger?: boolean;
+  avatar?: string;
+  last?: boolean;
 }) {
   return (
-    <View style={styles.infoRow}>
-      <View style={styles.infoLabel}>
-        <Icon name={icon} size={16} color={Serene.onSurfaceVariant} />
-        <Text style={styles.infoLabelText}>{label}</Text>
+    <View style={[styles.infoRow, !last && styles.infoRowBorder]}>
+      <Icon name={icon} size={20} color={Serene.onSurfaceVariant} />
+      <Text style={styles.infoLabel}>{label}</Text>
+      <View style={styles.infoValueWrap}>
+        {avatar ? (
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{avatar}</Text>
+          </View>
+        ) : null}
+        <Text style={[styles.infoValue, danger && styles.infoValueDanger]} numberOfLines={2}>
+          {value}
+        </Text>
       </View>
-      <Text style={[styles.infoValue, valueAccent && styles.infoValueAccent]} numberOfLines={1}>
-        {value}
-      </Text>
     </View>
   );
 }
 
-function SubtaskRow({
-  title,
-  initialChecked,
-}: {
-  title: string;
-  initialChecked?: boolean;
-}) {
-  const [checked, setChecked] = useState(Boolean(initialChecked));
-
+function Person({ name, initial, dark }: { name: string; initial: string; dark?: boolean }) {
   return (
-    <Pressable
-      style={styles.subtaskRow}
-      onPress={() => setChecked((value) => !value)}
-      accessibilityRole="checkbox"
-      accessibilityState={{ checked }}>
-      <View style={[styles.subtaskCheckbox, checked && styles.subtaskCheckboxChecked]}>
-        {checked ? <Icon name="check" size={12} color={Serene.onPrimary} /> : null}
+    <View style={styles.person}>
+      <View style={[styles.avatar, !dark && styles.avatarTeal]}>
+        <Text style={styles.avatarText}>{initial}</Text>
       </View>
-      <Text style={[styles.subtaskText, checked && styles.subtaskTextChecked]}>{title}</Text>
-    </Pressable>
+      <Text style={styles.personName}>{name}</Text>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: {
+  flex: {
     flex: 1,
-    backgroundColor: Serene.surface,
   },
-  header: {
-    height: 56,
-    paddingHorizontal: Space.gutter,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Serene.surface,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Serene.surfaceContainerHigh,
-  },
-  headerButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
+  flexMin: {
     flex: 1,
-    textAlign: 'center',
-    ...Typography.titleMd,
-    color: Serene.onSurface,
-  },
-  scroll: {
-    flex: 1,
+    minWidth: 0,
   },
   content: {
-    paddingHorizontal: Space.gutter,
-    paddingTop: Space.md,
-    paddingBottom: Space.lg,
+    paddingTop: 4,
+    paddingBottom: 120,
   },
-  pillsRow: {
+  badges: {
     flexDirection: 'row',
-    alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 8,
   },
-  priorityPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.errorContainer,
-  },
-  priorityDot: {
-    width: 6,
-    height: 6,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.error,
-  },
-  priorityText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 11,
-    lineHeight: 14,
-    color: Serene.onErrorContainer,
-  },
-  statusPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.surfaceContainerHigh,
-  },
-  statusText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 11,
-    lineHeight: 14,
-    color: Serene.onSurfaceVariant,
-  },
   title: {
-    ...Typography.headlineMd,
-    color: Serene.onSurface,
-    marginTop: 10,
+    fontFamily: FontFamily.headingBold,
+    fontSize: 28,
+    lineHeight: 34,
+    letterSpacing: -0.5,
+    color: Tint.navy,
+    marginTop: 12,
   },
-  titleCompleted: {
+  titleDone: {
     color: Serene.onSurfaceVariant,
     textDecorationLine: 'line-through',
   },
-  subtitle: {
+  context: {
     fontFamily: FontFamily.body,
+    fontSize: 15,
+    lineHeight: 21,
+    color: Serene.onSurfaceVariant,
+    marginTop: 6,
+  },
+  block: {
+    marginTop: Space.md,
+    gap: 6,
+  },
+  blockLabel: {
+    fontFamily: FontFamily.bodySemiBold,
     fontSize: 13,
     lineHeight: 18,
-    color: Serene.onSurfaceVariant,
-    marginTop: 4,
-  },
-  descriptionCard: {
-    marginTop: Space.md,
-    padding: 14,
-    borderRadius: Radius.xl,
-    backgroundColor: Serene.surfaceContainerLowest,
-    gap: 4,
-    ...Shadow.card,
-  },
-  descriptionLabel: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 10,
-    lineHeight: 14,
-    letterSpacing: 0.5,
+    letterSpacing: 0.4,
     textTransform: 'uppercase',
     color: Serene.onSurfaceVariant,
   },
   description: {
     fontFamily: FontFamily.body,
-    fontSize: 14,
-    lineHeight: 20,
-    color: Serene.onSurface,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-    marginTop: Space.lg,
-    marginBottom: Space.sm,
-  },
-  sectionTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+    fontSize: 16,
+    lineHeight: 24,
+    color: Tint.navy,
   },
   sectionTitle: {
-    ...Typography.headlineSm,
-    color: Serene.onSurface,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 26,
+    marginBottom: 12,
   },
-  sectionTrailing: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 11,
-    lineHeight: 14,
-    color: Serene.onSurfaceVariant,
+  aside: {
+    fontFamily: FontFamily.bodyBold,
+    fontSize: 15,
+    lineHeight: 20,
+    color: Tint.primary,
   },
   infoCard: {
-    paddingHorizontal: Space.sm,
-    paddingVertical: 2,
-    borderRadius: Radius.xl,
-    backgroundColor: Serene.surfaceContainerLowest,
-    ...Shadow.card,
+    paddingVertical: 4,
   },
   infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-    paddingVertical: 11,
-    paddingHorizontal: 4,
+    gap: 10,
+    minHeight: 52,
+    paddingVertical: 10,
+  },
+  infoRowBorder: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Tint.border,
   },
   infoLabel: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flexShrink: 0,
-  },
-  infoLabelText: {
     fontFamily: FontFamily.body,
-    fontSize: 12,
-    lineHeight: 16,
+    fontSize: 15,
+    lineHeight: 20,
     color: Serene.onSurfaceVariant,
   },
+  infoValueWrap: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 8,
+  },
   infoValue: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurface,
     flexShrink: 1,
     textAlign: 'right',
+    fontFamily: FontFamily.bodySemiBold,
+    fontSize: 15,
+    lineHeight: 20,
+    color: Tint.navy,
   },
-  infoValueAccent: {
-    color: Serene.error,
+  infoValueDanger: {
+    color: '#b91c1c',
   },
-  assignee: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  assigneeAvatar: {
-    width: 20,
-    height: 20,
+  avatar: {
+    width: 26,
+    height: 26,
     borderRadius: Radius.full,
-    backgroundColor: Serene.primary,
+    backgroundColor: Tint.black,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  assigneeInitial: {
+  avatarTeal: {
+    backgroundColor: Tint.primary,
+  },
+  avatarText: {
     fontFamily: FontFamily.bodyBold,
-    fontSize: 10,
-    lineHeight: 12,
+    fontSize: 13,
+    lineHeight: 17,
     color: Serene.onPrimary,
   },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: Serene.surfaceContainerHigh,
+  subtasks: {
+    paddingVertical: 12,
   },
-  subtasksCard: {
-    paddingHorizontal: Space.sm,
-    paddingVertical: 2,
-    borderRadius: Radius.xl,
-    backgroundColor: Serene.surfaceContainerLowest,
-    ...Shadow.card,
+  progressTrack: {
+    height: 6,
+    borderRadius: Radius.full,
+    backgroundColor: Tint.soft,
+    overflow: 'hidden',
+    marginBottom: 6,
   },
-  subtaskRow: {
+  progressFill: {
+    height: '100%',
+    borderRadius: Radius.full,
+    backgroundColor: Tint.primary,
+  },
+  subRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingVertical: 11,
-    paddingHorizontal: 4,
+    gap: 12,
+    minHeight: 50,
   },
-  subtaskCheckbox: {
-    width: 18,
-    height: 18,
-    borderRadius: Radius.sm,
-    borderWidth: 1.5,
-    borderColor: Serene.outlineVariant,
-    backgroundColor: Serene.surfaceContainerLowest,
-    alignItems: 'center',
-    justifyContent: 'center',
+  subRowBorder: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Tint.border,
   },
-  subtaskCheckboxChecked: {
-    borderWidth: 0,
-    backgroundColor: Serene.secondary,
+  subText: {
+    flex: 1,
+    fontFamily: FontFamily.body,
+    fontSize: 16,
+    lineHeight: 22,
+    color: Tint.navy,
   },
-  subtaskText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurface,
-  },
-  subtaskTextChecked: {
+  subTextDone: {
     color: Serene.onSurfaceVariant,
     textDecorationLine: 'line-through',
   },
-  documentCard: {
+  docRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    padding: 12,
-    borderRadius: Radius.xl,
-    backgroundColor: Serene.surfaceContainerLowest,
-    ...Shadow.card,
   },
-  documentIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.md,
-    backgroundColor: Serene.surfaceContainerHigh,
+  docIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: Tint.soft,
+    borderWidth: 1,
+    borderColor: Tint.border,
     alignItems: 'center',
     justifyContent: 'center',
-    flexShrink: 0,
   },
-  documentBody: {
-    flex: 1,
-    minWidth: 0,
-  },
-  documentTitle: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurface,
-  },
-  documentMeta: {
-    fontFamily: FontFamily.body,
-    fontSize: 12,
-    lineHeight: 16,
-    color: Serene.onSurfaceVariant,
-  },
-  shareCard: {
+  people: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
-    padding: 12,
-    borderRadius: Radius.xl,
-    backgroundColor: Serene.surfaceContainerLowest,
-    ...Shadow.card,
+    gap: 10,
   },
-  shareMember: {
+  person: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.surfaceContainerLow,
-  },
-  shareAvatar: {
-    width: 20,
-    height: 20,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  shareAvatarPrimary: {
-    backgroundColor: Serene.primary,
-  },
-  shareAvatarSecondary: {
-    backgroundColor: Serene.secondary,
-  },
-  shareInitial: {
-    fontFamily: FontFamily.bodyBold,
-    fontSize: 10,
-    lineHeight: 12,
-    color: Serene.onPrimary,
-  },
-  shareName: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 12,
-    lineHeight: 16,
-    color: Serene.onSurface,
-  },
-  completeButton: {
-    marginTop: Space.lg,
-    height: 48,
-    borderRadius: Radius.xl,
-    backgroundColor: Serene.secondary,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
     gap: 8,
-    ...Shadow.card,
+    paddingLeft: 4,
+    paddingRight: 12,
+    paddingVertical: 4,
+    borderRadius: Radius.full,
+    backgroundColor: Tint.soft,
   },
-  reopenButton: {
-    backgroundColor: Serene.surfaceContainerHigh,
-  },
-  completeButtonText: {
+  personName: {
     fontFamily: FontFamily.bodySemiBold,
-    fontSize: 14,
+    fontSize: 15,
     lineHeight: 20,
-    color: Serene.onSecondary,
+    color: Tint.navy,
   },
-  reopenButtonText: {
-    color: Serene.onSurface,
+  privacy: {
+    fontFamily: FontFamily.body,
+    fontSize: 13,
+    lineHeight: 19,
+    color: Serene.onSurfaceVariant,
+    marginTop: 8,
   },
-  secondaryActions: {
+  actions: {
+    marginTop: 28,
+    gap: 10,
+  },
+  actionRow: {
     flexDirection: 'row',
     gap: 10,
-    marginTop: 10,
   },
-  secondaryButton: {
-    flex: 1,
-    height: 44,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.surfaceContainerLowest,
+  deleteRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    ...Shadow.card,
-  },
-  secondaryButtonText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurface,
+    gap: 10,
   },
   deleteButton: {
+    flex: 1.3,
+    height: 50,
+    borderRadius: 16,
+    backgroundColor: Serene.error,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    height: 40,
-    marginTop: Space.sm,
+    gap: 8,
+  },
+  deletePressed: {
+    opacity: 0.88,
   },
   deleteText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.error,
+    fontFamily: FontFamily.bodySemiBold,
+    fontSize: 16,
+    lineHeight: 21,
+    color: Serene.onPrimary,
+  },
+  missing: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    paddingBottom: 80,
+  },
+  missingIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    backgroundColor: Serene.secondaryContainer,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  missingTitle: {
+    fontFamily: FontFamily.headingBold,
+    fontSize: 20,
+    lineHeight: 26,
+    color: Tint.navy,
+  },
+  missingText: {
+    fontFamily: FontFamily.body,
+    fontSize: 15,
+    lineHeight: 21,
+    color: Serene.onSurfaceVariant,
+    marginBottom: 8,
   },
 });
