@@ -326,7 +326,10 @@ function HealthRefundCard() {
 
 function AppointmentCard() {
   return (
-    <Card href="/calendar/detail" label="Contrôle ophtalmologique" style={styles.cardGap}>
+    <Card
+      href={{ pathname: '/calendar/detail', params: { id: 'ophtalmo' } }}
+      label="Contrôle ophtalmologique"
+      style={styles.cardGap}>
       <View style={styles.rowBetween}>
         <View style={styles.metaRow}>
           <Icon name="medical_services" size={20} color={Tint.primary} />
@@ -351,12 +354,22 @@ function AppointmentCard() {
         <SmallButton
           icon="directions"
           label="Itinéraire"
-          onPress={() => router.push('/calendar/detail')}
+          onPress={() => router.push({ pathname: '/calendar/detail', params: { id: 'ophtalmo' } })}
         />
         <SmallButton
           icon="notifications_active"
           label="Rappel (1h)"
-          onPress={() => router.push('/reminders/add')}
+          onPress={() =>
+            router.push({
+              pathname: '/reminders/add',
+              params: {
+                linkKind: 'event',
+                linkId: 'ophtalmo',
+                linkTitle: 'Contrôle ophtalmologique',
+                at: new Date(2024, 4, 16, 13, 30).toISOString(),
+              },
+            })
+          }
         />
       </View>
     </Card>

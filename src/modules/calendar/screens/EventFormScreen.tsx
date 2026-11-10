@@ -1,5 +1,5 @@
 // S-15 - Création / édition d'événement | Module M07 Rendez-vous et calendrier | Phase S6
-import { router, usePathname } from 'expo-router';
+import { router, useLocalSearchParams, usePathname } from 'expo-router';
 import { useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -12,760 +12,827 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icon';
-import { FontFamily, Radius, Serene, Shadow, Space, Typography } from '@/constants/design';
+import { Chip, PrimaryButton, TopBar, kitStyles } from '@/components/ui/kit';
+import { DatePickerSheet } from '@/components/ui/date-picker';
+import { TimeWheelSheet } from '@/components/ui/wheel-picker';
+import { FontFamily, Radius, Serene, Space, Tint } from '@/constants/design';
+import {
+  DEMO_TODAY,
+  addDays,
+  atTime,
+  dayOffset,
+  formatDay,
+  formatLongDay,
+  formatTime,
+} from '@/lib/demo-dates';
 
-type EventType = 'rendez-vous' | 'personnel' | 'foyer';
+import {
+  RECURRENCE_LABELS,
+  WEEKDAY_SHORT,
+  REMINDER_OPTIONS,
+  TONES,
+  USER_TIMEZONE,
+  conflictsFor,
+  durationOf,
+  formatDuration,
+  freeSlots,
+} from '../data';
+import { eventActions, useCalendarState, useEvent } from '../store';
+import type { CalendarEvent, EventDraft, EventRecurrence, EventTone } from '../types';
 
-const TYPES: { key: EventType; label: string; icon: string }[] = [
-  { key: 'rendez-vous', label: 'Rendez-vous', icon: 'medical_services' },
-  { key: 'personnel', label: 'Personnel', icon: 'person' },
-  { key: 'foyer', label: 'Foyer', icon: 'family_restroom' },
-];
+const TONE_KEYS: EventTone[] = ['health', 'admin', 'family', 'work', 'leisure'];
+const RECURRENCES: EventRecurrence[] = ['none', 'weekly', 'monthly'];
 
-const TIME_SLOTS = [
-  { start: '09:30', end: '10:15' },
-  { start: '14:00', end: '15:00' },
-  { start: '16:45', end: '17:15' },
-  { start: '18:30', end: '19:30' },
-];
+/** Démo : événement prérempli (demain 10h00, 45 min). */
+function demoDraft(day?: Date, start?: Date): EventDraft {
+  const startAt = start ?? atTime(day ?? addDays(DEMO_TODAY, 1), 10);
+  return {
+    title: 'Retirer la carte d’identité de Léo',
+    start: startAt,
+    end: new Date(startAt.getTime() + 45 * 60000),
+    allDay: false,
+    location: 'Mairie du 11e • Place Léon-Blum',
+    description: 'Apporter l’ancienne carte et le récépissé de demande.',
+    tone: 'admin',
+    // Personnel par défaut : le partage avec le foyer est toujours un choix explicite.
+    shared: false,
+    members: [],
+    reminder: 60,
+    recurrence: 'none',
+  };
+}
 
-const REMINDER_OPTIONS = ['Aucun', '15 min', '30 min', '1 heure', '1 jour'];
-const RECURRENCES = ['Ne se répète pas', 'Chaque semaine', 'Chaque mois'];
+function draftOf(event: CalendarEvent): EventDraft {
+  const { id: _id, cancelled: _cancelled, ...draft } = event;
+  return draft;
+}
 
 export default function EventFormScreen() {
   const pathname = usePathname();
+  const params = useLocalSearchParams<{ id?: string; start?: string; date?: string }>();
   const isEdit = pathname.includes('/edit');
+  const existing = useEvent(isEdit ? params.id : '__new__');
+  const { events } = useCalendarState();
+  const insets = useSafeAreaInsets();
 
-  const [type, setType] = useState<EventType>(isEdit ? 'rendez-vous' : 'rendez-vous');
-  const [title, setTitle] = useState(isEdit ? 'Rendez-vous dentiste' : '');
-  const [location, setLocation] = useState(
-    isEdit ? 'Dr. Moreau • Cabinet Voltaire, Paris 11e' : '',
-  );
-  const [description, setDescription] = useState(
-    isEdit ? 'Apporter la carte vitale et le dossier dentaire.' : '',
-  );
-  const [slotIndex, setSlotIndex] = useState(0);
-  const [allDay, setAllDay] = useState(false);
-  const [reminder, setReminder] = useState(isEdit ? '30 min' : 'Aucun');
-  const [recurrence, setRecurrence] = useState(RECURRENCES[0]);
-  const [shared, setShared] = useState(isEdit);
-  const [shareThomas, setShareThomas] = useState(isEdit);
+  const [draft, setDraft] = useState<EventDraft>(() => {
+    if (existing) return draftOf(existing);
+    const start = params.start ? new Date(params.start) : undefined;
+    const day = params.date ? new Date(params.date) : undefined;
+    // Un jour passé n'est pas proposé : on se cale sur demain.
+    return demoDraft(day && dayOffset(day) >= 0 ? day : undefined, start);
+  });
+  const [focused, setFocused] = useState<'title' | 'location' | 'description' | null>(null);
+  const [titleTouched, setTitleTouched] = useState(false);
+  // Sélecteur ouvert : date ou heure, du début ou de la fin (comme l'agenda du téléphone).
+  const [picker, setPicker] = useState<'startDate' | 'startTime' | 'endDate' | 'endTime' | null>(null);
 
-  const slot = TIME_SLOTS[slotIndex];
-  const hasConflict = slot.start === '14:00';
+  const duration = durationOf(draft);
+  const startHour = draft.start.getHours();
+  const startMinute = draft.start.getMinutes();
+  const endHour = draft.end.getHours();
+  const endMinute = draft.end.getMinutes();
+  const titleError = titleTouched && draft.title.trim().length === 0;
+  // La fin doit suivre le début (même jour ou plus tard pour un événement sur la journée).
+  const endError = draft.allDay
+    ? dayOffset(draft.end) < dayOffset(draft.start)
+    : draft.end.getTime() <= draft.start.getTime();
+  const canSave = draft.title.trim().length > 0 && !endError;
 
-  const canSave = title.trim().length > 0;
+  const slot = { start: draft.start, end: draft.end, allDay: draft.allDay, id: existing?.id };
+  const conflicts = conflictsFor(slot, events);
+  const suggestions = conflicts.length > 0 ? freeSlots(slot, events) : [];
+
+
+  const set = <K extends keyof EventDraft>(key: K, value: EventDraft[K]) =>
+    setDraft((current) => ({ ...current, [key]: value }));
+
+  /** Change le début en gardant la durée. */
+  const setStart = (start: Date) =>
+    setDraft((current) => ({ ...current, start, end: new Date(start.getTime() + durationOf(current) * 60000) }));
+
+  const setEnd = (end: Date) => setDraft((current) => ({ ...current, end }));
+
+  const toggleShare = (value: boolean) =>
+    setDraft((current) => ({ ...current, shared: value, members: value ? ['Thomas'] : [] }));
 
   const handleSave = () => {
-    if (!canSave) return;
-    router.replace('/calendar');
+    if (!canSave) {
+      setTitleTouched(true);
+      return;
+    }
+    const clean: EventDraft = {
+      ...draft,
+      title: draft.title.trim(),
+      location: draft.location.trim(),
+      description: draft.description.trim(),
+      ...(draft.allDay
+        ? { start: atTime(draft.start, 0), end: atTime(draft.end, 23, 59) }
+        : {}),
+    };
+    const when = `${formatLongDay(clean.start)}${clean.allDay ? '' : ` à ${formatTime(clean.start)}`}`;
+    if (isEdit && existing) {
+      eventActions.save(existing.id, clean);
+      eventActions.setFlash({ text: 'Événement mis à jour.' });
+    } else {
+      const newId = eventActions.create(clean);
+      eventActions.setFlash({ text: `Événement ajouté : ${when}.`, undo: eventActions.remove.bind(null, newId) });
+    }
+    if (router.canGoBack()) router.back();
+    else router.replace('/calendar');
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
-        <Pressable
-          style={styles.headerButton}
-          accessibilityRole="button"
-          accessibilityLabel="Annuler"
-          onPress={() => router.back()}>
-          <Icon name="close" size={22} color={Serene.onSurface} />
-        </Pressable>
-        <Text style={styles.headerTitle}>
-          {isEdit ? 'Modifier l’événement' : 'Nouvel événement'}
-        </Text>
-        <Pressable
-          style={styles.saveButton}
-          accessibilityRole="button"
-          onPress={handleSave}
-          disabled={!canSave}>
-          <Text style={[styles.saveButtonText, !canSave && styles.saveButtonTextDisabled]}>
-            Enregistrer
-          </Text>
-        </Pressable>
-      </View>
+    <SafeAreaView style={kitStyles.safe} edges={['top']}>
+      <TopBar close fallback="/calendar" title={isEdit ? 'Modifier l’événement' : 'Nouvel événement'} />
 
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={styles.content}
+          style={styles.flex}
+          contentContainerStyle={[kitStyles.content, styles.content]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled">
-          <View style={styles.typeRow}>
-            {TYPES.map((option) => {
-              const active = type === option.key;
+          {/* Type */}
+          <Text style={[kitStyles.label, styles.gap]}>Type</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.typesScroll}
+            contentContainerStyle={styles.types}>
+            {TONE_KEYS.map((key) => (
+              <Chip
+                key={key}
+                label={TONES[key].label}
+                icon={TONES[key].icon}
+                selected={draft.tone === key}
+                onPress={() => set('tone', key)}
+              />
+            ))}
+          </ScrollView>
 
-              return (
-                <Pressable
-                  key={option.key}
-                  style={[styles.typeChip, active && styles.typeChipActive]}
-                  onPress={() => setType(option.key)}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: active }}>
-                  <Icon
-                    name={option.icon}
-                    size={16}
-                    color={active ? Serene.onPrimary : Serene.onSurfaceVariant}
-                  />
-                  <Text style={[styles.typeText, active && styles.typeTextActive]}>
-                    {option.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
+          {/* Titre */}
+          <Text style={[kitStyles.label, styles.spaced, styles.gap]}>
+            Titre <Text style={styles.required}>*</Text>
+          </Text>
+          <TextInput
+            style={[kitStyles.input, focused === 'title' && kitStyles.inputFocused, titleError && kitStyles.inputError]}
+            value={draft.title}
+            onChangeText={(value) => set('title', value)}
+            onFocus={() => setFocused('title')}
+            onBlur={() => {
+              setFocused(null);
+              setTitleTouched(true);
+            }}
+            placeholder="Ex. Rendez-vous chez le médecin"
+            placeholderTextColor={Serene.onSurfaceVariant}
+            selectionColor={Tint.primary}
+            accessibilityLabel="Titre de l’événement"
+            aria-invalid={titleError}
+          />
+          {titleError ? (
+            <View style={styles.errorRow}>
+              <Icon name="error" size={16} color={Serene.error} />
+              <Text style={styles.errorText}>Donnez un titre à l’événement.</Text>
+            </View>
+          ) : null}
 
-          <Field label="Titre" required>
-            <TextInput
-              style={styles.textInput}
-              placeholder="Ex. Rendez-vous dentiste"
-              placeholderTextColor={Serene.onSurfaceVariant}
-              value={title}
-              onChangeText={setTitle}
-              selectionColor={Serene.secondary}
-            />
-          </Field>
-
-          <Field label="Date">
-            <Pressable style={styles.selectRow} accessibilityRole="button">
-              <View style={styles.selectLeft}>
-                <View style={styles.selectIcon}>
-                  <Icon name="event" size={18} color={Serene.secondary} />
-                </View>
-                <View>
-                  <Text style={styles.selectValue}>Jeudi 9 mai 2024</Text>
-                  <Text style={styles.selectHint}>Europe/Paris (UTC+2)</Text>
-                </View>
-              </View>
-              <Icon name="chevron_right" size={20} color={Serene.outlineVariant} />
-            </Pressable>
-          </Field>
-
-          <Field label="Horaire">
-            <View style={styles.timeRow}>
-              <View style={styles.timeBox}>
-                <Text style={styles.timeBoxLabel}>Début</Text>
-                <Text style={styles.timeBoxValue}>{allDay ? '—' : slot.start}</Text>
-              </View>
-              <Icon name="arrow_forward" size={18} color={Serene.outlineVariant} />
-              <View style={styles.timeBox}>
-                <Text style={styles.timeBoxLabel}>Fin</Text>
-                <Text style={styles.timeBoxValue}>{allDay ? '—' : slot.end}</Text>
-              </View>
+          {/* Quand : début à gauche, fin à droite, comme l'agenda du téléphone */}
+          <Text style={[kitStyles.label, styles.spaced, styles.gap]}>Quand</Text>
+          <View style={[kitStyles.card, styles.cardGap]}>
+            <View style={styles.allDayRow}>
+              <Icon name="wb_sunny" size={20} color={Tint.navy} />
+              <Text style={styles.allDayText}>Toute la journée</Text>
+              <DemoSwitch value={draft.allDay} onValueChange={(value) => set('allDay', value)} label="Toute la journée" />
             </View>
 
-            <View style={styles.timeChipsRow}>
-              {TIME_SLOTS.map((option, index) => {
-                const active = index === slotIndex && !allDay;
-
-                return (
-                  <Pressable
-                    key={option.start}
-                    style={[styles.timeChip, active && styles.timeChipActive]}
-                    onPress={() => {
-                      setSlotIndex(index);
-                      setAllDay(false);
-                    }}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: active }}>
-                    <Text style={[styles.timeChipText, active && styles.timeChipTextActive]}>
-                      {option.start}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-
-            <View style={styles.toggleCard}>
-              <View style={styles.toggleLeft}>
-                <View style={styles.toggleIcon}>
-                  <Icon name="wb_sunny" size={18} color={Serene.secondary} />
-                </View>
-                <Text style={styles.toggleTitle}>Toute la journée</Text>
+            <View style={styles.range}>
+              <WhenColumn
+                label="Début"
+                date={draft.start}
+                showTime={!draft.allDay}
+                onPressDate={() => setPicker('startDate')}
+                onPressTime={() => setPicker('startTime')}
+              />
+              <View style={styles.rangeArrow}>
+                <Icon name="arrow_forward" size={20} color={Serene.onSurfaceVariant} />
               </View>
-              <Switch
-                value={allDay}
-                onValueChange={setAllDay}
-                trackColor={{ false: Serene.surfaceContainerHigh, true: Serene.secondary }}
-                thumbColor={Serene.surfaceContainerLowest}
+              <WhenColumn
+                label="Fin"
+                date={draft.end}
+                showTime={!draft.allDay}
+                error={endError}
+                onPressDate={() => setPicker('endDate')}
+                onPressTime={() => setPicker('endTime')}
               />
             </View>
 
-            {!allDay ? (
-              <View style={hasConflict ? styles.conflictBanner : styles.freeBanner}>
-                <Icon
-                  name={hasConflict ? 'warning' : 'verified'}
-                  size={18}
-                  color={hasConflict ? Serene.error : Serene.success}
-                />
-                <Text style={hasConflict ? styles.conflictText : styles.freeText}>
-                  {hasConflict
-                    ? 'Conflit détecté avec « Réunion projet Bringo Mind » (14:00 – 15:00). Choisissez un autre horaire ou acceptez le chevauchement.'
-                    : 'Aucun conflit détecté sur ce créneau.'}
-                </Text>
+            {endError ? (
+              <View style={styles.errorRow} accessibilityLiveRegion="polite">
+                <Icon name="error" size={16} color={Serene.error} />
+                <Text style={styles.errorText}>La fin doit être après le début.</Text>
               </View>
             ) : null}
-          </Field>
 
-          <Field label="Lieu">
-            <View style={styles.inputWithIcon}>
-              <Icon name="location_on" size={18} color={Serene.onSurfaceVariant} />
-              <TextInput
-                style={styles.inlineInput}
-                placeholder="Adresse ou visioconférence"
-                placeholderTextColor={Serene.onSurfaceVariant}
-                value={location}
-                onChangeText={setLocation}
-                selectionColor={Serene.secondary}
-              />
+            <View style={styles.rangeFooter}>
+              {!draft.allDay && !endError ? (
+                <View style={styles.footerItem}>
+                  <Icon name="timer" size={16} color={Serene.onSurfaceVariant} />
+                  <Text style={kitStyles.muted}>Durée : {formatDuration(duration)}</Text>
+                </View>
+              ) : null}
+              <View style={styles.footerItem}>
+                <Icon name="public" size={16} color={Serene.onSurfaceVariant} />
+                <Text style={kitStyles.muted}>
+                  {USER_TIMEZONE.label} ({USER_TIMEZONE.offset})
+                </Text>
+              </View>
             </View>
-          </Field>
+          </View>
 
-          <Field label="Description">
+          {/* Conflits */}
+          {!draft.allDay ? (
+            conflicts.length > 0 ? (
+              <View style={styles.conflict} accessibilityLiveRegion="polite">
+                <View style={styles.conflictHead}>
+                  <Icon name="warning" size={20} color="#b91c1c" />
+                  <Text style={styles.conflictTitle}>
+                    Conflit avec « {conflicts[0].title} » ({formatTime(conflicts[0].start)} – {formatTime(conflicts[0].end)})
+                  </Text>
+                </View>
+                {suggestions.length > 0 ? (
+                  <>
+                    <Text style={styles.conflictText}>Créneaux libres le même jour :</Text>
+                    <View style={styles.wrap}>
+                      {suggestions.map((start) => (
+                        <Pressable
+                          key={start.toISOString()}
+                          style={({ pressed }) => [styles.slot, pressed && styles.pressed]}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Choisir ${formatTime(start)}`}
+                          onPress={() => setStart(start)}>
+                          <Icon name="event_available" size={16} color={Tint.primary} />
+                          <Text style={styles.slotText}>
+                            {formatTime(start)} – {formatTime(new Date(start.getTime() + duration * 60000))}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </>
+                ) : null}
+                <Text style={styles.conflictHelp}>Vous pouvez aussi enregistrer malgré le chevauchement.</Text>
+              </View>
+            ) : (
+              <View style={styles.free}>
+                <Icon name="event_available" size={20} color={Serene.success} />
+                <Text style={styles.freeText}>Aucun conflit sur ce créneau.</Text>
+              </View>
+            )
+          ) : null}
+
+          {/* Lieu */}
+          <Text style={[kitStyles.label, styles.spaced, styles.gap]}>Lieu</Text>
+          <View style={[styles.inputRow, focused === 'location' && kitStyles.inputFocused]}>
+            <Icon name="location_on" size={20} color={focused === 'location' ? Tint.primary : Serene.onSurfaceVariant} />
             <TextInput
-              style={[styles.textInput, styles.textArea]}
-              placeholder="Notes, participants, documents à apporter..."
+              style={styles.inputInline}
+              value={draft.location}
+              onChangeText={(value) => set('location', value)}
+              onFocus={() => setFocused('location')}
+              onBlur={() => setFocused(null)}
+              placeholder="Adresse ou visioconférence"
               placeholderTextColor={Serene.onSurfaceVariant}
-              value={description}
-              onChangeText={setDescription}
-              multiline
-              textAlignVertical="top"
-              selectionColor={Serene.secondary}
-            />
-          </Field>
-
-          <Field label="Rappel">
-            <View style={styles.chipsWrap}>
-              {REMINDER_OPTIONS.map((option) => {
-                const active = reminder === option;
-
-                return (
-                  <Pressable
-                    key={option}
-                    style={[styles.chip, active && styles.chipActive]}
-                    onPress={() => setReminder(option)}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: active }}>
-                    <Text style={[styles.chipText, active && styles.chipTextActive]}>
-                      {option}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </Field>
-
-          <Field label="Récurrence">
-            <View style={styles.chipsWrap}>
-              {RECURRENCES.map((option) => {
-                const active = recurrence === option;
-
-                return (
-                  <Pressable
-                    key={option}
-                    style={[styles.chip, active && styles.chipActive]}
-                    onPress={() => setRecurrence(option)}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: active }}>
-                    <Text style={[styles.chipText, active && styles.chipTextActive]}>
-                      {option}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </Field>
-
-          <View style={styles.toggleCard}>
-            <View style={styles.toggleLeft}>
-              <View style={styles.toggleIcon}>
-                <Icon name="family_restroom" size={18} color={Serene.secondary} />
-              </View>
-              <View style={styles.toggleTextBlock}>
-                <Text style={styles.toggleTitle}>Partager avec le foyer</Text>
-                <Text style={styles.toggleHint}>Visible par les membres autorisés</Text>
-              </View>
-            </View>
-            <Switch
-              value={shared}
-              onValueChange={setShared}
-              trackColor={{ false: Serene.surfaceContainerHigh, true: Serene.secondary }}
-              thumbColor={Serene.surfaceContainerLowest}
+              selectionColor={Tint.primary}
+              accessibilityLabel="Lieu"
             />
           </View>
 
-          {shared ? (
-            <View style={styles.chipsWrap}>
-              <View style={[styles.memberChip, styles.memberChipFixed]}>
-                <View style={[styles.memberAvatar, styles.memberAvatarPrimary]}>
-                  <Text style={styles.memberInitial}>C</Text>
-                </View>
-                <Text style={styles.memberName}>Claire (vous)</Text>
+          {/* Description */}
+          <Text style={[kitStyles.label, styles.spaced, styles.gap]}>Description</Text>
+          <TextInput
+            style={[kitStyles.input, styles.textarea, focused === 'description' && kitStyles.inputFocused]}
+            value={draft.description}
+            onChangeText={(value) => set('description', value)}
+            onFocus={() => setFocused('description')}
+            onBlur={() => setFocused(null)}
+            placeholder="Informations utiles…"
+            placeholderTextColor={Serene.onSurfaceVariant}
+            selectionColor={Tint.primary}
+            multiline
+            textAlignVertical="top"
+            accessibilityLabel="Description"
+          />
+
+          {/* Rappel */}
+          <Text style={[kitStyles.label, styles.spaced, styles.gap]}>Rappel</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.typesScroll}
+            contentContainerStyle={styles.types}>
+            {REMINDER_OPTIONS.map((option) => (
+              <Chip
+                key={option.label}
+                label={option.label}
+                icon={option.minutes === null ? undefined : 'notifications_active'}
+                selected={draft.reminder === option.minutes}
+                onPress={() => set('reminder', option.minutes)}
+              />
+            ))}
+          </ScrollView>
+
+          {/* Récurrence */}
+          <Text style={[kitStyles.label, styles.spaced, styles.gap]}>Récurrence</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.typesScroll}
+            contentContainerStyle={styles.types}>
+            {RECURRENCES.map((recurrence) => (
+              <Chip
+                key={recurrence}
+                label={RECURRENCE_LABELS[recurrence]}
+                selected={draft.recurrence === recurrence}
+                onPress={() => set('recurrence', recurrence)}
+              />
+            ))}
+          </ScrollView>
+
+          {/* Partage — personnel par défaut */}
+          <View style={[kitStyles.card, styles.share]}>
+            <View style={styles.shareRow}>
+              <View style={[styles.shareIcon, draft.shared && styles.shareIconOn]}>
+                <Icon
+                  name={draft.shared ? 'group' : 'lock'}
+                  size={22}
+                  color={draft.shared ? Serene.onSecondaryContainer : Tint.navy}
+                />
               </View>
-              <Pressable
-                style={[styles.memberChip, shareThomas && styles.memberChipActive]}
-                onPress={() => setShareThomas((value) => !value)}
-                accessibilityRole="button"
-                accessibilityState={{ selected: shareThomas }}>
-                <View style={[styles.memberAvatar, styles.memberAvatarSecondary]}>
-                  <Text style={styles.memberInitial}>T</Text>
-                </View>
-                <Text style={styles.memberName}>Thomas</Text>
-                {shareThomas ? (
-                  <Icon name="check_circle" size={16} color={Serene.secondary} />
-                ) : (
-                  <Icon name="add_circle" size={16} color={Serene.onSurfaceVariant} />
-                )}
-              </Pressable>
+              <View style={styles.flexMin}>
+                <Text style={styles.shareTitle}>Partager avec le foyer</Text>
+                <Text style={kitStyles.muted}>
+                  {draft.shared ? 'Visible par les membres invités' : 'Événement personnel, visible par vous seule'}
+                </Text>
+              </View>
+              <DemoSwitch value={draft.shared} onValueChange={toggleShare} label="Partager avec le foyer" />
             </View>
-          ) : null}
-
-          <Pressable
-            style={[
-              styles.submitButton,
-              (!canSave || hasConflict) && styles.submitButtonDisabled,
-            ]}
-            onPress={handleSave}
-            disabled={!canSave || hasConflict}
-            accessibilityRole="button">
-            <Icon
-              name={isEdit ? 'save' : 'event_available'}
-              size={18}
-              color={Serene.onPrimary}
-            />
-            <Text style={styles.submitButtonText}>
-              {isEdit ? 'Enregistrer les modifications' : 'Créer l’événement'}
-            </Text>
-          </Pressable>
-
-          {hasConflict ? (
-            <Text style={styles.conflictHelp}>
-              Résolvez le conflit horaire pour enregistrer l’événement.
-            </Text>
-          ) : null}
-
-          <Pressable style={styles.cancelButton} onPress={() => router.back()}>
-            <Text style={styles.cancelButtonText}>Annuler</Text>
-          </Pressable>
+            {draft.shared ? (
+              <View style={styles.members}>
+                <Text style={styles.subLabel}>Invités</Text>
+                <View style={styles.wrap}>
+                  <View style={styles.me}>
+                    <View style={styles.avatar}>
+                      <Text style={styles.avatarText}>C</Text>
+                    </View>
+                    <Text style={styles.meText}>Claire (vous)</Text>
+                  </View>
+                  <Chip
+                    label="Thomas"
+                    icon={draft.members.includes('Thomas') ? 'check' : 'add'}
+                    selected={draft.members.includes('Thomas')}
+                    onPress={() =>
+                      set('members', draft.members.includes('Thomas') ? [] : ['Thomas'])
+                    }
+                  />
+                </View>
+              </View>
+            ) : null}
+          </View>
         </ScrollView>
+
+        <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, Space.md) }]}>
+          <PrimaryButton
+            label={
+              conflicts.length > 0 && !draft.allDay
+                ? 'Enregistrer quand même'
+                : isEdit
+                  ? 'Enregistrer les modifications'
+                  : 'Ajouter au calendrier'
+            }
+            icon={isEdit ? 'check' : 'event_available'}
+            disabled={!canSave}
+            onPress={handleSave}
+            style={styles.footerButton}
+          />
+        </View>
       </KeyboardAvoidingView>
+
+      <DatePickerSheet
+        visible={picker === 'startDate'}
+        title="Date de début"
+        value={draft.start}
+        onSelect={(day) => setStart(atTime(day, startHour, startMinute))}
+        onClose={() => setPicker(null)}
+      />
+      <DatePickerSheet
+        visible={picker === 'endDate'}
+        title="Date de fin"
+        value={draft.end}
+        minDate={draft.start}
+        onSelect={(day) => setEnd(atTime(day, endHour, endMinute))}
+        onClose={() => setPicker(null)}
+      />
+      <TimeWheelSheet
+        visible={picker === 'startTime'}
+        title="Heure de début"
+        hours={startHour}
+        minutes={startMinute}
+        onConfirm={(hours, minutes) => setStart(atTime(draft.start, hours, minutes))}
+        onClose={() => setPicker(null)}
+      />
+      <TimeWheelSheet
+        visible={picker === 'endTime'}
+        title="Heure de fin"
+        hours={endHour}
+        minutes={endMinute}
+        onConfirm={(hours, minutes) => setEnd(atTime(draft.end, hours, minutes))}
+        onClose={() => setPicker(null)}
+      />
     </SafeAreaView>
   );
 }
 
-function Field({
+/** Une colonne Début ou Fin : la date (touchée → calendrier) et l'heure (touchée → roue). */
+function WhenColumn({
   label,
-  required,
-  children,
+  date,
+  showTime,
+  error,
+  onPressDate,
+  onPressTime,
 }: {
   label: string;
-  required?: boolean;
-  children: React.ReactNode;
+  date: Date;
+  showTime: boolean;
+  error?: boolean;
+  onPressDate: () => void;
+  onPressTime: () => void;
 }) {
   return (
-    <View style={styles.field}>
-      <Text style={styles.fieldLabel}>
-        {label}
-        {required ? <Text style={styles.required}> *</Text> : null}
-      </Text>
-      {children}
+    <View style={styles.when}>
+      <Text style={styles.whenLabel}>{label}</Text>
+      <Pressable
+        style={({ pressed }) => [styles.whenDate, pressed && styles.pressed]}
+        accessibilityRole="button"
+        accessibilityLabel={`${label} : ${formatLongDay(date)}, changer la date`}
+        onPress={onPressDate}>
+        <Text style={[styles.whenDay, error && styles.whenError]} numberOfLines={1}>
+          {WEEKDAY_SHORT[date.getDay()]}. {formatDay(date)}
+        </Text>
+        <Text style={styles.whenYear}>{date.getFullYear()}</Text>
+      </Pressable>
+      {showTime ? (
+        <Pressable
+          style={({ pressed }) => [styles.whenTime, error && styles.whenTimeError, pressed && styles.pressed]}
+          accessibilityRole="button"
+          accessibilityLabel={`${label} : ${formatTime(date)}, changer l’heure`}
+          onPress={onPressTime}>
+          <Text style={[styles.whenTimeText, error && styles.whenError]}>{formatTime(date)}</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
 
+function DemoSwitch({
+  value,
+  onValueChange,
+  label,
+}: {
+  value: boolean;
+  onValueChange: (value: boolean) => void;
+  label: string;
+}) {
+  return (
+    <Switch
+      value={value}
+      onValueChange={onValueChange}
+      trackColor={{ false: '#c3cfe0', true: Tint.primary }}
+      thumbColor={Serene.surfaceContainerLowest}
+      {...(Platform.OS === 'web' ? { activeThumbColor: Serene.surfaceContainerLowest } : {})}
+      ios_backgroundColor="#c3cfe0"
+      accessibilityLabel={label}
+    />
+  );
+}
+
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: Serene.surface,
-  },
   flex: {
     flex: 1,
   },
-  header: {
-    height: 56,
-    paddingHorizontal: Space.gutter,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Serene.surface,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Serene.surfaceContainerHigh,
-  },
-  headerButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: -8,
-  },
-  headerTitle: {
+  flexMin: {
     flex: 1,
-    ...Typography.titleMd,
-    color: Serene.onSurface,
-    marginLeft: 4,
+    minWidth: 0,
   },
-  saveButton: {
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-  },
-  saveButtonText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.secondary,
-  },
-  saveButtonTextDisabled: {
-    color: Serene.outlineVariant,
-  },
-  scroll: {
-    flex: 1,
+  pressed: {
+    opacity: 0.75,
   },
   content: {
-    paddingHorizontal: Space.gutter,
-    paddingTop: Space.md,
-    paddingBottom: Space.lg,
-    gap: Space.md,
+    paddingTop: 8,
+    paddingBottom: 32,
   },
-  typeRow: {
-    flexDirection: 'row',
-    gap: 8,
+  gap: {
+    marginBottom: 10,
   },
-  typeChip: {
-    flex: 1,
-    height: 40,
-    paddingHorizontal: 8,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.surfaceContainerLowest,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 5,
-    ...Shadow.card,
-  },
-  typeChipActive: {
-    backgroundColor: Serene.primary,
-  },
-  typeText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 12,
-    lineHeight: 16,
-    color: Serene.onSurfaceVariant,
-  },
-  typeTextActive: {
-    color: Serene.onPrimary,
-    fontFamily: FontFamily.bodySemiBold,
-  },
-  field: {
-    gap: 6,
-  },
-  fieldLabel: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 11,
-    lineHeight: 14,
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
-    color: Serene.onSurfaceVariant,
+  spaced: {
+    marginTop: 22,
   },
   required: {
     color: Serene.error,
   },
-  textInput: {
-    minHeight: 44,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.surfaceContainerLowest,
-    fontFamily: FontFamily.body,
-    fontSize: 14,
-    lineHeight: 20,
-    color: Serene.onSurface,
-    ...Shadow.card,
+  typesScroll: {
+    marginHorizontal: -Space.gutter,
   },
-  textArea: {
-    minHeight: 88,
+  types: {
+    gap: 8,
+    paddingHorizontal: Space.gutter,
   },
-  selectRow: {
-    minHeight: 56,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.surfaceContainerLowest,
+  errorRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-    ...Shadow.card,
+    gap: 6,
+    marginTop: 8,
   },
-  selectLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    flex: 1,
-    minWidth: 0,
-  },
-  selectIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: Radius.md,
-    backgroundColor: Serene.surfaceContainerLow,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  selectValue: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 14,
+  errorText: {
+    fontFamily: FontFamily.bodyMedium,
+    fontSize: 13,
     lineHeight: 18,
-    color: Serene.onSurface,
+    color: Serene.error,
   },
-  selectHint: {
-    fontFamily: FontFamily.body,
-    fontSize: 12,
-    lineHeight: 16,
-    color: Serene.onSurfaceVariant,
+  cardGap: {
+    gap: 14,
   },
-  timeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  timeBox: {
-    flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.surfaceContainerLowest,
-    ...Shadow.card,
-  },
-  timeBoxLabel: {
-    fontFamily: FontFamily.body,
-    fontSize: 11,
-    lineHeight: 15,
-    color: Serene.onSurfaceVariant,
-  },
-  timeBoxValue: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 20,
-    lineHeight: 26,
-    color: Serene.onSurface,
-  },
-  timeChipsRow: {
+  wrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-    marginTop: 8,
   },
-  timeChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.surfaceContainerLow,
-  },
-  timeChipActive: {
-    backgroundColor: Serene.surfaceContainerHigh,
-  },
-  timeChipText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 12,
-    lineHeight: 16,
-    color: Serene.onSurfaceVariant,
-  },
-  timeChipTextActive: {
-    fontFamily: FontFamily.bodySemiBold,
-    color: Serene.onSurface,
-  },
-  toggleCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-    padding: 12,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.surfaceContainerLowest,
-    ...Shadow.card,
-  },
-  toggleLeft: {
+  allDayRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    paddingBottom: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Tint.border,
+  },
+  range: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+  },
+  rangeArrow: {
+    paddingTop: 34,
+  },
+  when: {
     flex: 1,
     minWidth: 0,
+    gap: 6,
   },
-  toggleIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: Radius.md,
-    backgroundColor: Serene.surfaceContainerLow,
+  whenLabel: {
+    fontFamily: FontFamily.bodySemiBold,
+    fontSize: 13,
+    lineHeight: 18,
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+    color: Serene.onSurfaceVariant,
+  },
+  whenDate: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    marginHorizontal: -10,
+    borderRadius: 12,
+  },
+  whenDay: {
+    fontFamily: FontFamily.headingBold,
+    fontSize: 18,
+    lineHeight: 24,
+    color: Tint.navy,
+  },
+  whenYear: {
+    fontFamily: FontFamily.body,
+    fontSize: 13,
+    lineHeight: 18,
+    color: Serene.onSurfaceVariant,
+  },
+  whenTime: {
+    alignSelf: 'flex-start',
+    height: 48,
+    minWidth: 96,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Tint.border,
+    backgroundColor: Tint.soft,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  toggleTextBlock: {
-    flex: 1,
-    minWidth: 0,
+  whenTimeError: {
+    borderColor: Serene.error,
+    backgroundColor: '#fff5f5',
   },
-  toggleTitle: {
+  whenTimeText: {
+    fontFamily: FontFamily.headingBold,
+    fontSize: 22,
+    lineHeight: 28,
+    color: Tint.navy,
+    fontVariant: ['tabular-nums'],
+  },
+  whenError: {
+    color: Serene.error,
+    textDecorationLine: 'line-through',
+  },
+  rangeFooter: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 14,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Tint.border,
+  },
+  footerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  allDayText: {
+    flex: 1,
+    fontFamily: FontFamily.bodySemiBold,
+    fontSize: 15,
+    lineHeight: 20,
+    color: Tint.navy,
+  },
+  subLabel: {
     fontFamily: FontFamily.bodySemiBold,
     fontSize: 14,
-    lineHeight: 18,
-    color: Serene.onSurface,
-  },
-  toggleHint: {
-    fontFamily: FontFamily.body,
-    fontSize: 12,
-    lineHeight: 16,
+    lineHeight: 19,
     color: Serene.onSurfaceVariant,
   },
-  conflictBanner: {
+  conflict: {
+    marginTop: 12,
+    gap: 10,
+    padding: 14,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    backgroundColor: '#fff5f5',
+  },
+  conflictHead: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 8,
-    padding: 12,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.errorContainer,
+  },
+  conflictTitle: {
+    flex: 1,
+    fontFamily: FontFamily.bodySemiBold,
+    fontSize: 15,
+    lineHeight: 21,
+    color: '#991b1b',
   },
   conflictText: {
-    flex: 1,
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 12,
-    lineHeight: 17,
-    color: Serene.onErrorContainer,
+    fontFamily: FontFamily.body,
+    fontSize: 14,
+    lineHeight: 19,
+    color: Tint.navy,
   },
-  freeBanner: {
+  conflictHelp: {
+    fontFamily: FontFamily.body,
+    fontSize: 13,
+    lineHeight: 18,
+    color: Serene.onSurfaceVariant,
+  },
+  slot: {
+    height: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: '#99f6e4',
+    backgroundColor: '#f0fdfa',
+  },
+  slotText: {
+    fontFamily: FontFamily.bodySemiBold,
+    fontSize: 14,
+    lineHeight: 19,
+    color: Tint.primary,
+  },
+  free: {
+    marginTop: 12,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    padding: 10,
-    borderRadius: Radius.lg,
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
     backgroundColor: Serene.successContainer,
   },
   freeText: {
     flex: 1,
     fontFamily: FontFamily.bodyMedium,
-    fontSize: 12,
-    lineHeight: 16,
-    color: Serene.success,
-  },
-  inputWithIcon: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    minHeight: 44,
-    paddingHorizontal: 12,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.surfaceContainerLowest,
-    ...Shadow.card,
-  },
-  inlineInput: {
-    flex: 1,
-    height: 44,
-    fontFamily: FontFamily.body,
-    fontSize: 14,
-    color: Serene.onSurface,
-  },
-  chipsWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.surfaceContainerLowest,
-    ...Shadow.card,
-  },
-  chipActive: {
-    backgroundColor: Serene.primary,
-  },
-  chipText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurfaceVariant,
-  },
-  chipTextActive: {
-    color: Serene.onPrimary,
-  },
-  memberChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.surfaceContainerLowest,
-    ...Shadow.card,
-  },
-  memberChipFixed: {
-    backgroundColor: Serene.surfaceContainerLow,
-  },
-  memberChipActive: {
-    backgroundColor: Serene.secondaryContainer,
-  },
-  memberAvatar: {
-    width: 22,
-    height: 22,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  memberAvatarPrimary: {
-    backgroundColor: Serene.primary,
-  },
-  memberAvatarSecondary: {
-    backgroundColor: Serene.secondary,
-  },
-  memberInitial: {
-    fontFamily: FontFamily.bodyBold,
-    fontSize: 10,
-    lineHeight: 12,
-    color: Serene.onPrimary,
-  },
-  memberName: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurface,
-  },
-  submitButton: {
-    height: 48,
-    marginTop: Space.sm,
-    borderRadius: Radius.xl,
-    backgroundColor: Serene.primary,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    ...Shadow.floating,
-  },
-  submitButtonDisabled: {
-    backgroundColor: Serene.surfaceDim,
-  },
-  submitButtonText: {
-    fontFamily: FontFamily.bodySemiBold,
     fontSize: 14,
     lineHeight: 20,
-    color: Serene.onPrimary,
+    color: Serene.success,
   },
-  conflictHelp: {
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    height: 54,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Tint.border,
+    backgroundColor: Tint.soft,
+  },
+  inputInline: {
+    flex: 1,
+    minWidth: 0,
+    outlineWidth: 0,
+    outlineStyle: 'solid',
     fontFamily: FontFamily.body,
-    fontSize: 12,
-    lineHeight: 16,
-    color: Serene.onSurfaceVariant,
-    textAlign: 'center',
+    fontSize: 16,
+    color: Tint.navy,
+    paddingVertical: 0,
   },
-  cancelButton: {
-    height: 40,
+  textarea: {
+    minHeight: 96,
+  },
+  share: {
+    marginTop: 22,
+  },
+  shareRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  shareIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: Tint.soft,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cancelButtonText: {
-    fontFamily: FontFamily.bodyMedium,
+  shareIconOn: {
+    backgroundColor: Serene.secondaryContainer,
+  },
+  shareTitle: {
+    fontFamily: FontFamily.bodySemiBold,
+    fontSize: 16,
+    lineHeight: 21,
+    color: Tint.navy,
+  },
+  members: {
+    marginTop: 14,
+    paddingTop: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Tint.border,
+    gap: 10,
+  },
+  me: {
+    height: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingLeft: 6,
+    paddingRight: 14,
+    borderRadius: Radius.full,
+    backgroundColor: Tint.soft,
+  },
+  avatar: {
+    width: 28,
+    height: 28,
+    borderRadius: Radius.full,
+    backgroundColor: Tint.black,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: {
+    fontFamily: FontFamily.bodyBold,
     fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurfaceVariant,
+    lineHeight: 17,
+    color: Serene.onPrimary,
+  },
+  meText: {
+    fontFamily: FontFamily.bodySemiBold,
+    fontSize: 14,
+    lineHeight: 19,
+    color: Tint.navy,
+  },
+  footer: {
+    paddingTop: 12,
+    paddingHorizontal: Space.gutter,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Tint.border,
+    backgroundColor: Tint.softer,
+    alignItems: 'center',
+  },
+  footerButton: {
+    width: '100%',
+    maxWidth: 528,
   },
 });

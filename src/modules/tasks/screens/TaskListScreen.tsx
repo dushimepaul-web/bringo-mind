@@ -564,6 +564,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     outlineWidth: 0,
+    outlineStyle: 'solid',
     fontFamily: FontFamily.body,
     fontSize: 16,
     color: Tint.navy,

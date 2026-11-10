@@ -1,450 +1,503 @@
-// S-13 (vue liste) - Agenda | Module M07 Rendez-vous et calendrier | Phase S6
+// S-13 (vue liste) - Planning | Module M07 Rendez-vous et calendrier | Phase S6
+// Tout ce qui est prévu, jour après jour, comme la vue « Planning » de l'agenda du téléphone.
 import { router } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  type ScrollViewInstance,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icon';
-import { FontFamily, Radius, Serene, Shadow, Space, Typography } from '@/constants/design';
+import { Chip, IconButton, TopBar, kitStyles } from '@/components/ui/kit';
+import { FontFamily, Radius, Serene, Tint } from '@/constants/design';
+import { DEMO_TODAY, dayOffset, formatTime, startOfDay } from '@/lib/demo-dates';
 
-type AgendaEvent = {
-  id: string;
-  title: string;
-  time: string;
-  end: string;
-  location: string;
-  icon: string;
-  accent: 'primary' | 'secondary' | 'warning';
-  shared?: boolean;
-};
+import { ViewSwitcher, itemsForDay, type DayItem, type SpaceFilter } from '../components/calendar-ui';
+import { MONTHS, TASK_DEADLINES, TONES, WEEKDAY_SHORT, durationOf, formatDuration } from '../data';
+import { useCalendarState } from '../store';
 
-type AgendaSection = {
-  key: string;
-  title: string;
-  events: AgendaEvent[];
-};
-
-const SECTIONS: AgendaSection[] = [
-  {
-    key: 'today',
-    title: 'Aujourd’hui • Jeudi 9 mai',
-    events: [
-      {
-        id: 'dentiste',
-        title: 'Rendez-vous dentiste',
-        time: '09:30',
-        end: '10:15',
-        location: 'Dr. Moreau • Cabinet Voltaire',
-        icon: 'medical_services',
-        accent: 'secondary',
-      },
-      {
-        id: 'reunion',
-        title: 'Réunion projet Bringo Mind',
-        time: '14:00',
-        end: '15:00',
-        location: 'Visioconférence',
-        icon: 'videocam',
-        accent: 'primary',
-      },
-      {
-        id: 'leo',
-        title: 'Récupérer Léo à l’école',
-        time: '16:45',
-        end: '17:15',
-        location: 'École Jean Moulin',
-        icon: 'school',
-        accent: 'warning',
-        shared: true,
-      },
-    ],
-  },
-  {
-    key: 'tomorrow',
-    title: 'Vendredi 10 mai',
-    events: [
-      {
-        id: 'parents',
-        title: 'Réunion parents d’élèves',
-        time: '18:00',
-        end: '19:30',
-        location: 'École Jean Moulin',
-        icon: 'groups',
-        accent: 'secondary',
-        shared: true,
-      },
-    ],
-  },
-  {
-    key: 'week',
-    title: 'Samedi 11 mai',
-    events: [
-      {
-        id: 'football',
-        title: 'Match de football de Léo',
-        time: '10:00',
-        end: '11:30',
-        location: 'Stade municipal',
-        icon: 'sports_soccer',
-        accent: 'warning',
-        shared: true,
-      },
-    ],
-  },
-  {
-    key: 'next-week',
-    title: 'Semaine prochaine',
-    events: [
-      {
-        id: 'assurance',
-        title: 'Renouvellement assurance habitation',
-        time: 'Mer. 10:00',
-        end: '',
-        location: 'En ligne',
-        icon: 'shield',
-        accent: 'primary',
-      },
-      {
-        id: 'ophtalmo',
-        title: 'Contrôle ophtalmologique',
-        time: 'Jeu. 14:30',
-        end: '15:00',
-        location: 'Centre Voltaire',
-        icon: 'visibility',
-        accent: 'secondary',
-      },
-    ],
-  },
+const FILTERS: { key: SpaceFilter; label: string; icon: string }[] = [
+  { key: 'all', label: 'Tout', icon: 'calendar_view_month' },
+  { key: 'personal', label: 'Personnel', icon: 'person' },
+  { key: 'household', label: 'Foyer', icon: 'group' },
 ];
 
+type Row =
+  | { type: 'month'; key: string; label: string }
+  | { type: 'day'; key: string; day: Date; items: DayItem[] };
+
 export default function AgendaScreen() {
-  const totalEvents = SECTIONS.reduce((total, section) => total + section.events.length, 0);
+  const { events } = useCalendarState();
+  const [filter, setFilter] = useState<SpaceFilter>('all');
+  const [showTasks, setShowTasks] = useState(true);
+  const [query, setQuery] = useState('');
+  const [searchFocused, setSearchFocused] = useState(false);
+  const scrollRef = useRef<ScrollViewInstance>(null);
+  // Position du jour d'aujourd'hui dans la liste (mesurée au rendu).
+  const [todayY, setTodayY] = useState<number | null>(null);
+  const positioned = useRef(false);
+
+  const rows = useMemo<Row[]>(() => {
+    const term = query.trim().toLowerCase();
+    const matches = (title: string, place = '') =>
+      !term || title.toLowerCase().includes(term) || place.toLowerCase().includes(term);
+    const visibleEvents = events.filter((event) => matches(event.title, event.location));
+    const visibleTasks = showTasks ? TASK_DEADLINES.filter((task) => matches(task.title)) : [];
+
+    // Tous les jours qui ont quelque chose de prévu, plus aujourd'hui (toujours affiché).
+    const keys = new Map<string, Date>();
+    for (const date of [...visibleEvents.map((e) => e.start), ...visibleTasks.map((t) => t.due)]) {
+      const day = startOfDay(date);
+      keys.set(day.toDateString(), day);
+    }
+    if (!term) keys.set(startOfDay(DEMO_TODAY).toDateString(), startOfDay(DEMO_TODAY));
+
+    const days = [...keys.values()].sort((a, b) => a.getTime() - b.getTime());
+    const result: Row[] = [];
+    let currentMonth = '';
+    for (const day of days) {
+      const items = itemsForDay(day, visibleEvents, visibleTasks, filter);
+      if (items.length === 0 && dayOffset(day) !== 0) continue;
+      const month = `${MONTHS[day.getMonth()]} ${day.getFullYear()}`;
+      if (month !== currentMonth) {
+        currentMonth = month;
+        result.push({ type: 'month', key: `m-${month}`, label: month });
+      }
+      result.push({ type: 'day', key: day.toDateString(), day, items });
+    }
+    return result;
+  }, [events, filter, showTasks, query]);
+
+  const upcoming = rows.filter(
+    (row): row is Extract<Row, { type: 'day' }> => row.type === 'day' && dayOffset(row.day) >= 0,
+  );
+  const upcomingCount = upcoming.reduce(
+    (total, row) => total + row.items.filter((item) => item.kind === 'event' && !item.event.cancelled).length,
+    0,
+  );
+
+  const scrollToToday = (animated = true) => {
+    if (todayY !== null) scrollRef.current?.scrollTo({ y: Math.max(0, todayY - 8), animated });
+  };
+
+  // Ouvre le planning sur aujourd'hui, comme l'agenda du téléphone (une seule fois).
+  useEffect(() => {
+    if (todayY === null || positioned.current) return;
+    const frame = requestAnimationFrame(() => {
+      positioned.current = true;
+      scrollRef.current?.scrollTo({ y: Math.max(0, todayY - 8), animated: false });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [todayY]);
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
-        <Pressable
-          style={styles.headerButton}
-          accessibilityRole="button"
-          accessibilityLabel="Retour au calendrier"
-          onPress={() => router.back()}>
-          <Icon name="arrow_back" size={22} color={Serene.onSurface} />
-        </Pressable>
-        <Text style={styles.headerTitle}>Agenda</Text>
-        <Pressable
-          style={styles.headerButton}
-          accessibilityLabel="Nouvel événement"
-          onPress={() => router.push('/calendar/add')}>
-          <Icon name="add" size={24} color={Serene.secondary} />
-        </Pressable>
-      </View>
+    <SafeAreaView style={kitStyles.safe} edges={['top']}>
+      <TopBar
+        title="Planning"
+        fallback="/calendar"
+        right={
+          <>
+            <Pressable
+              style={({ pressed }) => [styles.todayButton, pressed && styles.pressed]}
+              accessibilityRole="button"
+              onPress={() => scrollToToday()}>
+              <Text style={styles.todayText}>Aujourd’hui</Text>
+            </Pressable>
+            <IconButton icon="add" label="Nouvel événement" onPress={() => router.push('/calendar/add')} />
+          </>
+        }
+      />
 
       <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.content}
+        ref={scrollRef}
+        style={styles.flex}
+        contentContainerStyle={[kitStyles.content, styles.content]}
         showsVerticalScrollIndicator={false}>
-        <View style={styles.summaryCard}>
-          <View style={styles.summaryIcon}>
-            <Icon name="event_note" size={22} color={Serene.secondary} />
+        {/* Vues, recherche et filtres défilent avec la liste */}
+        <View style={styles.toolbar}>
+          <ViewSwitcher
+            value="planning"
+            onChange={(next) => {
+              if (next !== 'planning') router.navigate({ pathname: '/calendar', params: { view: next } });
+            }}
+          />
+          <View style={[styles.search, searchFocused && kitStyles.inputFocused]}>
+            <Icon name="search" size={20} color={searchFocused ? Tint.primary : Serene.onSurfaceVariant} />
+            <TextInput
+              style={styles.searchInput}
+              value={query}
+              onChangeText={setQuery}
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => setSearchFocused(false)}
+              placeholder="Rechercher un événement…"
+              placeholderTextColor={Serene.onSurfaceVariant}
+              selectionColor={Tint.primary}
+              accessibilityLabel="Rechercher dans le planning"
+            />
+            {query ? (
+              <Pressable hitSlop={10} accessibilityRole="button" accessibilityLabel="Effacer" onPress={() => setQuery('')}>
+                <Icon name="cancel" size={20} color={Serene.onSurfaceVariant} filled />
+              </Pressable>
+            ) : null}
           </View>
-          <View style={styles.summaryBody}>
-            <Text style={styles.summaryTitle}>Votre agenda à venir</Text>
-            <Text style={styles.summaryText}>
-              {totalEvents} événements sur les 7 prochains jours
-            </Text>
-          </View>
-          <View style={styles.summaryPill}>
-            <Icon name="group" size={12} color={Serene.onSurfaceVariant} />
-            <Text style={styles.summaryPillText}>Foyer</Text>
-          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
+            {FILTERS.map((entry) => (
+              <Chip
+                key={entry.key}
+                label={entry.label}
+                icon={entry.icon}
+                selected={filter === entry.key}
+                onPress={() => setFilter(entry.key)}
+              />
+            ))}
+            <Chip
+              label="Échéances"
+              icon={showTasks ? 'check_box' : 'check_box_outline_blank'}
+              selected={showTasks}
+              onPress={() => setShowTasks((value) => !value)}
+            />
+          </ScrollView>
+          <Text style={styles.summary}>
+            {upcomingCount} événement{upcomingCount > 1 ? 's' : ''} à venir • remontez pour voir le passé
+          </Text>
         </View>
-
-        {SECTIONS.map((section) => (
-          <View key={section.key} style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>{section.title}</Text>
-              <View style={styles.countPill}>
-                <Text style={styles.countText}>{section.events.length}</Text>
-              </View>
-            </View>
-
-            <View style={styles.sectionList}>
-              {section.events.map((event) => (
-                <Pressable
-                  key={event.id}
-                  style={styles.eventCard}
-                  onPress={() => router.push('/calendar/detail')}
-                  accessibilityRole="button">
-                  <View style={styles.timeBlock}>
-                    <Text style={styles.timeText}>{event.time}</Text>
-                    {event.end ? <Text style={styles.endText}>{event.end}</Text> : null}
-                  </View>
-                  <View style={[styles.eventIcon, accentBubble(event.accent)]}>
-                    <Icon name={event.icon} size={17} color={accentColor(event.accent)} />
-                  </View>
-                  <View style={styles.eventBody}>
-                    <Text style={styles.eventTitle} numberOfLines={2}>
-                      {event.title}
-                    </Text>
-                    <View style={styles.locationRow}>
-                      <Icon name="location_on" size={13} color={Serene.onSurfaceVariant} />
-                      <Text style={styles.locationText} numberOfLines={1}>
-                        {event.location}
-                      </Text>
-                    </View>
-                    {event.shared ? (
-                      <View style={styles.sharedPill}>
-                        <Icon name="group" size={11} color={Serene.onSurfaceVariant} />
-                        <Text style={styles.sharedText}>Partagé avec le foyer</Text>
-                      </View>
-                    ) : null}
-                  </View>
-                  <Icon name="chevron_right" size={20} color={Serene.outlineVariant} />
-                </Pressable>
-              ))}
-            </View>
+        {rows.length === 0 ? (
+          <View style={[kitStyles.card, styles.empty]}>
+            <Icon name="search_off" size={28} color={Tint.primary} />
+            <Text style={styles.emptyTitle}>Aucun résultat</Text>
+            <Text style={kitStyles.muted}>Essayez un autre mot-clé ou retirez un filtre.</Text>
           </View>
-        ))}
+        ) : (
+          rows.map((row) =>
+            row.type === 'month' ? (
+              <View key={row.key} style={styles.monthBanner}>
+                <Text style={styles.monthText}>{row.label}</Text>
+              </View>
+            ) : (
+              <View
+                key={row.key}
+                style={[styles.dayRow, dayOffset(row.day) < 0 && styles.pastRow]}
+                onLayout={(event) => {
+                  if (dayOffset(row.day) === 0) setTodayY(event.nativeEvent.layout.y);
+                }}>
+                <DayColumn day={row.day} />
+                <View style={styles.dayItems}>
+                  {row.items.length === 0 ? (
+                    <Pressable
+                      style={({ pressed }) => [styles.freeDay, pressed && styles.pressed]}
+                      accessibilityRole="button"
+                      onPress={() => router.push('/calendar/add')}>
+                      <Text style={styles.freeText}>Rien de prévu aujourd’hui</Text>
+                      <Text style={kitStyles.link}>Ajouter</Text>
+                    </Pressable>
+                  ) : (
+                    row.items.map((item) => (
+                      <PlanningItem
+                        key={item.kind === 'event' ? item.event.id : `t-${item.task.id}`}
+                        item={item}
+                      />
+                    ))
+                  )}
+                </View>
+              </View>
+            ),
+          )
+        )}
       </ScrollView>
-
-      <View style={styles.footer}>
-        <Pressable
-          style={styles.addButton}
-          accessibilityRole="button"
-          onPress={() => router.push('/calendar/add')}>
-          <Icon name="add" size={22} color={Serene.onPrimary} />
-          <Text style={styles.addButtonText}>Nouvel événement</Text>
-        </Pressable>
-      </View>
     </SafeAreaView>
   );
 }
 
-function accentColor(accent: AgendaEvent['accent']) {
-  if (accent === 'warning') return Serene.warning;
-  if (accent === 'secondary') return Serene.secondary;
-  return Serene.primary;
+/** Colonne de gauche : jour de la semaine et numéro, entouré si c'est aujourd'hui. */
+function DayColumn({ day }: { day: Date }) {
+  const today = dayOffset(day) === 0;
+  return (
+    <View style={styles.dayColumn}>
+      <Text style={[styles.weekday, today && styles.weekdayToday]}>
+        {WEEKDAY_SHORT[day.getDay()].toUpperCase()}
+      </Text>
+      <View style={[styles.dayNumberWrap, today && styles.dayNumberToday]}>
+        <Text style={[styles.dayNumber, today && styles.dayNumberTodayText]}>{day.getDate()}</Text>
+      </View>
+    </View>
+  );
 }
 
-function accentBubble(accent: AgendaEvent['accent']) {
-  if (accent === 'warning') return styles.iconWarning;
-  if (accent === 'secondary') return styles.iconSecondary;
-  return styles.iconPrimary;
+/** Ligne compacte d'un événement ou d'une échéance de tâche. */
+function PlanningItem({ item }: { item: DayItem }) {
+  if (item.kind === 'task') {
+    const { task } = item;
+    return (
+      <Pressable
+        style={({ pressed }) => [styles.item, styles.taskItem, pressed && styles.pressed]}
+        accessibilityRole="button"
+        accessibilityLabel={`Échéance : ${task.title}`}
+        onPress={() => router.push({ pathname: '/tasks/detail', params: { id: task.id } })}>
+        <View style={styles.taskBox}>
+          <Icon name="check" size={12} color={Tint.primary} />
+        </View>
+        <View style={styles.itemBody}>
+          <Text style={styles.itemTitle} numberOfLines={2}>
+            {task.title}
+          </Text>
+          <Text style={styles.taskMeta}>Échéance de tâche{task.hasTime ? ` • ${formatTime(task.due)}` : ''}</Text>
+        </View>
+      </Pressable>
+    );
+  }
+
+  const { event } = item;
+  const tone = TONES[event.tone];
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.item, { backgroundColor: event.cancelled ? Tint.soft : tone.bg }, pressed && styles.pressed]}
+      accessibilityRole="button"
+      accessibilityLabel={`${event.title}${event.allDay ? ', toute la journée' : `, ${formatTime(event.start)}`}`}
+      onPress={() => router.push({ pathname: '/calendar/detail', params: { id: event.id } })}>
+      <View style={[styles.itemBar, { backgroundColor: event.cancelled ? Tint.border : tone.bar }]} />
+      <View style={styles.itemBody}>
+        <Text style={[styles.itemTitle, event.cancelled && styles.cancelled]} numberOfLines={2}>
+          {event.title}
+        </Text>
+        <Text style={[styles.itemTime, { color: tone.fg }]}>
+          {event.allDay
+            ? 'Toute la journée'
+            : `${formatTime(event.start)} – ${formatTime(event.end)} • ${formatDuration(durationOf(event))}`}
+          {event.cancelled ? ' • Annulé' : ''}
+        </Text>
+        {event.location ? (
+          <Text style={styles.itemPlace} numberOfLines={1}>
+            {event.location}
+          </Text>
+        ) : null}
+      </View>
+      {event.shared ? <Icon name="group" size={18} color={Tint.primary} /> : null}
+    </Pressable>
+  );
 }
 
 const styles = StyleSheet.create({
-  safe: {
+  flex: {
     flex: 1,
-    backgroundColor: Serene.surface,
   },
-  header: {
-    height: 56,
-    paddingHorizontal: Space.gutter,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Serene.surface,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Serene.surfaceContainerHigh,
+  pressed: {
+    opacity: 0.8,
   },
-  headerButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
+  todayButton: {
+    height: 36,
+    paddingHorizontal: 12,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: Tint.border,
+    backgroundColor: Serene.surfaceContainerLowest,
     justifyContent: 'center',
   },
-  headerTitle: {
-    flex: 1,
-    textAlign: 'center',
-    ...Typography.titleMd,
-    color: Serene.onSurface,
+  todayText: {
+    fontFamily: FontFamily.bodySemiBold,
+    fontSize: 14,
+    lineHeight: 19,
+    color: Tint.navy,
   },
-  scroll: {
+  toolbar: {
+    gap: 10,
+    paddingBottom: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Tint.border,
+  },
+  search: {
+    height: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Tint.border,
+    backgroundColor: Serene.surfaceContainerLowest,
+  },
+  searchInput: {
     flex: 1,
+    minWidth: 0,
+    outlineWidth: 0,
+    outlineStyle: 'solid',
+    fontFamily: FontFamily.body,
+    fontSize: 16,
+    color: Tint.navy,
+    paddingVertical: 0,
+  },
+  filters: {
+    gap: 8,
+  },
+  summary: {
+    fontFamily: FontFamily.body,
+    fontSize: 13,
+    lineHeight: 18,
+    color: Serene.onSurfaceVariant,
   },
   content: {
-    paddingHorizontal: Space.gutter,
-    paddingTop: Space.md,
-    paddingBottom: Space.md,
+    paddingTop: 4,
+    paddingBottom: 40,
   },
-  summaryCard: {
+  monthBanner: {
+    marginTop: 18,
+    marginBottom: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    backgroundColor: Tint.lavender,
+  },
+  monthText: {
+    fontFamily: FontFamily.headingBold,
+    fontSize: 18,
+    lineHeight: 24,
+    color: Tint.navy,
+  },
+  dayRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     gap: 12,
-    padding: 14,
-    borderRadius: Radius.xl,
-    backgroundColor: Serene.surfaceContainerLowest,
-    ...Shadow.card,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Tint.border,
   },
-  summaryIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.secondaryContainer,
+  pastRow: {
+    opacity: 0.6,
+  },
+  dayColumn: {
+    width: 48,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-  summaryBody: {
-    flex: 1,
-    minWidth: 0,
-  },
-  summaryTitle: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 14,
-    lineHeight: 19,
-    color: Serene.onSurface,
-  },
-  summaryText: {
-    fontFamily: FontFamily.body,
-    fontSize: 12,
-    lineHeight: 16,
-    color: Serene.onSurfaceVariant,
-  },
-  summaryPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.surfaceContainerHigh,
-  },
-  summaryPillText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 10,
-    lineHeight: 14,
-    color: Serene.onSurfaceVariant,
-  },
-  section: {
-    marginTop: Space.md,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: Space.sm,
-  },
-  sectionTitle: {
-    ...Typography.headlineSm,
-    color: Serene.onSurface,
-  },
-  countPill: {
-    minWidth: 20,
-    height: 20,
-    paddingHorizontal: 5,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.surfaceContainerHigh,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  countText: {
-    fontFamily: FontFamily.bodyBold,
-    fontSize: 11,
-    lineHeight: 14,
-    color: Serene.onSurfaceVariant,
-  },
-  sectionList: {
-    gap: 10,
-  },
-  eventCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    padding: 12,
-    borderRadius: Radius.xl,
-    backgroundColor: Serene.surfaceContainerLowest,
-    ...Shadow.card,
-  },
-  timeBlock: {
-    width: 44,
+    gap: 2,
     paddingTop: 2,
   },
-  timeText: {
+  weekday: {
     fontFamily: FontFamily.bodySemiBold,
     fontSize: 12,
     lineHeight: 16,
-    color: Serene.onSurface,
-  },
-  endText: {
-    fontFamily: FontFamily.body,
-    fontSize: 10,
-    lineHeight: 14,
+    letterSpacing: 0.4,
     color: Serene.onSurfaceVariant,
   },
-  eventIcon: {
-    width: 34,
-    height: 34,
+  weekdayToday: {
+    color: Tint.primary,
+  },
+  dayNumberWrap: {
+    width: 40,
+    height: 40,
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconPrimary: {
-    backgroundColor: Serene.surfaceContainerHigh,
+  dayNumberToday: {
+    backgroundColor: Tint.primary,
   },
-  iconSecondary: {
-    backgroundColor: Serene.secondaryContainer,
+  dayNumber: {
+    fontFamily: FontFamily.headingBold,
+    fontSize: 20,
+    lineHeight: 26,
+    color: Tint.navy,
   },
-  iconWarning: {
-    backgroundColor: Serene.warningContainer,
+  dayNumberTodayText: {
+    color: Serene.onPrimary,
   },
-  eventBody: {
+  dayItems: {
     flex: 1,
     minWidth: 0,
-    gap: 3,
+    gap: 8,
   },
-  eventTitle: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 14,
-    lineHeight: 19,
-    color: Serene.onSurface,
-  },
-  locationRow: {
+  item: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
-  },
-  locationText: {
-    flexShrink: 1,
-    fontFamily: FontFamily.body,
-    fontSize: 11,
-    lineHeight: 15,
-    color: Serene.onSurfaceVariant,
-  },
-  sharedPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    alignSelf: 'flex-start',
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.surfaceContainerHigh,
-  },
-  sharedText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 10,
-    lineHeight: 14,
-    color: Serene.onSurfaceVariant,
-  },
-  footer: {
-    paddingHorizontal: Space.gutter,
+    gap: 10,
     paddingVertical: 10,
-    backgroundColor: Serene.surface,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Serene.surfaceContainerHigh,
+    paddingRight: 12,
+    borderRadius: 14,
+    overflow: 'hidden',
   },
-  addButton: {
-    height: 48,
-    borderRadius: Radius.xl,
-    backgroundColor: Serene.primary,
-    flexDirection: 'row',
+  itemBar: {
+    width: 4,
+    alignSelf: 'stretch',
+    borderRadius: Radius.full,
+    marginLeft: 6,
+  },
+  itemBody: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  itemTitle: {
+    fontFamily: FontFamily.bodySemiBold,
+    fontSize: 15,
+    lineHeight: 20,
+    color: Tint.navy,
+  },
+  itemTime: {
+    fontFamily: FontFamily.bodySemiBold,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  itemPlace: {
+    fontFamily: FontFamily.body,
+    fontSize: 13,
+    lineHeight: 18,
+    color: Serene.onSurfaceVariant,
+  },
+  cancelled: {
+    textDecorationLine: 'line-through',
+    color: Serene.onSurfaceVariant,
+  },
+  taskItem: {
+    paddingLeft: 10,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: '#99f6e4',
+    backgroundColor: '#f0fdfa',
+  },
+  taskBox: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: Tint.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    ...Shadow.floating,
   },
-  addButtonText: {
+  taskMeta: {
     fontFamily: FontFamily.bodySemiBold,
+    fontSize: 13,
+    lineHeight: 18,
+    color: Tint.primary,
+  },
+  freeDay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 44,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: Tint.border,
+  },
+  freeText: {
+    fontFamily: FontFamily.body,
     fontSize: 14,
-    lineHeight: 20,
-    color: Serene.onPrimary,
+    lineHeight: 19,
+    color: Serene.onSurfaceVariant,
+  },
+  empty: {
+    marginTop: 22,
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 24,
+  },
+  emptyTitle: {
+    fontFamily: FontFamily.headingBold,
+    fontSize: 18,
+    lineHeight: 24,
+    color: Tint.navy,
   },
 });

@@ -166,7 +166,7 @@ export default function TaskFormScreen() {
 
   return (
     <SafeAreaView style={taskStyles.safe} edges={['top']}>
-      <TopBar close title={isEdit ? 'Modifier la tâche' : 'Nouvelle tâche'} />
+      <TopBar close fallback="/tasks" title={isEdit ? 'Modifier la tâche' : 'Nouvelle tâche'} />
 
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView

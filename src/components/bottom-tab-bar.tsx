@@ -24,7 +24,14 @@ const TABS: Tab[] = [
 ];
 
 /** Écrans de saisie plein écran : la barre d'onglets est masquée. */
-const HIDDEN_ON = ['/tasks/add', '/tasks/edit'];
+const HIDDEN_ON = [
+  '/tasks/add',
+  '/tasks/edit',
+  '/reminders/add',
+  '/reminders/edit',
+  '/calendar/add',
+  '/calendar/edit',
+];
 
 export function BottomTabBar() {
   const insets = useSafeAreaInsets();

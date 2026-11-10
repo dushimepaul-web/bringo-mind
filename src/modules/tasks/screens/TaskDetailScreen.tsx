@@ -42,7 +42,7 @@ export default function TaskDetailScreen() {
   if (!task) {
     return (
       <SafeAreaView style={taskStyles.safe} edges={['top']}>
-        <TopBar title="Détail de la tâche" />
+        <TopBar title="Détail de la tâche" fallback="/tasks" />
         <View style={[taskStyles.content, styles.missing]}>
           <View style={styles.missingIcon}>
             <Icon name="search_off" size={30} color={Tint.primary} />
@@ -110,6 +110,7 @@ export default function TaskDetailScreen() {
     <SafeAreaView style={taskStyles.safe} edges={['top']}>
       <TopBar
         title="Détail de la tâche"
+        fallback="/tasks"
         right={<IconButton icon="more_vert" label="Plus d’actions" onPress={() => setSheet('menu')} />}
       />
 
