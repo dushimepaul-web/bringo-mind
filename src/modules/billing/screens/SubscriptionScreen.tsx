@@ -1,800 +1,461 @@
-// S-31 - Abonnement & facturation | Module M17 Abonnement | Phase S10
-import { router } from 'expo-router';
+// S-31 - Abonnement | Module M15 Facturation | Phase S12 (prestataire de paiement : décision D-05 ouverte)
+// Offre actuelle, utilisation, comparaison claire, factures, et résiliation transparente et réversible.
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icon';
-import { FontFamily, Radius, Serene, Shadow, Space, Typography } from '@/constants/design';
+import { BottomSheet, Chip, PrimaryButton, SecondaryButton, Tag, TopBar, UndoToast, kitStyles } from '@/components/ui/kit';
+import { SettingsRow, SettingsSection } from '@/components/ui/settings';
+import { FontFamily, Radius, Serene, Tint } from '@/constants/design';
 
-type Plan = 'premium' | 'famille';
+type PlanKey = 'free' | 'premium' | 'family';
+type Cycle = 'monthly' | 'yearly';
+
+const PLANS: Record<PlanKey, { name: string; monthly: string; yearly: string; perks: string[] }> = {
+  free: {
+    name: 'Gratuit',
+    monthly: '0 €',
+    yearly: '0 €',
+    perks: ['Tâches, rappels et calendrier', '20 documents', 'Kora : 10 questions par mois'],
+  },
+  premium: {
+    name: 'Premium',
+    monthly: '9,99 €',
+    yearly: '99,90 €',
+    perks: ['Documents illimités', 'Kora illimitée et commande vocale', 'Messagerie et calendrier connectés', 'Foyer jusqu’à 4 membres'],
+  },
+  family: {
+    name: 'Famille',
+    monthly: '14,99 €',
+    yearly: '149,90 €',
+    perks: ['Tout Premium', 'Foyer jusqu’à 8 membres', 'Comptes enfants encadrés', 'Coffre partagé de 50 Go'],
+  },
+};
 
 const INVOICES = [
-  { date: '9 mai 2024', amount: '9,99 €', label: 'Premium mensuel' },
-  { date: '9 avril 2024', amount: '9,99 €', label: 'Premium mensuel' },
-  { date: '9 mars 2024', amount: '9,99 €', label: 'Premium mensuel' },
+  { id: 'f-mai', date: '9 mai 2024', amount: '9,99 €' },
+  { id: 'f-avr', date: '9 avril 2024', amount: '9,99 €' },
+  { id: 'f-mar', date: '9 mars 2024', amount: '9,99 €' },
 ];
 
-const PREMIUM_FEATURES = [
-  'Documents illimités analysés par Kora',
-  '1 000 requêtes IA par mois',
-  'Synchronisation multi-comptes',
-  'Support prioritaire',
-];
-
-const FAMILY_FEATURES = [
-  'Tout Premium pour 5 membres',
-  'Documents et tâches partagés',
-  '3 000 requêtes IA par mois',
-  'Espace foyer avancé + historique',
+const USAGE = [
+  { label: 'Documents', value: '12', limit: 'illimités', ratio: 0.3 },
+  { label: 'Questions à Kora ce mois', value: '34', limit: 'illimitées', ratio: 0.45 },
+  { label: 'Membres du foyer', value: '3', limit: 'sur 4', ratio: 0.75 },
 ];
 
 export default function SubscriptionScreen() {
-  const [plan, setPlan] = useState<Plan>('premium');
-  const [upgraded, setUpgraded] = useState(false);
-  const [cancelConfirm, setCancelConfirm] = useState(false);
-  const [cancelRequested, setCancelRequested] = useState(false);
+  const [current, setCurrent] = useState<PlanKey>('premium');
+  const [cycle, setCycle] = useState<Cycle>('monthly');
+  const [cancelled, setCancelled] = useState(false);
+  const [sheet, setSheet] = useState<{ change: PlanKey } | 'cancel' | 'card' | null>(null);
+  const [toast, setToast] = useState<{ text: string; undo?: () => void } | null>(null);
 
-  const upgrade = () => {
-    setPlan('famille');
-    setUpgraded(true);
-    setCancelConfirm(false);
-    setCancelRequested(false);
-  };
-
-  const confirmCancel = () => {
-    setCancelRequested(true);
-    setCancelConfirm(false);
-  };
-
-  const price = plan === 'famille' ? '14,99 €' : '9,99 €';
+  const plan = PLANS[current];
+  const price = (key: PlanKey) => (cycle === 'monthly' ? `${PLANS[key].monthly} / mois` : `${PLANS[key].yearly} / an`);
+  const close = () => setSheet(null);
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
-        <Pressable
-          style={styles.headerButton}
-          accessibilityRole="button"
-          accessibilityLabel="Retour"
-          onPress={() => router.back()}>
-          <Icon name="arrow_back" size={22} color={Serene.onSurface} />
-        </Pressable>
-        <Text style={styles.headerTitle}>Abonnement</Text>
-        <Pressable
-          style={styles.headerButton}
-          accessibilityRole="button"
-          accessibilityLabel="Fermer"
-          onPress={() => router.back()}>
-          <Icon name="close" size={22} color={Serene.onSurfaceVariant} />
-        </Pressable>
-      </View>
-
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}>
-        <View style={styles.currentCard}>
-          <View style={styles.currentTop}>
-            <View style={styles.currentBadge}>
-              <Icon name="workspace_premium" size={15} color={Serene.onPrimary} />
-              <Text style={styles.currentBadgeText}>
-                {plan === 'famille' ? 'Famille' : 'Premium'}
-              </Text>
+    <SafeAreaView style={kitStyles.safe} edges={['top']}>
+      <TopBar title="Abonnement" fallback="/profile" />
+      <ScrollView contentContainerStyle={[kitStyles.content, styles.content]} showsVerticalScrollIndicator={false}>
+        {cancelled ? (
+          <View style={styles.banner}>
+            <Icon name="event_busy" size={22} color="#92400e" />
+            <View style={styles.flex}>
+              <Text style={styles.bannerTitle}>Résiliation prévue le 9 juin</Text>
+              <Text style={styles.bannerText}>Vous gardez {plan.name} jusque-là, puis vous passerez à l’offre Gratuite.</Text>
             </View>
-            <View style={styles.activePill}>
-              <View style={styles.activeDot} />
-              <Text style={styles.activeText}>
-                {cancelRequested ? 'Résiliation programmée' : 'Actif'}
-              </Text>
-            </View>
-          </View>
-
-          <Text style={styles.currentPrice}>{price}</Text>
-          <Text style={styles.currentPeriod}>par mois • sans engagement</Text>
-
-          <View style={styles.currentDivider} />
-
-          <View style={styles.currentRow}>
-            <Icon name="event_repeat" size={15} color={Serene.onSecondaryContainer} />
-            <Text style={styles.currentRowText}>
-              {cancelRequested
-                ? 'Accès conservé jusqu’au 9 juin 2024'
-                : 'Prochain paiement le 9 juin 2024'}
-            </Text>
-          </View>
-          <View style={styles.currentRow}>
-            <Icon name="credit_card" size={15} color={Serene.onSecondaryContainer} />
-            <Text style={styles.currentRowText}>Visa •••• 4242</Text>
-          </View>
-        </View>
-
-        {upgraded ? (
-          <View style={styles.successBanner}>
-            <Icon name="check_circle" size={18} color={Serene.success} />
-            <Text style={styles.successText}>
-              Passage au plan Famille confirmé. Le nouveau tarif s’appliquera au prochain cycle.
-            </Text>
+            <Pressable
+              hitSlop={8}
+              accessibilityRole="button"
+              onPress={() => {
+                setCancelled(false);
+                setToast({ text: `Abonnement ${plan.name} conservé` });
+              }}>
+              <Text style={styles.bannerAction}>Reprendre</Text>
+            </Pressable>
           </View>
         ) : null}
 
-        <View style={styles.usageCard}>
-          <Text style={styles.cardTitle}>Utilisation ce mois-ci</Text>
-          <UsageBar label="Documents analysés" value={128} max={500} unit="documents" />
-          <UsageBar label="Requêtes IA" value={340} max={plan === 'famille' ? 3000 : 1000} unit="requêtes" />
-          <UsageBar label="Membres du foyer" value={3} max={5} unit="membres" />
-        </View>
-
-        <Text style={styles.sectionLabel}>Comparer les offres</Text>
-
-        <View style={styles.plans}>
-          <PlanCard
-            title="Premium"
-            price="9,99 €"
-            features={PREMIUM_FEATURES}
-            current={plan === 'premium'}
-            onSelect={() => {
-              setPlan('premium');
-              setUpgraded(false);
-            }}
-          />
-          <PlanCard
-            title="Famille"
-            price="14,99 €"
-            features={FAMILY_FEATURES}
-            current={plan === 'famille'}
-            highlight
-            onSelect={upgrade}
-          />
-        </View>
-
-        <View style={styles.paymentCard}>
-          <Text style={styles.cardTitle}>Moyen de paiement</Text>
-          <View style={styles.paymentRow}>
-            <View style={styles.paymentIcon}>
-              <Icon name="credit_card" size={19} color={Serene.onSurface} />
+        {/* Offre actuelle */}
+        <View style={styles.current}>
+          <View style={styles.currentTop}>
+            <View style={styles.flex}>
+              <Text style={styles.currentLabel}>Votre offre</Text>
+              <Text style={styles.currentName}>Bringo Mind {plan.name}</Text>
             </View>
-            <View style={styles.paymentBody}>
-              <Text style={styles.paymentName}>Visa •••• 4242</Text>
-              <Text style={styles.paymentMeta}>Expire le 08/27</Text>
-            </View>
-            <Pressable style={styles.paymentAction}>
-              <Text style={styles.paymentActionText}>Modifier</Text>
-            </Pressable>
+            <Tag label={cancelled ? 'Se termine le 9 juin' : 'Active'} tone={cancelled ? 'neutral' : 'success'} icon={cancelled ? 'schedule' : 'check'} />
           </View>
+          <Text style={styles.currentPrice}>{PLANS[current].monthly}<Text style={styles.currentPer}> / mois</Text></Text>
+          <Text style={styles.currentMeta}>
+            {current === 'free' ? 'Sans engagement' : cancelled ? 'Aucun prochain prélèvement' : 'Prochain prélèvement le 9 juin • sans engagement'}
+          </Text>
         </View>
 
-        <View style={styles.invoicesCard}>
-          <View style={styles.invoicesHeader}>
-            <Text style={styles.cardTitle}>Historique de facturation</Text>
-            <Pressable>
-              <Text style={styles.seeAll}>Tout voir</Text>
-            </Pressable>
-          </View>
-          {INVOICES.map((invoice, index) => (
-            <View key={invoice.date}>
-              {index > 0 ? <View style={styles.divider} /> : null}
-              <Pressable style={styles.invoiceRow}>
-                <View style={styles.invoiceIcon}>
-                  <Icon name="receipt_long" size={17} color={Serene.onSurfaceVariant} />
-                </View>
-                <View style={styles.invoiceBody}>
-                  <Text style={styles.invoiceLabel}>{invoice.label}</Text>
-                  <Text style={styles.invoiceDate}>{invoice.date}</Text>
-                </View>
-                <Text style={styles.invoiceAmount}>{invoice.amount}</Text>
-                <Icon name="download" size={17} color={Serene.onSurfaceVariant} />
-              </Pressable>
+        <SettingsSection title="Utilisation ce mois-ci" icon="insights">
+          {USAGE.map((entry, index) => (
+            <View key={entry.label} style={[styles.usage, index > 0 && styles.usageBorder]}>
+              <View style={styles.usageTop}>
+                <Text style={styles.usageLabel}>{entry.label}</Text>
+                <Text style={styles.usageValue}>
+                  {entry.value} <Text style={styles.usageLimit}>{entry.limit}</Text>
+                </Text>
+              </View>
+              <View style={styles.track}>
+                <View style={[styles.fill, { width: `${Math.round(entry.ratio * 100)}%` }]} />
+              </View>
             </View>
           ))}
+        </SettingsSection>
+
+        {/* Comparer les offres */}
+        <View style={styles.compareHead}>
+          <Text style={styles.sectionTitle}>Comparer les offres</Text>
+        </View>
+        <View style={styles.cycle}>
+          <Chip label="Mensuel" selected={cycle === 'monthly'} onPress={() => setCycle('monthly')} />
+          <Chip label="Annuel • 2 mois offerts" selected={cycle === 'yearly'} onPress={() => setCycle('yearly')} />
+        </View>
+        <View style={styles.plans}>
+          {(Object.keys(PLANS) as PlanKey[]).map((key) => {
+            const isCurrent = key === current;
+            return (
+              <View key={key} style={[styles.plan, isCurrent && styles.planCurrent]}>
+                <View style={styles.planTop}>
+                  <Text style={styles.planName}>{PLANS[key].name}</Text>
+                  {isCurrent ? <Tag label="Votre offre" tone="teal" /> : key === 'family' ? <Tag label="Pour tout le foyer" /> : null}
+                </View>
+                <Text style={styles.planPrice}>{price(key)}</Text>
+                {PLANS[key].perks.map((perk) => (
+                  <View key={perk} style={styles.perk}>
+                    <Icon name="check" size={18} color={Tint.primary} />
+                    <Text style={styles.perkText}>{perk}</Text>
+                  </View>
+                ))}
+                {!isCurrent ? (
+                  <SecondaryButton
+                    label={key === 'free' ? 'Passer à Gratuit' : `Passer à ${PLANS[key].name}`}
+                    style={styles.planButton}
+                    onPress={() => setSheet({ change: key })}
+                  />
+                ) : null}
+              </View>
+            );
+          })}
         </View>
 
-        {cancelRequested ? (
-          <View style={styles.cancelBanner}>
-            <Icon name="info" size={17} color={Serene.warning} />
-            <View style={styles.cancelBannerBody}>
-              <Text style={styles.cancelBannerTitle}>Résiliation enregistrée</Text>
-              <Text style={styles.cancelBannerText}>
-                Votre accès Premium reste actif jusqu’au 9 juin 2024. Aucun prélèvement ne sera
-                effectué après cette date.
-              </Text>
-              <Pressable onPress={() => setCancelRequested(false)}>
-                <Text style={styles.cancelUndo}>Reprendre mon abonnement</Text>
-              </Pressable>
-            </View>
-          </View>
-        ) : cancelConfirm ? (
-          <View style={styles.cancelCard}>
-            <Text style={styles.cancelTitle}>Confirmer la résiliation ?</Text>
-            <Text style={styles.cancelText}>
-              Vous conserverez vos données. Certaines fonctions IA passeront en mode limité à la
-              fin de la période.
-            </Text>
-            <View style={styles.cancelActions}>
-              <Pressable style={styles.cancelKeep} onPress={() => setCancelConfirm(false)}>
-                <Text style={styles.cancelKeepText}>Conserver</Text>
-              </Pressable>
-              <Pressable style={styles.cancelConfirmButton} onPress={confirmCancel}>
-                <Text style={styles.cancelConfirmText}>Résilier</Text>
-              </Pressable>
-            </View>
-          </View>
-        ) : (
-          <Pressable
-            style={styles.cancelLink}
-            accessibilityRole="button"
-            onPress={() => setCancelConfirm(true)}>
-            <Text style={styles.cancelLinkText}>Résilier l’abonnement</Text>
-          </Pressable>
-        )}
+        <SettingsSection title="Paiement" icon="credit_card">
+          <SettingsRow first icon="credit_card" title="Carte Visa •••• 4242" subtitle="Expire en août 2027" onPress={() => setSheet('card')} />
+        </SettingsSection>
 
-        <Text style={styles.legal}>
-          Paiement sécurisé. Les abonnements se renouvellent automatiquement et peuvent être
-          résiliés à tout moment depuis cet écran.
-        </Text>
+        <SettingsSection title="Factures" icon="receipt_long" footer="Chaque facture est aussi envoyée à claire.martin@email.fr.">
+          {INVOICES.map((invoice, index) => (
+            <SettingsRow
+              key={invoice.id}
+              first={index === 0}
+              icon="description"
+              title={`Premium mensuel • ${invoice.amount}`}
+              subtitle={`Payée le ${invoice.date}`}
+              onPress={() => setToast({ text: `Démo : facture du ${invoice.date} téléchargée` })}
+              right={<Icon name="download" size={20} color={Serene.onSurfaceVariant} />}
+            />
+          ))}
+        </SettingsSection>
+
+        {current !== 'free' && !cancelled ? (
+          <SecondaryButton label="Résilier l’abonnement" danger style={styles.cancel} onPress={() => setSheet('cancel')} />
+        ) : null}
+        <Text style={styles.legal}>Paiement sécurisé. Résiliable à tout moment, sans frais.</Text>
       </ScrollView>
+
+      {/* Changer d'offre */}
+      <BottomSheet
+        visible={typeof sheet === 'object' && sheet !== null}
+        title={typeof sheet === 'object' && sheet ? `Passer à ${PLANS[sheet.change].name} ?` : ''}
+        subtitle={
+          typeof sheet === 'object' && sheet
+            ? sheet.change === 'free'
+              ? 'Vous gardez vos données. Au-delà de 20 documents, les nouveaux ne pourront plus être ajoutés.'
+              : `Nouveau tarif : ${price(sheet.change)}, appliqué au prochain prélèvement le 9 juin.`
+            : undefined
+        }
+        onClose={close}>
+        <PrimaryButton
+          label="Confirmer le changement"
+          icon="check"
+          onPress={() => {
+            if (typeof sheet !== 'object' || !sheet) return;
+            const previous = current;
+            setCurrent(sheet.change);
+            setCancelled(false);
+            close();
+            setToast({ text: `Offre ${PLANS[sheet.change].name} choisie`, undo: () => setCurrent(previous) });
+          }}
+        />
+        <SecondaryButton label="Garder mon offre" onPress={close} />
+      </BottomSheet>
+
+      {/* Résilier : ce qui se passe, clairement */}
+      <BottomSheet visible={sheet === 'cancel'} title="Résilier votre abonnement ?" subtitle={`Vous gardez ${plan.name} jusqu’au 9 juin.`} onClose={close}>
+        {[
+          { icon: 'check', text: 'Vos tâches, rappels, événements et documents sont conservés' },
+          { icon: 'remove', text: 'Kora et les connexions externes seront limitées' },
+          { icon: 'replay', text: 'Vous pouvez reprendre votre abonnement à tout moment' },
+        ].map((line) => (
+          <View key={line.text} style={styles.cancelLine}>
+            <Icon name={line.icon} size={20} color={line.icon === 'remove' ? Serene.error : Tint.primary} />
+            <Text style={styles.cancelText}>{line.text}</Text>
+          </View>
+        ))}
+        <SecondaryButton
+          label="Résilier"
+          danger
+          onPress={() => {
+            setCancelled(true);
+            close();
+            setToast({ text: 'Résiliation enregistrée', undo: () => setCancelled(false) });
+          }}
+        />
+        <SecondaryButton label={`Garder ${plan.name}`} onPress={close} />
+      </BottomSheet>
+
+      {/* Carte : la saisie se fait chez le prestataire de paiement */}
+      <BottomSheet
+        visible={sheet === 'card'}
+        title="Moyen de paiement"
+        subtitle="Pour votre sécurité, la carte se modifie sur la page sécurisée de notre prestataire de paiement."
+        onClose={close}>
+        <PrimaryButton
+          label="Ouvrir la page sécurisée"
+          icon="open_in_new"
+          onPress={() => {
+            close();
+            setToast({ text: 'Démo : ouverture de la page de paiement sécurisée' });
+          }}
+        />
+        <SecondaryButton label="Plus tard" onPress={close} />
+      </BottomSheet>
+
+      {toast ? (
+        <UndoToast key={toast.text} text={toast.text} onUndo={toast.undo} onHide={() => setToast(null)} bottom={24} />
+      ) : null}
     </SafeAreaView>
   );
 }
 
-function UsageBar({
-  label,
-  value,
-  max,
-  unit,
-}: {
-  label: string;
-  value: number;
-  max: number;
-  unit: string;
-}) {
-  const ratio = Math.min(1, value / max);
-  const critical = ratio >= 0.8;
-
-  return (
-    <View style={styles.usageBlock}>
-      <View style={styles.usageHeader}>
-        <Text style={styles.usageLabel}>{label}</Text>
-        <Text style={[styles.usageValue, critical && styles.usageValueCritical]}>
-          {value}/{max} {unit}
-        </Text>
-      </View>
-      <View style={styles.track}>
-        <View
-          style={[
-            styles.fill,
-            { width: `${ratio * 100}%` },
-            critical ? styles.fillCritical : styles.fillNormal,
-          ]}
-        />
-      </View>
-    </View>
-  );
-}
-
-function PlanCard({
-  title,
-  price,
-  features,
-  current,
-  highlight,
-  onSelect,
-}: {
-  title: string;
-  price: string;
-  features: string[];
-  current: boolean;
-  highlight?: boolean;
-  onSelect: () => void;
-}) {
-  return (
-    <View style={[styles.planCard, highlight && styles.planCardHighlight]}>
-      {highlight ? (
-        <View style={styles.recommendedPill}>
-          <Text style={styles.recommendedText}>Recommandé</Text>
-        </View>
-      ) : null}
-      <Text style={styles.planTitle}>{title}</Text>
-      <Text style={styles.planPrice}>{price}</Text>
-      <Text style={styles.planPeriod}>/ mois</Text>
-
-      <View style={styles.planFeatures}>
-        {features.map((feature) => (
-          <View key={feature} style={styles.planFeatureRow}>
-            <Icon name="check_circle" size={14} color={Serene.secondary} />
-            <Text style={styles.planFeatureText}>{feature}</Text>
-          </View>
-        ))}
-      </View>
-
-      <Pressable
-        style={[styles.planButton, current ? styles.planButtonCurrent : styles.planButtonActive]}
-        onPress={onSelect}
-        disabled={current}
-        accessibilityRole="button">
-        <Text style={current ? styles.planButtonCurrentText : styles.planButtonText}>
-          {current ? 'Offre actuelle' : 'Choisir cette offre'}
-        </Text>
-      </Pressable>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: Serene.surface,
-  },
-  header: {
-    height: 56,
-    paddingHorizontal: Space.gutter,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Serene.surface,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Serene.surfaceContainerHigh,
-  },
-  headerButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    flex: 1,
-    textAlign: 'center',
-    ...Typography.titleMd,
-    color: Serene.onSurface,
-  },
-  scroll: {
+  flex: {
     flex: 1,
   },
   content: {
-    paddingHorizontal: Space.gutter,
-    paddingTop: Space.md,
-    paddingBottom: Space.lg,
-    gap: Space.md,
+    paddingTop: 4,
+    paddingBottom: 40,
   },
-  currentCard: {
-    padding: 16,
-    borderRadius: Radius.xl,
-    backgroundColor: Serene.secondaryContainer,
-    ...Shadow.card,
+  banner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 14,
+    padding: 14,
+    borderRadius: 16,
+    backgroundColor: '#fffbeb',
+    borderWidth: 1,
+    borderColor: '#fde68a',
+  },
+  bannerTitle: {
+    fontFamily: FontFamily.bodySemiBold,
+    fontSize: 15,
+    lineHeight: 20,
+    color: '#92400e',
+  },
+  bannerText: {
+    fontFamily: FontFamily.body,
+    fontSize: 13,
+    lineHeight: 18,
+    color: Tint.navy,
+  },
+  bannerAction: {
+    fontFamily: FontFamily.bodyBold,
+    fontSize: 15,
+    lineHeight: 20,
+    color: Tint.primary,
+  },
+  current: {
+    padding: 20,
+    gap: 6,
+    borderRadius: 24,
+    backgroundColor: Tint.black,
   },
   currentTop: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 8,
   },
-  currentBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.primary,
-  },
-  currentBadgeText: {
+  currentLabel: {
     fontFamily: FontFamily.bodySemiBold,
-    fontSize: 10,
-    lineHeight: 14,
+    fontSize: 13,
+    lineHeight: 18,
     letterSpacing: 0.4,
     textTransform: 'uppercase',
+    color: Tint.glow,
+  },
+  currentName: {
+    fontFamily: FontFamily.headingBold,
+    fontSize: 22,
+    lineHeight: 28,
     color: Serene.onPrimary,
   },
-  activePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  activeDot: {
-    width: 6,
-    height: 6,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.success,
-  },
-  activeText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 11,
-    lineHeight: 15,
-    color: Serene.onSecondaryContainer,
-  },
   currentPrice: {
+    marginTop: 6,
     fontFamily: FontFamily.headingBold,
     fontSize: 34,
     lineHeight: 40,
-    color: Serene.onSecondaryContainer,
-    marginTop: 12,
+    color: Serene.onPrimary,
   },
-  currentPeriod: {
+  currentPer: {
     fontFamily: FontFamily.body,
-    fontSize: 12,
-    lineHeight: 16,
-    color: Serene.onSecondaryContainer,
+    fontSize: 16,
+    color: '#cbd5e1',
   },
-  currentDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: Serene.onSecondaryContainer,
-    opacity: 0.15,
-    marginVertical: 12,
+  currentMeta: {
+    fontFamily: FontFamily.body,
+    fontSize: 14,
+    lineHeight: 19,
+    color: '#cbd5e1',
   },
-  currentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-    marginBottom: 5,
-  },
-  currentRowText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 12,
-    lineHeight: 16,
-    color: Serene.onSecondaryContainer,
-  },
-  successBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  usage: {
     gap: 8,
-    padding: 12,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.successContainer,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
-  successText: {
-    flex: 1,
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 12,
-    lineHeight: 17,
-    color: Serene.success,
+  usageBorder: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Tint.border,
   },
-  usageCard: {
-    padding: 14,
-    borderRadius: Radius.xl,
-    backgroundColor: Serene.surfaceContainerLowest,
-    ...Shadow.card,
-  },
-  cardTitle: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurface,
-  },
-  usageBlock: {
-    marginTop: 12,
-  },
-  usageHeader: {
+  usageTop: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 5,
+    gap: 8,
   },
   usageLabel: {
-    fontFamily: FontFamily.body,
-    fontSize: 11,
-    lineHeight: 15,
-    color: Serene.onSurfaceVariant,
+    flex: 1,
+    fontFamily: FontFamily.bodySemiBold,
+    fontSize: 15,
+    lineHeight: 20,
+    color: Tint.navy,
   },
   usageValue: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 11,
-    lineHeight: 15,
-    color: Serene.onSurface,
+    fontFamily: FontFamily.headingBold,
+    fontSize: 16,
+    lineHeight: 21,
+    color: Tint.navy,
   },
-  usageValueCritical: {
-    color: Serene.error,
+  usageLimit: {
+    fontFamily: FontFamily.body,
+    fontSize: 13,
+    color: Serene.onSurfaceVariant,
   },
   track: {
-    height: 6,
+    height: 8,
     borderRadius: Radius.full,
-    backgroundColor: Serene.surfaceContainerHigh,
+    backgroundColor: Tint.soft,
     overflow: 'hidden',
   },
   fill: {
-    height: '100%',
+    height: 8,
     borderRadius: Radius.full,
+    backgroundColor: Tint.primary,
   },
-  fillNormal: {
-    backgroundColor: Serene.secondary,
+  compareHead: {
+    marginTop: 26,
   },
-  fillCritical: {
-    backgroundColor: Serene.error,
-  },
-  sectionLabel: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 11,
-    lineHeight: 14,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-    color: Serene.onSurfaceVariant,
-    marginTop: Space.xs,
-  },
-  plans: {
-    gap: 10,
-  },
-  planCard: {
-    padding: 14,
-    borderRadius: Radius.xl,
-    backgroundColor: Serene.surfaceContainerLowest,
-    borderWidth: 1,
-    borderColor: Serene.surfaceContainerHigh,
-  },
-  planCardHighlight: {
-    borderColor: Serene.secondary,
-    backgroundColor: Serene.surfaceContainerLowest,
-  },
-  recommendedPill: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.secondaryContainer,
-    marginBottom: 6,
-  },
-  recommendedText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 9,
-    lineHeight: 13,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-    color: Serene.onSecondaryContainer,
-  },
-  planTitle: {
-    ...Typography.titleMd,
-    color: Serene.onSurface,
-  },
-  planPrice: {
+  sectionTitle: {
     fontFamily: FontFamily.headingBold,
-    fontSize: 24,
-    lineHeight: 30,
-    color: Serene.onSurface,
-    marginTop: 2,
+    fontSize: 20,
+    lineHeight: 26,
+    letterSpacing: -0.3,
+    color: Tint.navy,
   },
-  planPeriod: {
-    fontFamily: FontFamily.body,
-    fontSize: 11,
-    lineHeight: 15,
-    color: Serene.onSurfaceVariant,
-    marginBottom: 8,
-  },
-  planFeatures: {
-    gap: 6,
-  },
-  planFeatureRow: {
+  cycle: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 6,
-  },
-  planFeatureText: {
-    flex: 1,
-    fontFamily: FontFamily.body,
-    fontSize: 12,
-    lineHeight: 17,
-    color: Serene.onSurface,
-  },
-  planButton: {
-    height: 40,
-    borderRadius: Radius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 12,
-  },
-  planButtonActive: {
-    backgroundColor: Serene.primary,
-  },
-  planButtonCurrent: {
-    backgroundColor: Serene.surfaceContainerLow,
-  },
-  planButtonText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onPrimary,
-  },
-  planButtonCurrentText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurfaceVariant,
-  },
-  paymentCard: {
-    padding: 14,
-    borderRadius: Radius.xl,
-    backgroundColor: Serene.surfaceContainerLowest,
-    ...Shadow.card,
-  },
-  paymentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
+    flexWrap: 'wrap',
+    gap: 8,
     marginTop: 10,
   },
-  paymentIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.md,
-    backgroundColor: Serene.surfaceContainerLow,
-    alignItems: 'center',
-    justifyContent: 'center',
+  plans: {
+    gap: 12,
+    marginTop: 12,
   },
-  paymentBody: {
-    flex: 1,
-  },
-  paymentName: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurface,
-  },
-  paymentMeta: {
-    fontFamily: FontFamily.body,
-    fontSize: 11,
-    lineHeight: 15,
-    color: Serene.onSurfaceVariant,
-  },
-  paymentAction: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.surfaceContainerLow,
-  },
-  paymentActionText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 11,
-    lineHeight: 15,
-    color: Serene.onSurface,
-  },
-  invoicesCard: {
-    padding: 14,
-    borderRadius: Radius.xl,
+  plan: {
+    gap: 8,
+    padding: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: Tint.border,
     backgroundColor: Serene.surfaceContainerLowest,
-    ...Shadow.card,
   },
-  invoicesHeader: {
+  planCurrent: {
+    borderWidth: 2,
+    borderColor: Tint.black,
+    padding: 15,
+  },
+  planTop: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 6,
-  },
-  seeAll: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 11,
-    lineHeight: 15,
-    color: Serene.secondary,
-  },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: Serene.surfaceContainerHigh,
-  },
-  invoiceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 9,
-    paddingVertical: 9,
-  },
-  invoiceIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: Radius.md,
-    backgroundColor: Serene.surfaceContainerLow,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  invoiceBody: {
-    flex: 1,
-  },
-  invoiceLabel: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 12,
-    lineHeight: 16,
-    color: Serene.onSurface,
-  },
-  invoiceDate: {
-    fontFamily: FontFamily.body,
-    fontSize: 10,
-    lineHeight: 14,
-    color: Serene.onSurfaceVariant,
-  },
-  invoiceAmount: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 12,
-    lineHeight: 16,
-    color: Serene.onSurface,
-  },
-  cancelBanner: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
     gap: 8,
-    padding: 12,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.warningContainer,
   },
-  cancelBannerBody: {
+  planName: {
+    fontFamily: FontFamily.headingBold,
+    fontSize: 19,
+    lineHeight: 25,
+    color: Tint.navy,
+  },
+  planPrice: {
+    fontFamily: FontFamily.headingBold,
+    fontSize: 17,
+    lineHeight: 23,
+    color: Tint.primary,
+  },
+  perk: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  perkText: {
     flex: 1,
-  },
-  cancelBannerTitle: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 12,
-    lineHeight: 16,
-    color: Serene.warning,
-  },
-  cancelBannerText: {
     fontFamily: FontFamily.body,
-    fontSize: 11,
-    lineHeight: 16,
-    color: Serene.warning,
-    marginTop: 2,
+    fontSize: 14,
+    lineHeight: 20,
+    color: Tint.navy,
   },
-  cancelUndo: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 11,
-    lineHeight: 15,
-    color: Serene.warning,
+  planButton: {
     marginTop: 6,
-    textDecorationLine: 'underline',
   },
-  cancelCard: {
-    padding: 14,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.errorContainer,
-  },
-  cancelTitle: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.error,
-  },
-  cancelText: {
-    fontFamily: FontFamily.body,
-    fontSize: 11,
-    lineHeight: 16,
-    color: Serene.error,
-    marginTop: 3,
-  },
-  cancelActions: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 10,
-  },
-  cancelKeep: {
-    flex: 1,
-    height: 38,
-    borderRadius: Radius.md,
-    backgroundColor: Serene.surfaceContainerLowest,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cancelKeepText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 12,
-    lineHeight: 16,
-    color: Serene.onSurface,
-  },
-  cancelConfirmButton: {
-    flex: 1,
-    height: 38,
-    borderRadius: Radius.md,
-    backgroundColor: Serene.error,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cancelConfirmText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 12,
-    lineHeight: 16,
-    color: Serene.onPrimary,
-  },
-  cancelLink: {
-    alignSelf: 'center',
-    paddingVertical: 4,
-  },
-  cancelLinkText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 12,
-    lineHeight: 16,
-    color: Serene.error,
+  cancel: {
+    marginTop: 24,
   },
   legal: {
-    fontFamily: FontFamily.body,
-    fontSize: 10,
-    lineHeight: 15,
-    color: Serene.onSurfaceVariant,
+    marginTop: 12,
     textAlign: 'center',
+    fontFamily: FontFamily.body,
+    fontSize: 13,
+    lineHeight: 18,
+    color: Serene.onSurfaceVariant,
+  },
+  cancelLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  cancelText: {
+    flex: 1,
+    fontFamily: FontFamily.body,
+    fontSize: 15,
+    lineHeight: 21,
+    color: Tint.navy,
   },
 });
