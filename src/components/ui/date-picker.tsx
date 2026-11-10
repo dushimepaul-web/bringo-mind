@@ -1,6 +1,6 @@
 // Sélecteur de date façon agenda du téléphone : un mois navigable, toucher un jour le choisit.
-import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View, type ScrollViewInstance } from 'react-native';
 
 import { Icon } from '@/components/icon';
 import { BottomSheet } from '@/components/ui/kit';
@@ -22,6 +22,8 @@ const MONTHS = [
   'Décembre',
 ];
 const LETTERS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+/** Années proposées, de la plus récente à la plus ancienne. */
+const YEARS = Array.from({ length: 2030 - 1930 + 1 }, (_, index) => 2030 - index);
 
 function grid(year: number, month: number) {
   const first = new Date(year, month, 1);
@@ -38,6 +40,7 @@ export function DatePickerSheet({
   title,
   value,
   minDate,
+  maxDate,
   onSelect,
   onClose,
 }: {
@@ -46,11 +49,20 @@ export function DatePickerSheet({
   value: Date;
   /** Jours antérieurs désactivés (ex. fin avant le début). */
   minDate?: Date;
+  /** Jours postérieurs désactivés (ex. date de naissance). */
+  maxDate?: Date;
   onSelect: (date: Date) => void;
   onClose: () => void;
 }) {
   const [cursor, setCursor] = useState(() => new Date(value.getFullYear(), value.getMonth(), 1));
   const [lastValue, setLastValue] = useState(value);
+  // Toucher le mois affiche la liste des années (utile pour une date de naissance).
+  const [yearMode, setYearMode] = useState(false);
+  const yearsRef = useRef<ScrollViewInstance>(null);
+  // Années possibles selon les limites (pas d'année future pour une date de naissance).
+  const years = YEARS.filter(
+    (year) => (!maxDate || year <= maxDate.getFullYear()) && (!minDate || year >= minDate.getFullYear()),
+  );
 
   // Réaligne le mois affiché quand la valeur change de l'extérieur.
   if (lastValue.getTime() !== value.getTime()) {
@@ -71,9 +83,16 @@ export function DatePickerSheet({
           onPress={() => move(-1)}>
           <Icon name="chevron_left" size={24} color={Tint.navy} />
         </Pressable>
-        <Text style={styles.month}>
-          {MONTHS[cursor.getMonth()]} {cursor.getFullYear()}
-        </Text>
+        <Pressable
+          style={({ pressed }) => [styles.monthButton, pressed && styles.pressed]}
+          accessibilityRole="button"
+          accessibilityLabel={yearMode ? 'Revenir aux jours' : 'Choisir l’année'}
+          onPress={() => setYearMode((open) => !open)}>
+          <Text style={styles.month}>
+            {MONTHS[cursor.getMonth()]} {cursor.getFullYear()}
+          </Text>
+          <Icon name={yearMode ? 'expand_less' : 'expand_more'} size={22} color={Tint.navy} />
+        </Pressable>
         <Pressable
           style={({ pressed }) => [styles.arrow, pressed && styles.pressed]}
           accessibilityRole="button"
@@ -83,45 +102,79 @@ export function DatePickerSheet({
         </Pressable>
       </View>
 
-      <View style={styles.letters}>
-        {LETTERS.map((letter, index) => (
-          <Text key={`${letter}-${index}`} style={styles.letter}>
-            {letter}
-          </Text>
-        ))}
-      </View>
-      <View style={styles.grid}>
-        {cells.map(({ date, inMonth }) => {
-          const selected = dayOffset(date) === dayOffset(value);
-          const today = dayOffset(date) === 0;
-          const disabled = minDate ? startOfDay(date) < startOfDay(minDate) : false;
-          return (
-            <Pressable
-              key={date.toISOString()}
-              style={styles.cell}
-              disabled={disabled}
-              accessibilityRole="button"
-              accessibilityLabel={formatLongDay(date)}
-              accessibilityState={{ selected, disabled }}
-              onPress={() => {
-                onSelect(startOfDay(date));
-                onClose();
-              }}>
-              <View style={[styles.day, today && styles.today, selected && styles.selected]}>
-                <Text
-                  style={[
-                    styles.dayText,
-                    !inMonth && styles.outText,
-                    disabled && styles.disabledText,
-                    selected && styles.selectedText,
-                  ]}>
-                  {date.getDate()}
-                </Text>
-              </View>
-            </Pressable>
-          );
-        })}
-      </View>
+      {yearMode ? (
+        <ScrollView
+          ref={yearsRef}
+          style={styles.years}
+          contentContainerStyle={styles.yearsGrid}
+          showsVerticalScrollIndicator={false}
+          onLayout={() => {
+            // Ouvre la liste sur l'année affichée.
+            const row = Math.floor(Math.max(0, years.indexOf(cursor.getFullYear())) / 4);
+            yearsRef.current?.scrollTo({ y: Math.max(0, (row - 2) * 52), animated: false });
+          }}>
+          {years.map((year) => {
+            const selected = year === cursor.getFullYear();
+            return (
+              <Pressable
+                key={year}
+                style={[styles.year, selected && styles.selected]}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                onPress={() => {
+                  setCursor(new Date(year, cursor.getMonth(), 1));
+                  setYearMode(false);
+                }}>
+                <Text style={[styles.dayText, selected && styles.selectedText]}>{year}</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      ) : (
+        <>
+          <View style={styles.letters}>
+          {LETTERS.map((letter, index) => (
+            <Text key={`${letter}-${index}`} style={styles.letter}>
+              {letter}
+            </Text>
+          ))}
+        </View>
+        <View style={styles.grid}>
+          {cells.map(({ date, inMonth }) => {
+            const selected = dayOffset(date) === dayOffset(value);
+            const today = dayOffset(date) === 0;
+            const disabled =
+            (minDate ? startOfDay(date) < startOfDay(minDate) : false) ||
+            (maxDate ? startOfDay(date) > startOfDay(maxDate) : false);
+            return (
+              <Pressable
+                key={date.toISOString()}
+                style={styles.cell}
+                disabled={disabled}
+                accessibilityRole="button"
+                accessibilityLabel={formatLongDay(date)}
+                accessibilityState={{ selected, disabled }}
+                onPress={() => {
+                  onSelect(startOfDay(date));
+                  onClose();
+                }}>
+                <View style={[styles.day, today && styles.today, selected && styles.selected]}>
+                  <Text
+                    style={[
+                      styles.dayText,
+                      !inMonth && styles.outText,
+                      disabled && styles.disabledText,
+                      selected && styles.selectedText,
+                    ]}>
+                    {date.getDate()}
+                  </Text>
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
+        </>
+      )}
     </BottomSheet>
   );
 }
@@ -139,6 +192,31 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: Tint.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  monthButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  years: {
+    maxHeight: 300,
+  },
+  yearsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  year: {
+    width: '22%',
+    height: 44,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: Tint.border,
     alignItems: 'center',

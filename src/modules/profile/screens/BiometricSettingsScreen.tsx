@@ -1,407 +1,232 @@
-// S-20 (sécurité) - Biométrie | Module M09 Profil et paramètres | Phase S8
-import { router } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+// Mobile - Déverrouillage biométrique | Module M09 Profil | Phase S8
+// Un seul état partagé avec le Profil ; les réglages s'appliquent tout de suite ; désactiver est confirmé.
+import { useEffect, useState } from 'react';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icon';
-import { FontFamily, Radius, Serene, Shadow, Space, Typography } from '@/constants/design';
+import { BottomSheet, Chip, PrimaryButton, SecondaryButton, Tag, TopBar, UndoToast, kitStyles } from '@/components/ui/kit';
+import { FieldLabel, SettingsRow, SettingsSection, ToggleSwitch, settingsStyles } from '@/components/ui/settings';
+import { FontFamily, Radius, Serene, Tint } from '@/constants/design';
+
+import { LOCK_DELAYS, profileActions, useProfileState } from '../store';
 
 export default function BiometricSettingsScreen() {
-  const [enabled, setEnabled] = useState(true);
-  const [sensitiveActions, setSensitiveActions] = useState(true);
-  const [fallbackPin, setFallbackPin] = useState(true);
-  const [testState, setTestState] = useState<'idle' | 'scanning' | 'success'>('idle');
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { biometric, confirmSensitive, fallbackCode, lockDelay } = useProfileState();
+  const [test, setTest] = useState<'idle' | 'scanning' | 'success'>('idle');
+  const [confirmOff, setConfirmOff] = useState(false);
+  const [toast, setToast] = useState<{ text: string; undo?: () => void } | null>(null);
 
-  useEffect(
-    () => () => {
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    },
-    [],
-  );
+  // Démo : la vérification Face ID prend un instant.
+  useEffect(() => {
+    if (test !== 'scanning') return undefined;
+    const timer = setTimeout(() => setTest('success'), 1200);
+    return () => clearTimeout(timer);
+  }, [test]);
 
-  const runTest = () => {
-    if (testState === 'scanning') return;
-    setTestState('scanning');
-    timeoutRef.current = setTimeout(() => setTestState('success'), 1200);
-  };
+  const off = !biometric;
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
-        <Pressable
-          style={styles.headerButton}
-          accessibilityRole="button"
-          accessibilityLabel="Retour"
-          onPress={() => router.back()}>
-          <Icon name="arrow_back" size={22} color={Serene.onSurface} />
-        </Pressable>
-        <Text style={styles.headerTitle}>Sécurité biométrique</Text>
-        <View style={styles.headerButton} />
-      </View>
+    <SafeAreaView style={kitStyles.safe} edges={['top']}>
+      <TopBar title="Déverrouillage biométrique" fallback="/profile" />
+      <ScrollView contentContainerStyle={[kitStyles.content, styles.content]} showsVerticalScrollIndicator={false}>
+        <View style={[kitStyles.card, styles.hero]}>
+          <View style={[styles.faceId, off && styles.faceIdOff, test === 'success' && styles.faceIdOk]}>
+            <Icon
+              name={test === 'success' ? 'check' : 'face'}
+              size={44}
+              color={off ? Serene.onSurfaceVariant : Serene.onPrimary}
+            />
+          </View>
+          <Text style={styles.heroTitle}>{off ? 'Face ID désactivé' : 'Face ID activé'}</Text>
+          <Text style={[kitStyles.muted, styles.center]}>
+            {off
+              ? 'L’app s’ouvre avec votre mot de passe.'
+              : 'Déverrouillez Bringo Mind et confirmez les actions sensibles avec votre visage.'}
+          </Text>
+          {off ? (
+            <PrimaryButton
+              label="Activer Face ID"
+              icon="face"
+              style={styles.heroButton}
+              onPress={() => {
+                profileActions.setBiometric(true);
+                setToast({ text: 'Face ID activé' });
+              }}
+            />
+          ) : (
+            <SecondaryButton
+              label={test === 'success' ? 'Identité vérifiée' : test === 'scanning' ? 'Vérification…' : 'Tester Face ID'}
+              icon={test === 'success' ? 'verified' : 'play_arrow'}
+              style={styles.heroButton}
+              onPress={() => setTest(test === 'scanning' ? 'scanning' : 'scanning')}
+            />
+          )}
+        </View>
 
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}>
-        <View style={styles.heroCard}>
-          <View style={[styles.fingerprintRing, enabled && styles.fingerprintRingActive]}>
-            <View style={[styles.fingerprintCircle, enabled && styles.fingerprintCircleActive]}>
-              <Icon
-                name="fingerprint"
-                size={44}
-                color={enabled ? Serene.onPrimary : Serene.onSurfaceVariant}
+        <SettingsSection title="Réglages" icon="tune" footer={off ? 'Activez Face ID pour modifier ces réglages.' : undefined}>
+          <SettingsRow
+            first
+            icon="lock_open"
+            title="Déverrouiller l’application"
+            subtitle="Face ID à l’ouverture de Bringo Mind"
+            right={
+              <ToggleSwitch
+                value={biometric}
+                label="Déverrouiller l’application avec Face ID"
+                onValueChange={(value) => (value ? profileActions.setBiometric(true) : setConfirmOff(true))}
               />
+            }
+          />
+          <SettingsRow
+            icon="gpp_good"
+            title="Confirmer les actions sensibles"
+            subtitle="Suppression, export, transfert du foyer"
+            disabled={off}
+            right={
+              <ToggleSwitch
+                value={confirmSensitive}
+                disabled={off}
+                label="Confirmer les actions sensibles avec Face ID"
+                onValueChange={profileActions.setConfirmSensitive}
+              />
+            }
+          />
+          <SettingsRow
+            icon="pin"
+            title="Code du téléphone en secours"
+            subtitle="Si Face ID ne vous reconnaît pas"
+            disabled={off}
+            right={
+              <ToggleSwitch
+                value={fallbackCode}
+                disabled={off}
+                label="Utiliser le code du téléphone en secours"
+                onValueChange={profileActions.setFallbackCode}
+              />
+            }
+          />
+          <View style={[settingsStyles.inset, settingsStyles.insetBorder, off && styles.disabled]}>
+            <FieldLabel>Verrouiller l’app</FieldLabel>
+            <View style={styles.chips}>
+              {LOCK_DELAYS.map((entry) => (
+                <Chip
+                  key={entry.key}
+                  label={entry.label}
+                  selected={lockDelay === entry.key}
+                  onPress={() => {
+                    if (off) return;
+                    profileActions.setLockDelay(entry.key);
+                  }}
+                />
+              ))}
             </View>
           </View>
-          <Text style={styles.heroTitle}>
-            {enabled ? 'Biométrie activée' : 'Biométrie désactivée'}
-          </Text>
-          <Text style={styles.heroText}>
-            Utilisez Face ID ou votre empreinte digitale pour déverrouiller Bringo Mind et confirmer
-            les actions sensibles.
-          </Text>
+        </SettingsSection>
 
-          <Pressable
-            style={[
-              styles.testButton,
-              testState === 'success' && styles.testButtonSuccess,
-            ]}
-            onPress={runTest}
-            accessibilityRole="button">
-            <Icon
-              name={
-                testState === 'success'
-                  ? 'check_circle'
-                  : testState === 'scanning'
-                    ? 'fingerprint'
-                    : 'play_arrow'
-              }
-              size={18}
-              color={testState === 'success' ? Serene.success : Serene.onSurface}
-            />
-            <Text
-              style={[
-                styles.testButtonText,
-                testState === 'success' && styles.testButtonTextSuccess,
-              ]}>
-              {testState === 'success'
-                ? 'Identité vérifiée'
-                : testState === 'scanning'
-                  ? 'Scan en cours...'
-                  : 'Tester la biométrie'}
-            </Text>
-          </Pressable>
-        </View>
-
-        <View style={styles.card}>
-          <ToggleRow
-            icon="fingerprint"
-            label="Déverrouillage de l’application"
-            hint="Face ID ou empreinte au lancement"
-            value={enabled}
-            onChange={setEnabled}
+        <SettingsSection title="Cet appareil" icon="phone_iphone">
+          <SettingsRow
+            first
+            icon="phone_iphone"
+            title="iPhone 15"
+            subtitle="Face ID disponible • iOS 18"
+            right={<Tag label="Compatible" icon="check" tone="success" />}
           />
-          <View style={styles.divider} />
-          <ToggleRow
-            icon="gpp_good"
-            label="Confirmer les actions sensibles"
-            hint="Suppression, export, transfert de foyer"
-            value={sensitiveActions}
-            onChange={setSensitiveActions}
-          />
-          <View style={styles.divider} />
-          <ToggleRow
-            icon="pin"
-            label="Code de secours"
-            hint="Utiliser le code de l’appareil en cas d’échec"
-            value={fallbackPin}
-            onChange={setFallbackPin}
-          />
-        </View>
+        </SettingsSection>
 
-        <View style={styles.deviceCard}>
-          <View style={styles.deviceIcon}>
-            <Icon name="phone_iphone" size={20} color={Serene.secondary} />
-          </View>
-          <View style={styles.deviceBody}>
-            <Text style={styles.deviceTitle}>iPhone 15</Text>
-            <Text style={styles.deviceText}>Face ID disponible • iOS 18.2</Text>
-          </View>
-          <View style={styles.deviceStatus}>
-            <Icon name="check_circle" size={14} color={Serene.success} />
-            <Text style={styles.deviceStatusText}>Compatible</Text>
-          </View>
-        </View>
-
-        <View style={styles.infoCard}>
-          <Icon name="shield" size={16} color={Serene.onSurfaceVariant} />
-          <Text style={styles.infoText}>
-            Vos données biométriques restent sur l’appareil. Bringo Mind ne les reçoit ni ne les
-            stocke jamais.
+        <View style={styles.note}>
+          <Icon name="lock" size={18} color={Tint.primary} />
+          <Text style={styles.noteText}>
+            Votre visage ne quitte jamais le téléphone : Bringo Mind reçoit seulement « reconnu » ou « non reconnu ».
           </Text>
         </View>
-
-        <Pressable
-          style={styles.saveButton}
-          accessibilityRole="button"
-          onPress={() => router.back()}>
-          <Icon name="check" size={18} color={Serene.onPrimary} />
-          <Text style={styles.saveButtonText}>Enregistrer</Text>
-        </Pressable>
       </ScrollView>
+
+      <BottomSheet
+        visible={confirmOff}
+        title="Désactiver Face ID ?"
+        subtitle="Vous devrez saisir votre mot de passe pour ouvrir l’app et confirmer les actions sensibles."
+        onClose={() => setConfirmOff(false)}>
+        <SecondaryButton
+          label="Désactiver"
+          danger
+          onPress={() => {
+            profileActions.setBiometric(false);
+            setConfirmOff(false);
+            setTest('idle');
+            setToast({ text: 'Face ID désactivé', undo: () => profileActions.setBiometric(true) });
+          }}
+        />
+        <SecondaryButton label="Garder Face ID" onPress={() => setConfirmOff(false)} />
+      </BottomSheet>
+
+      {toast ? (
+        <UndoToast key={toast.text} text={toast.text} onUndo={toast.undo} onHide={() => setToast(null)} bottom={24} />
+      ) : null}
     </SafeAreaView>
   );
 }
 
-function ToggleRow({
-  icon,
-  label,
-  hint,
-  value,
-  onChange,
-}: {
-  icon: string;
-  label: string;
-  hint: string;
-  value: boolean;
-  onChange: (value: boolean) => void;
-}) {
-  return (
-    <View style={styles.row}>
-      <View style={styles.rowIcon}>
-        <Icon name={icon} size={18} color={Serene.onSurfaceVariant} />
-      </View>
-      <View style={styles.rowBody}>
-        <Text style={styles.rowLabel}>{label}</Text>
-        <Text style={styles.rowHint}>{hint}</Text>
-      </View>
-      <Switch
-        value={value}
-        onValueChange={onChange}
-        trackColor={{ false: Serene.surfaceContainerHigh, true: Serene.secondary }}
-        thumbColor={Serene.surfaceContainerLowest}
-      />
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: Serene.surface,
-  },
-  header: {
-    height: 56,
-    paddingHorizontal: Space.gutter,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Serene.surface,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Serene.surfaceContainerHigh,
-  },
-  headerButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    flex: 1,
+  center: {
     textAlign: 'center',
-    ...Typography.titleMd,
-    color: Serene.onSurface,
-  },
-  scroll: {
-    flex: 1,
   },
   content: {
-    paddingHorizontal: Space.gutter,
-    paddingTop: Space.md,
-    paddingBottom: Space.lg,
-    gap: Space.md,
+    paddingTop: 4,
+    paddingBottom: 40,
   },
-  heroCard: {
+  hero: {
     alignItems: 'center',
-    padding: Space.md,
-    borderRadius: Radius.xxl,
-    backgroundColor: Serene.surfaceContainerLowest,
-    ...Shadow.card,
+    gap: 8,
+    paddingVertical: 22,
   },
-  fingerprintRing: {
-    width: 96,
-    height: 96,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.surfaceContainerLow,
+  faceId: {
+    width: 88,
+    height: 88,
+    borderRadius: 28,
+    backgroundColor: Tint.black,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 10,
+    marginBottom: 4,
   },
-  fingerprintRingActive: {
-    backgroundColor: Serene.secondaryContainer,
+  faceIdOff: {
+    backgroundColor: Tint.soft,
   },
-  fingerprintCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.surfaceContainerHigh,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fingerprintCircleActive: {
-    backgroundColor: Serene.primary,
+  faceIdOk: {
+    backgroundColor: Tint.primary,
   },
   heroTitle: {
-    ...Typography.headlineSm,
-    color: Serene.onSurface,
+    fontFamily: FontFamily.headingBold,
+    fontSize: 21,
+    lineHeight: 27,
+    color: Tint.navy,
   },
-  heroText: {
-    fontFamily: FontFamily.body,
-    fontSize: 12,
-    lineHeight: 17,
-    color: Serene.onSurfaceVariant,
-    textAlign: 'center',
-    marginTop: 3,
-    maxWidth: 300,
+  heroButton: {
+    alignSelf: 'stretch',
+    marginTop: 8,
   },
-  testButton: {
+  disabled: {
+    opacity: 0.45,
+  },
+  chips: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.surfaceContainerLow,
+    flexWrap: 'wrap',
+    gap: 8,
   },
-  testButtonSuccess: {
-    backgroundColor: Serene.successContainer,
-  },
-  testButtonText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 12,
-    lineHeight: 16,
-    color: Serene.onSurface,
-  },
-  testButtonTextSuccess: {
-    color: Serene.success,
-    fontFamily: FontFamily.bodySemiBold,
-  },
-  card: {
-    paddingHorizontal: Space.sm,
-    borderRadius: Radius.xl,
-    backgroundColor: Serene.surfaceContainerLowest,
-    ...Shadow.card,
-  },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: Serene.surfaceContainerHigh,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 4,
-  },
-  rowIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: Radius.md,
-    backgroundColor: Serene.surfaceContainerLow,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  rowBody: {
-    flex: 1,
-    minWidth: 0,
-  },
-  rowLabel: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurface,
-  },
-  rowHint: {
-    fontFamily: FontFamily.body,
-    fontSize: 11,
-    lineHeight: 15,
-    color: Serene.onSurfaceVariant,
-  },
-  deviceCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    padding: 12,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.surfaceContainerLowest,
-    ...Shadow.card,
-  },
-  deviceIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: Radius.md,
-    backgroundColor: Serene.secondaryContainer,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  deviceBody: {
-    flex: 1,
-    minWidth: 0,
-  },
-  deviceTitle: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurface,
-  },
-  deviceText: {
-    fontFamily: FontFamily.body,
-    fontSize: 11,
-    lineHeight: 15,
-    color: Serene.onSurfaceVariant,
-  },
-  deviceStatus: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-  },
-  deviceStatusText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 10,
-    lineHeight: 14,
-    color: Serene.success,
-  },
-  infoCard: {
+  note: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 8,
-    padding: 12,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.surfaceContainerLow,
+    marginTop: 20,
+    padding: 14,
+    borderRadius: Radius.md,
+    backgroundColor: Tint.soft,
   },
-  infoText: {
+  noteText: {
     flex: 1,
     fontFamily: FontFamily.body,
-    fontSize: 12,
-    lineHeight: 17,
-    color: Serene.onSurfaceVariant,
-  },
-  saveButton: {
-    height: 48,
-    borderRadius: Radius.xl,
-    backgroundColor: Serene.primary,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    ...Shadow.floating,
-  },
-  saveButtonText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 14,
-    lineHeight: 20,
-    color: Serene.onPrimary,
+    fontSize: 13,
+    lineHeight: 18,
+    color: Tint.navy,
   },
 });

@@ -1,4 +1,5 @@
-// S-27 - Assistant conversationnel | Module M12 Assistant IA | Phase S11
+// S-27 - Assistant Kora | Module M13 Assistant | Phase S11
+// Kora aide sans décider à la place : chaque proposition ouvre le vrai formulaire, prérempli, à valider.
 import { router } from 'expo-router';
 import { useRef, useState } from 'react';
 import {
@@ -14,920 +15,431 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { AppHeader } from '@/components/app-header';
 import { Icon } from '@/components/icon';
-import { FontFamily, Radius, Serene, Shadow, Space, Typography } from '@/constants/design';
+import { Chip, UndoToast, kitStyles } from '@/components/ui/kit';
+import { FontFamily, Radius, Serene, Tint } from '@/constants/design';
+import { DEMO_TODAY, formatTime } from '@/lib/demo-dates';
 
-type ChatMessage = {
-  id: number;
-  role: 'user' | 'kora';
-  text: string;
+import { QUICK_QUESTIONS, answer, initialConversation, topicOf, type ActionCard, type Message, type Topic } from '../data';
+
+const TONES: Record<ActionCard['tone'], { bg: string; fg: string }> = {
+  event: { bg: '#e2dfff', fg: '#3323cc' },
+  task: { bg: Serene.secondaryContainer, fg: Serene.onSecondaryContainer },
+  reminder: { bg: '#fef3c7', fg: '#92400e' },
+  document: { bg: '#dce9ff', fg: '#1e3a8a' },
 };
 
 export default function AssistantScreen() {
+  const [messages, setMessages] = useState<Message[]>(initialConversation);
+  const [scope, setScope] = useState<'personal' | 'household'>('personal');
   const [draft, setDraft] = useState('');
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const idRef = useRef(0);
+  const [focused, setFocused] = useState(false);
+  const [typing, setTyping] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
   const scrollRef = useRef<ScrollViewInstance>(null);
 
-  const handleSend = () => {
-    const text = draft.trim();
-    if (!text) return;
-
-    const userId = idRef.current++;
-    const koraId = idRef.current++;
-
-    setMessages((prev) => [
-      ...prev,
-      { id: userId, role: 'user', text },
-      {
-        id: koraId,
-        role: 'kora',
-        text: "J'analyse votre demande administrative et prépare la confirmation...",
-      },
-    ]);
+  const ask = (text: string, topic: Topic = topicOf(text)) => {
+    const clean = text.trim();
+    if (!clean || typing) return;
+    // Démo : l'heure avance d'une minute à chaque échange.
+    const at = new Date(DEMO_TODAY.getTime() + messages.length * 60000);
+    setMessages((current) => [...current, { id: `me-${current.length}`, from: 'me', text: clean, at }]);
     setDraft('');
+    setTyping(true);
+    setTimeout(() => {
+      setMessages((current) => [...current, { id: `kora-${current.length}`, from: 'kora', at, ...answer(topic) }]);
+      setTyping(false);
+    }, 700);
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <AppHeader />
-        <SecurityBanner />
+    <SafeAreaView style={kitStyles.safe} edges={['top']}>
+      {/* En-tête : qui est Kora et ce qu'elle peut voir */}
+      <View style={styles.header}>
+        <View style={styles.koraAvatar}>
+          <Icon name="auto_awesome" size={22} color={Tint.glow} />
+        </View>
+        <View style={styles.flex}>
+          <Text style={styles.headerTitle}>Kora</Text>
+          <Text style={styles.headerSubtitle}>Kora propose, vous décidez</Text>
+        </View>
+        <Pressable
+          style={({ pressed }) => [styles.voiceButton, pressed && styles.pressed]}
+          accessibilityRole="button"
+          accessibilityLabel="Commande vocale"
+          onPress={() => router.push('/voice')}>
+          <Icon name="mic" size={22} color={Tint.navy} />
+        </Pressable>
+      </View>
+      <View style={styles.scopeRow}>
+        <Chip label="Personnel" icon="lock" selected={scope === 'personal'} onPress={() => setScope('personal')} />
+        <Chip label="Foyer" icon="group" selected={scope === 'household'} onPress={() => setScope('household')} />
+        <Text style={styles.scopeHint} numberOfLines={2}>
+          {scope === 'personal' ? 'Kora ne voit que vos éléments' : 'Kora voit aussi ce qui est partagé'}
+        </Text>
+      </View>
 
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
           ref={scrollRef}
-          style={styles.scroll}
-          contentContainerStyle={styles.content}
+          style={styles.flex}
+          contentContainerStyle={[kitStyles.content, styles.content]}
+          onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
           keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-          onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}>
-          <KoraBriefing />
-          <UserBubble
-            text="Peux-tu programmer un rendez-vous chez le dentiste pour Léo mercredi prochain à 15h, et créer un rappel pour Thomas pour qu'il l'accompagne ?"
-            time="09:42"
-          />
-          <KoraStructuredResponse />
-
+          showsVerticalScrollIndicator={false}>
           {messages.map((message) =>
-            message.role === 'user' ? (
-              <UserBubble key={message.id} text={message.text} time="À l'instant" />
+            message.from === 'me' ? (
+              <View key={message.id} style={styles.meWrap}>
+                <Text style={styles.time}>{formatTime(message.at)}</Text>
+                <View style={styles.meBubble}>
+                  <Text style={styles.meText}>{message.text}</Text>
+                </View>
+              </View>
             ) : (
-              <KoraSimpleBubble key={message.id} text={message.text} />
+              <View key={message.id} style={styles.koraWrap}>
+                <View style={styles.koraMeta}>
+                  <View style={styles.koraDot}>
+                    <Icon name="auto_awesome" size={14} color={Tint.glow} />
+                  </View>
+                  <Text style={styles.koraName}>Kora</Text>
+                  <Text style={styles.time}>{formatTime(message.at)}</Text>
+                </View>
+                <Text style={styles.koraText}>{message.text}</Text>
+                {message.cards?.map((card) => (
+                  <Card key={card.id} card={card} />
+                ))}
+              </View>
             ),
           )}
-
-          <QuickPrompts onSelect={setDraft} />
+          {typing ? (
+            <View style={styles.typing}>
+              <View style={styles.koraDot}>
+                <Icon name="auto_awesome" size={14} color={Tint.glow} />
+              </View>
+              <Text style={styles.typingText}>Kora prépare sa réponse…</Text>
+            </View>
+          ) : null}
         </ScrollView>
 
-        <InputDock draft={draft} onChange={setDraft} onSend={handleSend} />
+        <View style={styles.composer}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quick} keyboardShouldPersistTaps="handled">
+            {QUICK_QUESTIONS.map((question) => (
+              <Chip key={question.topic} label={question.label} icon={question.icon} onPress={() => ask(question.label, question.topic)} />
+            ))}
+          </ScrollView>
+          <View style={styles.inputRow}>
+            <Pressable
+              style={({ pressed }) => [styles.roundButton, pressed && styles.pressed]}
+              accessibilityRole="button"
+              accessibilityLabel="Joindre un document"
+              onPress={() => setToast('Démo : choisir un document à montrer à Kora')}>
+              <Icon name="attach_file" size={22} color={Tint.navy} />
+            </Pressable>
+            <View style={[styles.input, focused && kitStyles.inputFocused]}>
+              <TextInput
+                style={styles.inputText}
+                value={draft}
+                onChangeText={setDraft}
+                onFocus={() => setFocused(true)}
+                onBlur={() => setFocused(false)}
+                onSubmitEditing={() => ask(draft)}
+                returnKeyType="send"
+                placeholder="Écrire à Kora…"
+                placeholderTextColor={Serene.onSurfaceVariant}
+                selectionColor={Tint.primary}
+                accessibilityLabel="Message pour Kora"
+              />
+            </View>
+            <Pressable
+              style={({ pressed }) => [styles.sendButton, !draft.trim() && styles.sendDisabled, pressed && styles.pressed]}
+              accessibilityRole="button"
+              accessibilityLabel={draft.trim() ? 'Envoyer' : 'Parler à Kora'}
+              onPress={() => (draft.trim() ? ask(draft) : router.push('/voice'))}>
+              <Icon name={draft.trim() ? 'arrow_upward' : 'mic'} size={22} color={Serene.onPrimary} />
+            </Pressable>
+          </View>
+        </View>
       </KeyboardAvoidingView>
+
+      {toast ? <UndoToast key={toast} text={toast} onHide={() => setToast(null)} bottom={150} /> : null}
     </SafeAreaView>
   );
 }
 
-function SecurityBanner() {
+/** Carte d'action : ce que Kora propose, et le bouton qui ouvre le vrai écran. */
+function Card({ card }: { card: ActionCard }) {
+  const tone = TONES[card.tone];
   return (
-    <View style={styles.security}>
-      <View style={styles.securityRow}>
-        <View style={styles.securityLeft}>
-          <View style={styles.securityDot} />
-          <Text style={styles.securityTitle}>Kora AI • Secrétaire de foyer</Text>
+    <View style={styles.card}>
+      <View style={styles.cardTop}>
+        <View style={[styles.cardIcon, { backgroundColor: tone.bg }]}>
+          <Icon name={card.icon} size={20} color={tone.fg} />
         </View>
-        <View style={styles.encryptedPill}>
-          <Icon name="lock" size={13} color={Serene.secondary} />
-          <Text style={styles.encryptedText}>Chiffré de bout en bout</Text>
-        </View>
-      </View>
-
-      <View style={styles.securityRow}>
-        <View style={styles.contextPill}>
-          <Icon name="roofing" size={14} color={Serene.secondary} />
-          <Text style={styles.contextPillText}>Contexte : Foyer Martin</Text>
-          <Icon name="expand_more" size={14} color={Serene.onSurfaceVariant} />
-        </View>
-        <Text style={styles.syncText}>Synchro cloud actif</Text>
-      </View>
-    </View>
-  );
-}
-
-function KoraAvatar() {
-  return (
-    <View style={styles.koraAvatar}>
-      <Icon name="arrow_back_ios_new" size={16} filled color={Serene.secondaryFixed} />
-    </View>
-  );
-}
-
-function KoraBriefing() {
-  return (
-    <View style={styles.koraRow}>
-      <KoraAvatar />
-      <View style={styles.koraColumn}>
-        <View style={styles.metaRow}>
-          <Text style={styles.author}>Kora</Text>
-          <Text style={styles.time}>09:41</Text>
-        </View>
-        <View style={[styles.koraBubble, styles.koraBubbleTop]}>
-          <Text style={styles.koraText}>
-            Bonjour Claire, <Text style={styles.bold}>1 facture en attente</Text> (eau Veolia) et{' '}
-            <Text style={styles.bold}>2 rendez-vous</Text> prévus cette semaine. Comment puis-je
-            vous aider ?
-          </Text>
+        <View style={styles.flex}>
+          <Text style={[styles.cardLabel, { color: tone.fg }]}>{card.label}</Text>
+          <Text style={styles.cardTitle}>{card.title}</Text>
+          <Text style={styles.cardDetail}>{card.detail}</Text>
         </View>
       </View>
-    </View>
-  );
-}
-
-function KoraSimpleBubble({ text }: { text: string }) {
-  return (
-    <View style={styles.koraRow}>
-      <KoraAvatar />
-      <View style={styles.koraColumn}>
-        <View style={styles.metaRow}>
-          <Text style={styles.author}>Kora</Text>
-          <Text style={styles.time}>À l&apos;instant</Text>
-        </View>
-        <View style={[styles.koraBubble, styles.koraBubbleTop]}>
-          <Text style={styles.koraText}>{text}</Text>
-        </View>
-      </View>
-    </View>
-  );
-}
-
-function UserBubble({ text, time }: { text: string; time: string }) {
-  return (
-    <View style={styles.userRow}>
-      <View style={styles.userColumn}>
-        <View style={styles.metaRowEnd}>
-          <Text style={styles.time}>{time}</Text>
-          <Text style={styles.author}>Claire</Text>
-        </View>
-        <View style={styles.userBubble}>
-          <Text style={styles.userText}>{text}</Text>
-        </View>
-      </View>
-    </View>
-  );
-}
-
-function KoraStructuredResponse() {
-  return (
-    <View style={styles.koraRowWide}>
-      <KoraAvatar />
-      <View style={styles.structuredColumn}>
-        <View style={styles.structuredHeader}>
-          <View style={styles.metaRow}>
-            <Text style={styles.author}>Kora</Text>
-            <Text style={styles.time}>09:42</Text>
-          </View>
-          <View style={styles.actionsPill}>
-            <Text style={styles.actionsPillText}>2 actions générées</Text>
-          </View>
-        </View>
-
-        <Text style={styles.koraText}>
-          Certainement. Voici les deux actions prêtes à être exécutées après votre validation :
-        </Text>
-
-        <CalendarActionCard />
-        <TaskActionCard />
-      </View>
-    </View>
-  );
-}
-
-function CalendarActionCard() {
-  return (
-    <View style={styles.actionCard}>
-      <View style={styles.actionHeader}>
-        <View style={styles.typePill}>
-          <Icon name="calendar_today" size={14} color={Serene.secondary} />
-          <Text style={styles.typePillText}>Événement Agenda</Text>
-        </View>
-        <View style={styles.confirmPill}>
-          <View style={styles.confirmDot} />
-          <Text style={styles.confirmPillText}>À confirmer</Text>
-        </View>
-      </View>
-
-      <View>
-        <Text style={styles.actionTitle}>Dentiste - Consultation annuelle (Léo)</Text>
-        <View style={styles.actionTimeRow}>
-          <Icon name="schedule" size={16} color={Serene.secondary} />
-          <Text style={styles.actionTime}>Mercredi 22 mai 2024 • 15:00</Text>
-        </View>
-      </View>
-
-      <View style={styles.metaGrid}>
-        <View style={styles.metaGridRow}>
-          <Text style={styles.metaLabel}>Praticien</Text>
-          <Text style={styles.metaValue} numberOfLines={2}>
-            Dr. Roche (Cabinet Saint-Michel)
-          </Text>
-        </View>
-        <View style={styles.metaGridRow}>
-          <Text style={styles.metaLabel}>Partagé avec</Text>
-          <View style={styles.chipRow}>
-            <View style={styles.tagChip}>
-              <Text style={styles.tagChipText}>Claire</Text>
-            </View>
-            <View style={styles.tagChip}>
-              <Text style={styles.tagChipText}>Thomas</Text>
-            </View>
-          </View>
-        </View>
-      </View>
-
-      <View style={styles.actionButtons}>
-        <Pressable style={styles.secondaryButton} onPress={() => router.push('/calendar/edit')}>
-          <Icon name="edit" size={16} color={Serene.onSurface} />
-          <Text style={styles.secondaryButtonText}>Modifier</Text>
-        </Pressable>
-        <Pressable style={styles.tealButton} onPress={() => router.push('/calendar/detail')}>
-          <Icon name="check_circle" size={16} color={Serene.onSecondary} />
-          <Text style={styles.tealButtonText}>Confirmer le RDV</Text>
-        </Pressable>
-      </View>
-    </View>
-  );
-}
-
-function TaskActionCard() {
-  return (
-    <View style={styles.actionCard}>
-      <View style={styles.actionHeader}>
-        <View style={styles.typePill}>
-          <Icon name="task_alt" size={14} color={Serene.secondary} />
-          <Text style={styles.typePillText}>Tâche partagée</Text>
-        </View>
-        <View style={styles.readyPill}>
-          <Text style={styles.readyPillText}>Prête à l&apos;envoi</Text>
-        </View>
-      </View>
-
-      <View>
-        <Text style={styles.actionTitle}>Accompagner Léo au dentiste</Text>
-        <Text style={styles.actionSubtitle}>Aller-retour et carnet de santé à fournir</Text>
-      </View>
-
-      <View style={styles.metaGrid}>
-        <View style={styles.metaGridRow}>
-          <Text style={styles.metaLabel}>Assigné à</Text>
-          <View style={styles.assigneeRow}>
-            <View style={styles.assigneeAvatar}>
-              <Text style={styles.assigneeInitial}>T</Text>
-            </View>
-            <Text style={styles.metaValue}>Thomas Martin</Text>
-          </View>
-        </View>
-        <View style={styles.metaGridRow}>
-          <Text style={styles.metaLabel}>Rappel programmé</Text>
-          <Text style={styles.metaAccent}>Push 2h avant (13:00)</Text>
-        </View>
-      </View>
-
-      <View style={styles.actionButtons}>
-        <Pressable style={styles.secondaryButton} onPress={() => router.push('/tasks/edit')}>
-          <Icon name="edit" size={16} color={Serene.onSurface} />
-          <Text style={styles.secondaryButtonText}>Modifier</Text>
-        </Pressable>
-        <Pressable style={styles.primaryButton} onPress={() => router.push('/tasks/add')}>
-          <Icon name="assignment_turned_in" size={16} color={Serene.secondaryFixed} />
-          <Text style={styles.primaryButtonText}>Créer la tâche</Text>
-        </Pressable>
-      </View>
-    </View>
-  );
-}
-
-function QuickPrompts({ onSelect }: { onSelect: (prompt: string) => void }) {
-  return (
-    <View style={styles.promptsWrap}>
-      <View style={styles.promptsLabelRow}>
-        <Icon name="lightbulb" size={14} color={Serene.secondary} />
-        <Text style={styles.promptsLabel}>Suggestions administratives</Text>
-      </View>
-
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.promptsRow}
-        style={styles.promptsScroll}>
-        <PromptChip
-          icon="receipt_long"
-          label="Que dois-je payer cette semaine ?"
-          onPress={() => onSelect('Que dois-je payer cette semaine ?')}
-        />
-        <PromptChip
-          icon="badge"
-          label="Quand expire mon passeport ?"
-          onPress={() => onSelect('Quand expire mon passeport ?')}
-        />
-        <PromptChip
-          icon="shopping_basket"
-          label="Créer un rappel courses"
-          onPress={() => onSelect('Créer un rappel courses')}
-        />
-      </ScrollView>
-    </View>
-  );
-}
-
-function PromptChip({
-  icon,
-  label,
-  onPress,
-}: {
-  icon: string;
-  label: string;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable style={styles.promptChip} onPress={onPress} accessibilityRole="button">
-      <Icon name={icon} size={14} color={Serene.secondary} />
-      <Text style={styles.promptChipText}>{label}</Text>
-    </Pressable>
-  );
-}
-
-function InputDock({
-  draft,
-  onChange,
-  onSend,
-}: {
-  draft: string;
-  onChange: (text: string) => void;
-  onSend: () => void;
-}) {
-  return (
-    <View style={styles.dock}>
-      <View style={styles.dockRow}>
-        <Pressable
-          style={styles.attachButton}
-          accessibilityRole="button"
-          accessibilityLabel="Joindre un document ou une facture"
-          onPress={() => router.push('/documents')}>
-          <Icon name="attach_file" size={20} color={Serene.onSurfaceVariant} />
-        </Pressable>
-
-        <View style={styles.inputWrap}>
-          <TextInput
-            style={styles.input}
-            placeholder="Demander ou dicter une action..."
-            placeholderTextColor={Serene.onSurfaceVariant}
-            value={draft}
-            onChangeText={onChange}
-            onSubmitEditing={onSend}
-            returnKeyType="send"
-            selectionColor={Serene.secondary}
-          />
-          <Pressable
-            style={styles.sendButton}
-            accessibilityRole="button"
-            accessibilityLabel="Envoyer"
-            onPress={onSend}>
-            <Icon name="arrow_upward" size={18} color={Serene.onSurfaceVariant} />
-          </Pressable>
-        </View>
-
-        <Pressable
-          style={styles.voiceButton}
-          accessibilityRole="button"
-          accessibilityLabel="Maintenir pour parler"
-          onPress={() => router.push('/voice')}>
-          <Icon name="mic" size={22} color={Serene.secondaryFixed} />
-          <Text style={styles.voiceLabel}>Vocal</Text>
-        </Pressable>
-      </View>
-
-      <Text style={styles.hint}>
-        Maintenez le bouton vocal ou saisissez pour déléguer à Kora
-      </Text>
+      <Pressable
+        style={({ pressed }) => [styles.cardAction, pressed && styles.pressed]}
+        accessibilityRole="button"
+        accessibilityLabel={`${card.action} : ${card.title}`}
+        onPress={() => router.push(card.href)}>
+        <Text style={styles.cardActionText}>{card.action}</Text>
+        <Icon name="arrow_forward" size={18} color={Serene.onPrimary} />
+      </Pressable>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: Serene.surface,
-  },
   flex: {
     flex: 1,
+    minWidth: 0,
   },
-  scroll: {
-    flex: 1,
+  pressed: {
+    opacity: 0.8,
   },
-  content: {
-    paddingHorizontal: Space.gutter,
-    paddingTop: Space.md,
-    paddingBottom: Space.sm,
-    gap: Space.md,
-  },
-  security: {
-    paddingHorizontal: Space.gutter,
-    paddingVertical: 10,
-    backgroundColor: Serene.surfaceContainerLow,
-    gap: Space.sm,
-    ...Shadow.card,
-  },
-  securityRow: {
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Space.sm,
-  },
-  securityLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  securityDot: {
-    width: 8,
-    height: 8,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.secondary,
-  },
-  securityTitle: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 11,
-    lineHeight: 14,
-    color: Serene.onSurfaceVariant,
-  },
-  encryptedPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.surfaceContainer,
-  },
-  encryptedText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 10,
-    lineHeight: 14,
-    color: Serene.onSurfaceVariant,
-  },
-  contextPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.surfaceContainerLowest,
-    ...Shadow.card,
-  },
-  contextPillText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 11,
-    lineHeight: 14,
-    color: Serene.onSurface,
-  },
-  syncText: {
-    fontFamily: FontFamily.body,
-    fontSize: 11,
-    lineHeight: 14,
-    color: Serene.onSurfaceVariant,
-  },
-  koraRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    maxWidth: '92%',
-  },
-  koraRowWide: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
+    gap: 12,
+    width: '100%',
+    maxWidth: 560,
+    alignSelf: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 8,
   },
   koraAvatar: {
-    width: 32,
-    height: 32,
+    width: 44,
+    height: 44,
     borderRadius: Radius.full,
-    backgroundColor: Serene.primary,
+    backgroundColor: Tint.black,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 2,
-    ...Shadow.card,
   },
-  koraColumn: {
-    flex: 1,
-    minWidth: 0,
-    gap: 4,
+  headerTitle: {
+    fontFamily: FontFamily.headingBold,
+    fontSize: 22,
+    lineHeight: 28,
+    color: Tint.navy,
   },
-  structuredColumn: {
-    flex: 1,
-    minWidth: 0,
-    gap: 12,
-  },
-  structuredHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  metaRowEnd: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  author: {
-    fontFamily: FontFamily.bodySemiBold,
+  headerSubtitle: {
+    fontFamily: FontFamily.body,
     fontSize: 13,
     lineHeight: 18,
-    color: Serene.onSurface,
+    color: Serene.onSurfaceVariant,
+  },
+  voiceButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Tint.border,
+    backgroundColor: Serene.surfaceContainerLowest,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scopeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    width: '100%',
+    maxWidth: 560,
+    alignSelf: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Tint.border,
+  },
+  scopeHint: {
+    flex: 1,
+    fontFamily: FontFamily.body,
+    fontSize: 13,
+    lineHeight: 17,
+    color: Serene.onSurfaceVariant,
+  },
+  content: {
+    paddingTop: 14,
+    paddingBottom: 16,
+    gap: 16,
   },
   time: {
     fontFamily: FontFamily.body,
-    fontSize: 11,
-    lineHeight: 14,
+    fontSize: 13,
+    lineHeight: 17,
     color: Serene.onSurfaceVariant,
   },
-  koraBubble: {
-    padding: 14,
-    borderRadius: Radius.xl,
-    backgroundColor: Serene.surfaceContainerLowest,
-    ...Shadow.card,
-  },
-  koraBubbleTop: {
-    borderTopLeftRadius: Radius.sm,
-  },
-  koraText: {
-    fontFamily: FontFamily.body,
-    fontSize: 14,
-    lineHeight: 20,
-    color: Serene.onSurface,
-  },
-  bold: {
-    fontFamily: FontFamily.bodySemiBold,
-    color: Serene.onSurface,
-  },
-  userRow: {
-    alignSelf: 'flex-end',
-    maxWidth: '92%',
-  },
-  userColumn: {
+  meWrap: {
     alignItems: 'flex-end',
     gap: 4,
   },
-  userBubble: {
-    padding: 14,
-    borderRadius: Radius.xl,
-    borderTopRightRadius: Radius.sm,
-    backgroundColor: Serene.primary,
-    ...Shadow.card,
+  meBubble: {
+    maxWidth: '86%',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 20,
+    borderBottomRightRadius: 6,
+    backgroundColor: Tint.black,
   },
-  userText: {
+  meText: {
+    fontFamily: FontFamily.body,
+    fontSize: 15,
+    lineHeight: 22,
+    color: Serene.onPrimary,
+  },
+  koraWrap: {
+    gap: 8,
+  },
+  koraMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  koraDot: {
+    width: 24,
+    height: 24,
+    borderRadius: Radius.full,
+    backgroundColor: Tint.black,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  koraName: {
+    fontFamily: FontFamily.bodySemiBold,
+    fontSize: 14,
+    lineHeight: 19,
+    color: Tint.navy,
+  },
+  koraText: {
+    fontFamily: FontFamily.body,
+    fontSize: 15,
+    lineHeight: 22,
+    color: Tint.navy,
+  },
+  typing: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  typingText: {
     fontFamily: FontFamily.body,
     fontSize: 14,
+    lineHeight: 19,
+    fontStyle: 'italic',
+    color: Serene.onSurfaceVariant,
+  },
+  card: {
+    gap: 12,
+    padding: 14,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: Tint.border,
+    backgroundColor: Serene.surfaceContainerLowest,
+  },
+  cardTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  cardIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardLabel: {
+    fontFamily: FontFamily.bodySemiBold,
+    fontSize: 13,
+    lineHeight: 17,
+  },
+  cardTitle: {
+    fontFamily: FontFamily.bodySemiBold,
+    fontSize: 16,
+    lineHeight: 21,
+    color: Tint.navy,
+  },
+  cardDetail: {
+    fontFamily: FontFamily.body,
+    fontSize: 13,
+    lineHeight: 18,
+    color: Serene.onSurfaceVariant,
+  },
+  cardAction: {
+    height: 42,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderRadius: 12,
+    backgroundColor: Tint.black,
+  },
+  cardActionText: {
+    fontFamily: FontFamily.bodySemiBold,
+    fontSize: 15,
     lineHeight: 20,
     color: Serene.onPrimary,
   },
-  actionsPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.secondaryContainer,
-  },
-  actionsPillText: {
-    fontFamily: FontFamily.bodyBold,
-    fontSize: 10,
-    lineHeight: 14,
-    color: Serene.secondary,
-  },
-  actionCard: {
-    padding: 16,
-    borderRadius: Radius.xl,
-    backgroundColor: Serene.surfaceContainerLowest,
-    gap: 14,
-    ...Shadow.card,
-  },
-  actionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  composer: {
+    width: '100%',
+    maxWidth: 560,
+    alignSelf: 'center',
     gap: 8,
-  },
-  typePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.surfaceContainer,
-  },
-  typePillText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 11,
-    lineHeight: 14,
-    color: Serene.onSurface,
-  },
-  confirmPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.surfaceContainerHigh,
-  },
-  confirmDot: {
-    width: 6,
-    height: 6,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.secondary,
-  },
-  confirmPillText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 11,
-    lineHeight: 14,
-    color: Serene.onSurface,
-  },
-  actionTitle: {
-    ...Typography.titleMd,
-    color: Serene.onSurface,
-  },
-  actionSubtitle: {
-    fontFamily: FontFamily.body,
-    fontSize: 12,
-    lineHeight: 16,
-    color: Serene.onSurfaceVariant,
-    marginTop: 2,
-  },
-  actionTimeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 6,
-  },
-  actionTime: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 13,
-    lineHeight: 18,
-    fontVariant: ['tabular-nums'],
-    color: Serene.onSurface,
-  },
-  metaGrid: {
-    padding: 12,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.surfaceContainerLow,
-    gap: 8,
-  },
-  metaGridRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-  },
-  metaLabel: {
-    fontFamily: FontFamily.body,
-    fontSize: 12,
-    lineHeight: 16,
-    color: Serene.onSurfaceVariant,
-  },
-  metaValue: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurface,
-    flexShrink: 1,
-    textAlign: 'right',
-  },
-  metaAccent: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.secondary,
-  },
-  chipRow: {
-    flexDirection: 'row',
-    gap: 4,
-  },
-  tagChip: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: Radius.sm,
-    backgroundColor: Serene.surfaceContainer,
-  },
-  tagChipText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 11,
-    lineHeight: 14,
-    color: Serene.onSurface,
-  },
-  assigneeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  assigneeAvatar: {
-    width: 20,
-    height: 20,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.surfaceContainerHigh,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  assigneeInitial: {
-    fontFamily: FontFamily.bodyBold,
-    fontSize: 10,
-    lineHeight: 12,
-    color: Serene.onSurface,
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  secondaryButton: {
-    flex: 1,
-    height: 40,
-    paddingHorizontal: 12,
-    borderRadius: Radius.md,
-    backgroundColor: Serene.surfaceContainer,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-  },
-  secondaryButtonText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurface,
-  },
-  tealButton: {
-    flex: 1,
-    height: 40,
-    paddingHorizontal: 12,
-    borderRadius: Radius.md,
-    backgroundColor: Serene.secondary,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    ...Shadow.card,
-  },
-  tealButtonText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSecondary,
-  },
-  primaryButton: {
-    flex: 1,
-    height: 40,
-    paddingHorizontal: 12,
-    borderRadius: Radius.md,
-    backgroundColor: Serene.primary,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    ...Shadow.card,
-  },
-  primaryButtonText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onPrimary,
-  },
-  readyPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.secondaryContainer,
-  },
-  readyPillText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 11,
-    lineHeight: 14,
-    color: Serene.onSecondaryContainer,
-  },
-  promptsWrap: {
-    paddingTop: Space.sm,
-    gap: Space.sm,
-  },
-  promptsLabelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  promptsLabel: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 10,
-    lineHeight: 14,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-    color: Serene.onSurfaceVariant,
-  },
-  promptsScroll: {
-    marginHorizontal: -Space.gutter,
-  },
-  promptsRow: {
-    paddingHorizontal: Space.gutter,
-    gap: 8,
-  },
-  promptChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    height: 32,
-    paddingHorizontal: 12,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.surfaceContainerLowest,
-    ...Shadow.card,
-  },
-  promptChipText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 11,
-    lineHeight: 14,
-    color: Serene.onSurface,
-  },
-  dock: {
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    gap: 10,
-    backgroundColor: Serene.surfaceContainerLowest,
+    paddingTop: 8,
+    paddingBottom: 10,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Serene.outlineVariant,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 16,
-    elevation: 8,
+    borderTopColor: Tint.border,
+    backgroundColor: Tint.softer,
   },
-  dockRow: {
+  quick: {
+    gap: 8,
+    paddingHorizontal: 20,
+  },
+  inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    paddingHorizontal: 20,
   },
-  attachButton: {
+  roundButton: {
     width: 44,
     height: 44,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.surfaceContainerLow,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: Tint.border,
+    backgroundColor: Serene.surfaceContainerLowest,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-  inputWrap: {
-    flex: 1,
-    height: 44,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.surfaceContainerLow,
     justifyContent: 'center',
   },
   input: {
-    height: 44,
-    paddingLeft: 14,
-    paddingRight: 40,
+    flex: 1,
+    height: 46,
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+    borderRadius: 23,
+    borderWidth: 1,
+    borderColor: Tint.border,
+    backgroundColor: Serene.surfaceContainerLowest,
+  },
+  inputText: {
     fontFamily: FontFamily.body,
-    fontSize: 14,
-    color: Serene.onSurface,
+    fontSize: 16,
+    color: Tint.navy,
+    outlineWidth: 0,
+    outlineStyle: 'solid',
+    paddingVertical: 0,
   },
   sendButton: {
-    position: 'absolute',
-    right: 6,
-    width: 32,
-    height: 32,
-    borderRadius: Radius.md,
-    backgroundColor: Serene.surfaceContainer,
+    width: 46,
+    height: 46,
+    borderRadius: Radius.full,
+    backgroundColor: Tint.black,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  voiceButton: {
-    width: 48,
-    height: 48,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...Shadow.floating,
-  },
-  voiceLabel: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 8,
-    lineHeight: 10,
-    color: Serene.secondaryFixed,
-  },
-  hint: {
-    fontFamily: FontFamily.body,
-    fontSize: 10,
-    lineHeight: 14,
-    textAlign: 'center',
-    color: Serene.onSurfaceVariant,
+  sendDisabled: {
+    backgroundColor: Tint.primary,
   },
 });

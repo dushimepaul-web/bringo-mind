@@ -19,12 +19,13 @@ import { FontFamily, Radius, Serene, Tint } from '@/constants/design';
 import { formatLongDay } from '@/lib/demo-dates';
 
 import { CALENDAR_VIEWS, CURRENCIES, LANGUAGES, STATS, THEMES, TIMEZONES, USER } from '../data';
-import { profileActions, useProfileState } from '../store';
+import { LOCK_DELAYS, initialsOf, profileActions, useProfileState } from '../store';
 
 type Sheet = 'logout' | 'twoFactorOff' | 'sessions' | null;
 
 export default function ProfileSettingsScreen() {
-  const { preferences, biometric, twoFactor, sessions, deletionAt, flash } = useProfileState();
+  const { preferences, user, biometric, lockDelay, twoFactor, sessions, deletionAt, flash } = useProfileState();
+  const fullName = `${user.firstName} ${user.lastName}`.trim();
   const [sheet, setSheet] = useState<Sheet>(null);
   const [toast, setToast] = useState<{ text: string; undo?: () => void } | null>(null);
 
@@ -75,13 +76,13 @@ export default function ProfileSettingsScreen() {
             accessibilityLabel="Modifier la photo et les informations"
             onPress={() => router.push('/profile/complete')}>
             <View style={styles.avatar}>
-              <Text style={styles.avatarText}>CM</Text>
+              <Text style={styles.avatarText}>{initialsOf(user)}</Text>
             </View>
             <View style={styles.avatarEdit}>
               <Icon name="photo_camera" size={16} color={Serene.onPrimary} />
             </View>
           </Pressable>
-          <Text style={styles.name}>{USER.name}</Text>
+          <Text style={styles.name}>{fullName}</Text>
           <Text style={kitStyles.muted}>{USER.email}</Text>
           <View style={styles.tags}>
             <Tag label={USER.plan} icon="workspace_premium" tone="teal" />
@@ -107,7 +108,7 @@ export default function ProfileSettingsScreen() {
             first
             icon="badge"
             title="Informations personnelles"
-            subtitle={`${USER.name} • ${USER.phone}`}
+            subtitle={`${fullName} • ${user.phone}`}
             onPress={() => router.push('/profile/complete')}
           />
           <SettingsRow
@@ -129,19 +130,17 @@ export default function ProfileSettingsScreen() {
             first
             icon="fingerprint"
             title="Déverrouillage biométrique"
-            subtitle={biometric ? 'Activé • Face ID' : 'Désactivé'}
+            subtitle={
+              biometric
+                ? `Face ID • verrouillage ${LOCK_DELAYS.find((entry) => entry.key === lockDelay)?.label.toLowerCase()}`
+                : 'Désactivé'
+            }
+            onPress={() => router.push('/profile/biometric')}
             right={
-              <ToggleSwitch
-                value={biometric}
-                label="Déverrouillage biométrique"
-                onValueChange={(value) => {
-                  profileActions.setBiometric(value);
-                  setToast({
-                    text: value ? 'Déverrouillage biométrique activé' : 'Déverrouillage biométrique désactivé',
-                    undo: () => profileActions.setBiometric(!value),
-                  });
-                }}
-              />
+              <View style={styles.rowEnd}>
+                <Tag label={biometric ? 'Activé' : 'Désactivé'} tone={biometric ? 'success' : 'neutral'} />
+                <Icon name="chevron_right" size={22} color={Serene.onSurfaceVariant} />
+              </View>
             }
           />
           <SettingsRow
@@ -322,6 +321,11 @@ const styles = StyleSheet.create({
   content: {
     paddingTop: 4,
     paddingBottom: 40,
+  },
+  rowEnd: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   deletion: {
     flexDirection: 'row',

@@ -1,593 +1,435 @@
-// S-24 - Connexions externes | Module M11 Intégrations | Phase S10
-import { router } from 'expo-router';
-import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+// S-24 - Connexions externes | Module M12 Intégrations | Phase S10
+// Ce qui est connecté, ce qui a été importé, et un contrôle fin de ce que Bringo Mind peut lire.
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icon';
-import { FontFamily, Radius, Serene, Shadow, Space, Typography } from '@/constants/design';
+import { BottomSheet, PrimaryButton, SecondaryButton, Tag, TopBar, UndoToast, kitStyles } from '@/components/ui/kit';
+import { RadioRow, SettingsRow, SettingsSection, ToggleSwitch } from '@/components/ui/settings';
+import { FontFamily, Radius, Serene, Tint } from '@/constants/design';
+import { DEMO_TODAY } from '@/lib/demo-dates';
 
-type AccountKey = 'gmail' | 'gcal' | 'outlook';
+import { CALENDARS, GMAIL_ADDRESS, PERMISSIONS, SENDERS } from '../data';
+import { integrationActions, useIntegrationsState } from '../store';
 
-type Account = {
-  key: AccountKey;
-  name: string;
-  detail: string;
-  icon: string;
-  connected: boolean;
-  permissions: string[];
-};
+type Account = 'gmail' | 'calendar' | 'outlook';
+type Sheet = { disconnect: Account } | 'outlook' | null;
 
-const INITIAL_ACCOUNTS: Account[] = [
-  {
-    key: 'gmail',
-    name: 'Gmail',
-    detail: 'claire.martin@gmail.com',
-    icon: 'mail',
-    connected: true,
-    permissions: ['Lire les e-mails entrants', 'Extraire les dates et montants', 'Détecter les pièces jointes'],
-  },
-  {
-    key: 'gcal',
-    name: 'Google Agenda',
-    detail: 'claire.martin@gmail.com',
-    icon: 'event',
-    connected: true,
-    permissions: ['Lire les événements', 'Créer des événements', 'Synchroniser les rappels'],
-  },
-  {
-    key: 'outlook',
-    name: 'Microsoft Outlook',
-    detail: 'Non connecté',
-    icon: 'alternate_email',
-    connected: false,
-    permissions: ['Lire les e-mails entrants', 'Détecter les pièces jointes'],
-  },
-];
+const ACCOUNT_NAMES: Record<Account, string> = { gmail: 'Gmail', calendar: 'Google Agenda', outlook: 'Microsoft Outlook' };
+
+function syncLabel(date: Date): string {
+  const minutes = Math.round((DEMO_TODAY.getTime() - date.getTime()) / 60000);
+  return minutes <= 0 ? 'à l’instant' : `il y a ${minutes} min`;
+}
 
 export default function ConnectedAccountsScreen() {
-  const [accounts, setAccounts] = useState<Account[]>(INITIAL_ACCOUNTS);
-  const [syncEnabled, setSyncEnabled] = useState<Record<AccountKey, boolean>>({
-    gmail: true,
-    gcal: true,
-    outlook: false,
-  });
-  const [expanded, setExpanded] = useState<AccountKey | null>('gmail');
-  const [syncing, setSyncing] = useState(false);
-  const [lastSync, setLastSync] = useState('Il y a 12 min');
+  const state = useIntegrationsState();
+  const [sheet, setSheet] = useState<Sheet>(null);
+  const [toast, setToast] = useState<{ text: string; undo?: () => void } | null>(null);
 
-  const connectedCount = accounts.filter((account) => account.connected).length;
+  useFocusEffect(
+    useCallback(() => {
+      if (state.flash) {
+        setToast(state.flash);
+        integrationActions.setFlash(null);
+      }
+    }, [state.flash]),
+  );
 
-  const toggleConnection = (key: AccountKey) => {
-    setAccounts((current) =>
-      current.map((account) =>
-        account.key === key
-          ? {
-              ...account,
-              connected: !account.connected,
-              detail: !account.connected
-                ? account.key === 'outlook'
-                  ? 'claire.martin@outlook.fr'
-                  : account.detail
-                : 'Non connecté',
-            }
-          : account,
-      ),
-    );
-    if (key === 'outlook') {
-      setSyncEnabled((current) => ({ ...current, outlook: true }));
-    }
-  };
-
-  const runSync = () => {
-    if (syncing) return;
-    setSyncing(true);
-    setTimeout(() => {
-      setSyncing(false);
-      setLastSync("À l'instant");
-    }, 1400);
-  };
+  const connected = [state.gmail, state.calendar, state.outlook].filter(Boolean).length;
+  const toReview = state.emails.filter((email) => email.status === 'review').length;
+  const close = () => setSheet(null);
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
-        <Pressable
-          style={styles.headerButton}
-          accessibilityRole="button"
-          accessibilityLabel="Retour"
-          onPress={() => router.back()}>
-          <Icon name="arrow_back" size={22} color={Serene.onSurface} />
-        </Pressable>
-        <Text style={styles.headerTitle}>Connexions externes</Text>
-        <View style={styles.headerButton} />
-      </View>
-
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}>
-        <View style={styles.heroCard}>
-          <View style={styles.heroIcon}>
-            <Icon name="cable" size={24} color={Serene.secondary} />
-          </View>
-          <View style={styles.heroBody}>
-            <Text style={styles.heroTitle}>{connectedCount} comptes connectés</Text>
-            <Text style={styles.heroText}>
-              Importez automatiquement vos e-mails et événements dans Bringo Mind.
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.syncCard}>
-          <View style={styles.syncLeft}>
-            <Icon name="sync" size={18} color={Serene.onSurfaceVariant} />
-            <View>
-              <Text style={styles.syncTitle}>Dernière synchronisation</Text>
-              <Text style={styles.syncText}>{lastSync}</Text>
+    <SafeAreaView style={kitStyles.safe} edges={['top']}>
+      <TopBar title="Connexions externes" fallback="/profile" />
+      <ScrollView contentContainerStyle={[kitStyles.content, styles.content]} showsVerticalScrollIndicator={false}>
+        {/* Résumé */}
+        <View style={[kitStyles.card, styles.summary]}>
+          <View style={styles.summaryTop}>
+            <View style={styles.summaryIcon}>
+              <Icon name="cable" size={24} color={Serene.onPrimary} />
+            </View>
+            <View style={styles.flex}>
+              <Text style={kitStyles.title}>
+                {connected} compte{connected > 1 ? 's' : ''} connecté{connected > 1 ? 's' : ''}
+              </Text>
+              <Text style={styles.meta}>Dernière synchronisation {syncLabel(state.lastSync)}</Text>
             </View>
           </View>
-          <Pressable
-            style={[styles.syncButton, syncing && styles.syncButtonActive]}
-            onPress={runSync}
-            disabled={syncing}>
-            <Icon
-              name={syncing ? 'hourglass_top' : 'refresh'}
-              size={15}
-              color={Serene.onSecondary}
-            />
-            <Text style={styles.syncButtonText}>
-              {syncing ? 'Synchronisation...' : 'Synchroniser'}
-            </Text>
-          </Pressable>
+          <View style={styles.stats}>
+            <Stat value={state.emails.length} label="e-mails importés" />
+            <Stat value={toReview} label="à vérifier" highlight={toReview > 0} />
+            <Stat value={12} label="événements" />
+          </View>
+          <SecondaryButton
+            label="Synchroniser maintenant"
+            icon="sync"
+            onPress={() => {
+              integrationActions.sync();
+              setToast({ text: 'Synchronisation terminée : rien de nouveau' });
+            }}
+          />
         </View>
 
-        <Text style={styles.sectionLabel}>Comptes et autorisations</Text>
-
-        <View style={styles.list}>
-          {accounts.map((account) => {
-            const isExpanded = expanded === account.key;
-
-            return (
-              <View key={account.key} style={styles.accountCard}>
-                <View style={styles.accountRow}>
-                  <View
-                    style={[
-                      styles.accountIcon,
-                      account.connected ? styles.accountIconConnected : styles.accountIconOff,
-                    ]}>
-                    <Icon
-                      name={account.icon}
-                      size={20}
-                      color={account.connected ? Serene.secondary : Serene.onSurfaceVariant}
-                    />
-                  </View>
-                  <View style={styles.accountBody}>
-                    <View style={styles.accountNameRow}>
-                      <Text style={styles.accountName}>{account.name}</Text>
-                      {account.connected ? (
-                        <View style={styles.connectedPill}>
-                          <View style={styles.connectedDot} />
-                          <Text style={styles.connectedText}>Connecté</Text>
-                        </View>
-                      ) : null}
-                    </View>
-                    <Text style={styles.accountDetail} numberOfLines={1}>
-                      {account.detail}
-                    </Text>
-                  </View>
-
-                  {account.connected ? (
-                    <Switch
-                      value={syncEnabled[account.key]}
-                      onValueChange={(value) =>
-                        setSyncEnabled((current) => ({ ...current, [account.key]: value }))
-                      }
-                      trackColor={{ false: Serene.surfaceContainerHigh, true: Serene.secondary }}
-                      thumbColor={Serene.surfaceContainerLowest}
-                    />
-                  ) : (
-                    <Pressable
-                      style={styles.connectButton}
-                      onPress={() => toggleConnection(account.key)}>
-                      <Text style={styles.connectButtonText}>Connecter</Text>
-                    </Pressable>
-                  )}
+        <SettingsSection title="E-mails importés" icon="mark_email_unread">
+          <SettingsRow
+            first
+            icon="inbox"
+            title="Voir les e-mails importés"
+            subtitle={toReview ? `${toReview} à vérifier • ${state.emails.length} au total` : `${state.emails.length} e-mails, tous traités`}
+            onPress={() => router.push('/integrations/email')}
+            right={
+              toReview ? (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{toReview}</Text>
                 </View>
+              ) : undefined
+            }
+          />
+        </SettingsSection>
 
-                {account.connected ? (
-                  <>
-                    <Pressable
-                      style={styles.permissionsToggle}
-                      onPress={() =>
-                        setExpanded((current) =>
-                          current === account.key ? null : account.key,
-                        )
-                      }
-                      accessibilityRole="button">
-                      <Icon name="key" size={15} color={Serene.onSurfaceVariant} />
-                      <Text style={styles.permissionsToggleText}>
-                        Gérer les autorisations ({account.permissions.length})
-                      </Text>
-                      <Icon
-                        name={isExpanded ? 'expand_less' : 'expand_more'}
-                        size={18}
-                        color={Serene.onSurfaceVariant}
-                      />
-                    </Pressable>
-
-                    {isExpanded ? (
-                      <View style={styles.permissionsList}>
-                        {account.permissions.map((permission) => (
-                          <PermissionRow key={permission} label={permission} />
-                        ))}
-                        <Pressable
-                          style={styles.disconnectButton}
-                          onPress={() => toggleConnection(account.key)}>
-                          <Icon name="link_off" size={15} color={Serene.error} />
-                          <Text style={styles.disconnectText}>Déconnecter ce compte</Text>
-                        </Pressable>
-                      </View>
-                    ) : null}
-                  </>
-                ) : null}
+        {/* Gmail */}
+        <SettingsSection
+          title="Messagerie"
+          icon="mail"
+          footer={state.gmail ? 'Seuls les e-mails de ces expéditeurs sont lus. Le reste de votre boîte n’est jamais ouvert.' : undefined}>
+          <AccountRow account="gmail" detail={GMAIL_ADDRESS} connected={state.gmail} onDisconnect={() => setSheet({ disconnect: 'gmail' })} onConnect={() => {
+            integrationActions.setConnected('gmail', true);
+            setToast({ text: 'Gmail reconnecté' });
+          }} />
+          {state.gmail
+            ? PERMISSIONS.map((permission) => (
+                <SettingsRow
+                  key={permission.key}
+                  icon={permission.icon}
+                  title={permission.title}
+                  subtitle={permission.subtitle}
+                  right={
+                    <ToggleSwitch
+                      value={state.permissions[permission.key]}
+                      label={permission.title}
+                      onValueChange={(value) => integrationActions.setPermission(permission.key, value)}
+                    />
+                  }
+                />
+              ))
+            : null}
+          {state.gmail ? (
+            <View style={styles.senders}>
+              <Text style={styles.sendersLabel}>Expéditeurs autorisés</Text>
+              <View style={styles.senderWrap}>
+                {SENDERS.map((sender) => {
+                  const on = state.senders.includes(sender);
+                  return <Tag key={sender} label={sender} icon={on ? 'check' : 'block'} tone={on ? 'teal' : 'neutral'} />;
+                })}
               </View>
-            );
-          })}
-        </View>
+            </View>
+          ) : null}
+        </SettingsSection>
 
-        <Pressable
-          style={styles.emailPreview}
-          accessibilityRole="button"
-          onPress={() => router.push('/integrations/email')}>
-          <View style={styles.emailPreviewIcon}>
-            <Icon name="mark_email_unread" size={20} color={Serene.onSecondaryContainer} />
-          </View>
-          <View style={styles.emailPreviewBody}>
-            <Text style={styles.emailPreviewTitle}>Voir un e-mail importé</Text>
-            <Text style={styles.emailPreviewText}>
-              Exemple d’extraction IA depuis votre boîte de réception
-            </Text>
-          </View>
-          <Icon name="chevron_right" size={20} color={Serene.onSecondaryContainer} />
-        </Pressable>
+        {/* Google Agenda */}
+        <SettingsSection
+          title="Calendrier"
+          icon="event"
+          footer={
+            state.calendar
+              ? state.twoWay
+                ? 'Les événements créés dans Bringo Mind sont aussi ajoutés à Google Agenda.'
+                : 'Les événements Google arrivent dans Bringo Mind ; rien n’est envoyé vers Google.'
+              : undefined
+          }>
+          <AccountRow account="calendar" detail={GMAIL_ADDRESS} connected={state.calendar} onDisconnect={() => setSheet({ disconnect: 'calendar' })} onConnect={() => {
+            integrationActions.setConnected('calendar', true);
+            setToast({ text: 'Google Agenda reconnecté' });
+          }} />
+          {state.calendar
+            ? CALENDARS.map((calendar) => (
+                <SettingsRow
+                  key={calendar.key}
+                  icon="calendar_month"
+                  title={calendar.title}
+                  subtitle={calendar.subtitle}
+                  right={
+                    <ToggleSwitch
+                      value={state.calendars[calendar.key]}
+                      label={`Importer le calendrier ${calendar.title}`}
+                      onValueChange={(value) => integrationActions.setCalendar(calendar.key, value)}
+                    />
+                  }
+                />
+              ))
+            : null}
+          {state.calendar ? (
+            <>
+              <RadioRow
+                title="Importer seulement"
+                subtitle="Google → Bringo Mind"
+                selected={!state.twoWay}
+                onPress={() => integrationActions.setTwoWay(false)}
+              />
+              <RadioRow
+                title="Synchroniser dans les deux sens"
+                subtitle="Google ⇄ Bringo Mind"
+                selected={state.twoWay}
+                onPress={() => integrationActions.setTwoWay(true)}
+              />
+            </>
+          ) : null}
+        </SettingsSection>
 
-        <View style={styles.privacyCard}>
-          <Icon name="shield" size={16} color={Serene.onSurfaceVariant} />
-          <Text style={styles.privacyText}>
-            Bringo Mind n’accède qu’aux données nécessaires. Vous pouvez révoquer l’accès à tout
-            moment ; les jetons sont chiffrés et jamais partagés.
+        {/* Outlook */}
+        <SettingsSection title="Autres comptes" icon="add_link">
+          <AccountRow
+            first
+            account="outlook"
+            detail={state.outlook ? 'claire.martin@outlook.fr' : 'E-mails et calendrier Microsoft'}
+            connected={state.outlook}
+            onDisconnect={() => setSheet({ disconnect: 'outlook' })}
+            onConnect={() => setSheet('outlook')}
+          />
+        </SettingsSection>
+
+        <View style={styles.note}>
+          <Icon name="shield" size={20} color={Tint.primary} />
+          <Text style={styles.noteText}>
+            Bringo Mind n’accède qu’aux données nécessaires. Vous pouvez retirer l’accès à tout moment ; les clés d’accès
+            sont chiffrées et jamais partagées.
           </Text>
         </View>
       </ScrollView>
+
+      {/* Connecter Outlook : ce qui sera lu, avant l'autorisation */}
+      <BottomSheet visible={sheet === 'outlook'} title="Connecter Microsoft Outlook" subtitle="Vous allez être redirigé vers Microsoft pour autoriser l’accès." onClose={close}>
+        {[
+          { icon: 'mark_email_read', text: 'Lire les e-mails de vos organismes (factures, courriers)' },
+          { icon: 'event', text: 'Importer les événements de votre calendrier' },
+          { icon: 'block', text: 'Jamais : envoyer des e-mails ou supprimer quoi que ce soit' },
+        ].map((line) => (
+          <View key={line.text} style={styles.permLine}>
+            <Icon name={line.icon} size={20} color={line.icon === 'block' ? Serene.error : Tint.primary} />
+            <Text style={styles.permText}>{line.text}</Text>
+          </View>
+        ))}
+        <PrimaryButton
+          label="Continuer vers Microsoft"
+          icon="open_in_new"
+          onPress={() => {
+            integrationActions.setConnected('outlook', true);
+            close();
+            setToast({ text: 'Microsoft Outlook connecté' });
+          }}
+        />
+        <SecondaryButton label="Plus tard" onPress={close} />
+      </BottomSheet>
+
+      {/* Déconnecter un compte */}
+      <BottomSheet
+        visible={typeof sheet === 'object' && sheet !== null}
+        title={typeof sheet === 'object' && sheet ? `Déconnecter ${ACCOUNT_NAMES[sheet.disconnect]} ?` : ''}
+        subtitle="Les éléments déjà importés restent dans Bringo Mind. Les nouveaux ne seront plus récupérés."
+        onClose={close}>
+        <SecondaryButton
+          label="Déconnecter"
+          icon="link_off"
+          danger
+          onPress={() => {
+            if (typeof sheet !== 'object' || !sheet) return;
+            const name = ACCOUNT_NAMES[sheet.disconnect];
+            const undo = integrationActions.setConnected(sheet.disconnect, false);
+            close();
+            setToast({ text: `${name} déconnecté`, undo });
+          }}
+        />
+        <SecondaryButton label="Garder la connexion" onPress={close} />
+      </BottomSheet>
+
+      {toast ? (
+        <UndoToast key={toast.text} text={toast.text} onUndo={toast.undo} onHide={() => setToast(null)} bottom={24} />
+      ) : null}
     </SafeAreaView>
   );
 }
 
-function PermissionRow({ label }: { label: string }) {
-  const [enabled, setEnabled] = useState(true);
-
+function Stat({ value, label, highlight }: { value: number; label: string; highlight?: boolean }) {
   return (
-    <Pressable
-      style={styles.permissionRow}
-      onPress={() => setEnabled((value) => !value)}
-      accessibilityRole="checkbox"
-      accessibilityState={{ checked: enabled }}>
-      <View style={[styles.permissionCheckbox, enabled && styles.permissionCheckboxActive]}>
-        {enabled ? <Icon name="check" size={11} color={Serene.onPrimary} /> : null}
-      </View>
-      <Text style={styles.permissionText}>{label}</Text>
-    </Pressable>
+    <View style={styles.stat}>
+      <Text style={[styles.statValue, highlight && styles.statHighlight]}>{value}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
+    </View>
+  );
+}
+
+/** Ligne d'un compte : état clair et une seule action (connecter ou déconnecter). */
+function AccountRow({
+  account,
+  detail,
+  connected,
+  onConnect,
+  onDisconnect,
+  first = true,
+}: {
+  account: Account;
+  detail: string;
+  connected: boolean;
+  onConnect: () => void;
+  onDisconnect: () => void;
+  first?: boolean;
+}) {
+  const icon = account === 'gmail' ? 'mail' : account === 'calendar' ? 'event' : 'alternate_email';
+  return (
+    <SettingsRow
+      first={first}
+      icon={icon}
+      title={ACCOUNT_NAMES[account]}
+      subtitle={connected ? `Connecté
+${detail}` : detail}
+      right={
+        connected ? (
+          <Pressable hitSlop={8} accessibilityRole="button" accessibilityLabel={`Déconnecter ${ACCOUNT_NAMES[account]}`} onPress={onDisconnect}>
+            <Text style={styles.disconnect}>Déconnecter</Text>
+          </Pressable>
+        ) : (
+          <PrimaryButton label="Connecter" style={styles.accountButtonDark} onPress={onConnect} />
+        )
+      }
+    />
   );
 }
 
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: Serene.surface,
-  },
-  header: {
-    height: 56,
-    paddingHorizontal: Space.gutter,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Serene.surface,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Serene.surfaceContainerHigh,
-  },
-  headerButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    flex: 1,
-    textAlign: 'center',
-    ...Typography.titleMd,
-    color: Serene.onSurface,
-  },
-  scroll: {
+  flex: {
     flex: 1,
   },
   content: {
-    paddingHorizontal: Space.gutter,
-    paddingTop: Space.md,
-    paddingBottom: Space.lg,
+    paddingTop: 4,
+    paddingBottom: 40,
   },
-  heroCard: {
+  summary: {
+    gap: 14,
+  },
+  summaryTop: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    padding: 14,
-    borderRadius: Radius.xl,
-    backgroundColor: Serene.surfaceContainerLowest,
-    ...Shadow.card,
   },
-  heroIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.secondaryContainer,
+  summaryIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: Tint.black,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  heroBody: {
-    flex: 1,
-    minWidth: 0,
-  },
-  heroTitle: {
-    ...Typography.titleMd,
-    color: Serene.onSurface,
-  },
-  heroText: {
+  meta: {
     fontFamily: FontFamily.body,
-    fontSize: 11,
-    lineHeight: 15,
+    fontSize: 13,
+    lineHeight: 18,
     color: Serene.onSurfaceVariant,
   },
-  syncCard: {
+  stats: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-    marginTop: 10,
-    padding: 12,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.surfaceContainerLow,
-  },
-  syncLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  syncTitle: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 11,
-    lineHeight: 15,
-    color: Serene.onSurface,
-  },
-  syncText: {
-    fontFamily: FontFamily.body,
-    fontSize: 10,
-    lineHeight: 14,
-    color: Serene.onSurfaceVariant,
-  },
-  syncButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.primary,
-  },
-  syncButtonActive: {
-    backgroundColor: Serene.secondary,
-  },
-  syncButtonText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 11,
-    lineHeight: 15,
-    color: Serene.onPrimary,
-  },
-  sectionLabel: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 11,
-    lineHeight: 14,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-    color: Serene.onSurfaceVariant,
-    marginTop: Space.lg,
-    marginBottom: Space.sm,
-  },
-  list: {
-    gap: 10,
-  },
-  accountCard: {
-    borderRadius: Radius.xl,
-    backgroundColor: Serene.surfaceContainerLowest,
-    ...Shadow.card,
-  },
-  accountRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    padding: 12,
-  },
-  accountIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  accountIconConnected: {
-    backgroundColor: Serene.secondaryContainer,
-  },
-  accountIconOff: {
-    backgroundColor: Serene.surfaceContainerLow,
-  },
-  accountBody: {
-    flex: 1,
-    minWidth: 0,
-  },
-  accountNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  accountName: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 14,
-    lineHeight: 19,
-    color: Serene.onSurface,
-  },
-  connectedPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.successContainer,
-  },
-  connectedDot: {
-    width: 5,
-    height: 5,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.success,
-  },
-  connectedText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 9,
-    lineHeight: 13,
-    color: Serene.success,
-  },
-  accountDetail: {
-    fontFamily: FontFamily.body,
-    fontSize: 11,
-    lineHeight: 15,
-    color: Serene.onSurfaceVariant,
-  },
-  connectButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.primary,
-  },
-  connectButtonText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 11,
-    lineHeight: 15,
-    color: Serene.onPrimary,
-  },
-  permissionsToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
+    paddingVertical: 10,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Serene.surfaceContainerHigh,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: Tint.border,
   },
-  permissionsToggleText: {
+  stat: {
     flex: 1,
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 11,
-    lineHeight: 15,
-    color: Serene.onSurfaceVariant,
-  },
-  permissionsList: {
-    gap: 2,
-    paddingHorizontal: 12,
-    paddingBottom: 10,
-  },
-  permissionRow: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingVertical: 5,
   },
-  permissionCheckbox: {
-    width: 17,
-    height: 17,
-    borderRadius: 5,
-    borderWidth: 1.5,
-    borderColor: Serene.outlineVariant,
-    alignItems: 'center',
-    justifyContent: 'center',
+  statValue: {
+    fontFamily: FontFamily.headingBold,
+    fontSize: 22,
+    lineHeight: 28,
+    color: Tint.navy,
   },
-  permissionCheckboxActive: {
-    borderWidth: 0,
-    backgroundColor: Serene.secondary,
+  statHighlight: {
+    color: '#b45309',
   },
-  permissionText: {
-    flex: 1,
+  statLabel: {
     fontFamily: FontFamily.body,
-    fontSize: 11,
-    lineHeight: 15,
+    fontSize: 13,
+    lineHeight: 18,
     color: Serene.onSurfaceVariant,
+    textAlign: 'center',
   },
-  disconnectButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 6,
-    paddingVertical: 6,
-  },
-  disconnectText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 11,
-    lineHeight: 15,
-    color: Serene.error,
-  },
-  emailPreview: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginTop: Space.md,
-    padding: 12,
-    borderRadius: Radius.xl,
-    backgroundColor: Serene.secondaryContainer,
-  },
-  emailPreviewIcon: {
-    width: 38,
-    height: 38,
+  badge: {
+    minWidth: 26,
+    height: 26,
+    paddingHorizontal: 8,
     borderRadius: Radius.full,
-    backgroundColor: Serene.surfaceContainerLowest,
+    backgroundColor: '#fef3c7',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  emailPreviewBody: {
-    flex: 1,
-    minWidth: 0,
+  badgeText: {
+    fontFamily: FontFamily.bodyBold,
+    fontSize: 13,
+    lineHeight: 17,
+    color: '#92400e',
   },
-  emailPreviewTitle: {
+  senders: {
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Tint.border,
+  },
+  sendersLabel: {
     fontFamily: FontFamily.bodySemiBold,
     fontSize: 13,
     lineHeight: 18,
-    color: Serene.onSecondaryContainer,
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+    color: Serene.onSurfaceVariant,
   },
-  emailPreviewText: {
-    fontFamily: FontFamily.body,
-    fontSize: 11,
-    lineHeight: 15,
-    color: Serene.onSecondaryContainer,
+  senderWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
   },
-  privacyCard: {
+  disconnect: {
+    fontFamily: FontFamily.bodySemiBold,
+    fontSize: 14,
+    lineHeight: 19,
+    color: Serene.error,
+  },
+  accountButtonDark: {
+    height: 40,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+  },
+  note: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 8,
-    marginTop: Space.md,
-    padding: 12,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.surfaceContainerLow,
+    gap: 10,
+    marginTop: 22,
+    padding: 14,
+    borderRadius: 16,
+    backgroundColor: Tint.soft,
+    borderWidth: 1,
+    borderColor: Tint.border,
   },
-  privacyText: {
+  noteText: {
     flex: 1,
     fontFamily: FontFamily.body,
-    fontSize: 12,
-    lineHeight: 17,
-    color: Serene.onSurfaceVariant,
+    fontSize: 14,
+    lineHeight: 20,
+    color: Tint.navy,
+  },
+  permLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  permText: {
+    flex: 1,
+    fontFamily: FontFamily.body,
+    fontSize: 15,
+    lineHeight: 21,
+    color: Tint.navy,
   },
 });

@@ -106,8 +106,9 @@ function inQuietHours(date: Date): boolean {
 
 export default function ReminderFormScreen() {
   const pathname = usePathname();
-  const { id, linkKind, linkId, linkTitle, at } = useLocalSearchParams<{
+  const { id, linkKind, linkId, linkTitle, at, title } = useLocalSearchParams<{
     id?: string;
+    title?: string;
     linkKind?: string;
     linkId?: string;
     linkTitle?: string;
@@ -131,6 +132,8 @@ export default function ReminderFormScreen() {
         note: '',
       };
     }
+    // Rappel personnel proposé depuis un autre écran (ex. un e-mail importé).
+    if (title) return { ...base, title, at: at ? new Date(at) : base.at, note: '' };
     return base;
   });
   const [titleFocused, setTitleFocused] = useState(false);

@@ -19,9 +19,26 @@ export type Preferences = {
   haptics: boolean;
 };
 
+export type PersonalInfo = {
+  firstName: string;
+  lastName: string;
+  phone: string;
+  birthdate: Date;
+  address: string;
+  city: string;
+  hasPhoto: boolean;
+};
+
+export type LockDelay = 'now' | '1min' | '5min';
+
 type Snapshot = {
   preferences: Preferences;
+  user: PersonalInfo;
   biometric: boolean;
+  /** Réglages liés à la biométrie. */
+  confirmSensitive: boolean;
+  fallbackCode: boolean;
+  lockDelay: LockDelay;
   twoFactor: boolean;
   sessions: typeof SESSIONS;
   consents: Record<ConsentKey, boolean>;
@@ -43,7 +60,19 @@ let state: Snapshot = {
     reduceMotion: false,
     haptics: true,
   },
+  user: {
+    firstName: 'Claire',
+    lastName: 'Martin',
+    phone: '+33 6 12 34 56 78',
+    birthdate: new Date(1988, 2, 14),
+    address: '12 rue de la Roquette',
+    city: '75011 Paris',
+    hasPhoto: false,
+  },
   biometric: true,
+  confirmSensitive: true,
+  fallbackCode: true,
+  lockDelay: '1min',
   twoFactor: false,
   sessions: SESSIONS,
   consents: { aiDocuments: true, suggestions: true, product: false, anonymous: false },
@@ -77,6 +106,21 @@ export const profileActions = {
   setBiometric(biometric: boolean) {
     emit({ biometric });
   },
+  saveUser(user: PersonalInfo) {
+    emit({ user });
+  },
+  setPhoto(hasPhoto: boolean) {
+    emit({ user: { ...state.user, hasPhoto } });
+  },
+  setConfirmSensitive(confirmSensitive: boolean) {
+    emit({ confirmSensitive });
+  },
+  setFallbackCode(fallbackCode: boolean) {
+    emit({ fallbackCode });
+  },
+  setLockDelay(lockDelay: LockDelay) {
+    emit({ lockDelay });
+  },
   setTwoFactor(twoFactor: boolean) {
     emit({ twoFactor });
   },
@@ -100,3 +144,12 @@ export const profileActions = {
     emit({ flash });
   },
 };
+
+export const LOCK_DELAYS: { key: LockDelay; label: string }[] = [
+  { key: 'now', label: 'Immédiatement' },
+  { key: '1min', label: 'Après 1 min' },
+  { key: '5min', label: 'Après 5 min' },
+];
+
+export const initialsOf = (user: PersonalInfo) =>
+  `${user.firstName.trim()[0] ?? ''}${user.lastName.trim()[0] ?? ''}`.toUpperCase();

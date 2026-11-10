@@ -1,539 +1,497 @@
-// S-24 (e-mail) - E-mail importé et extraction IA | Module M11 Intégrations | Phase S10
-import { router } from 'expo-router';
-import { useState } from 'react';
+// Mobile - E-mails importés | Module M12 Intégrations | Phase S10
+// Sans identifiant : la liste. Avec identifiant : l'e-mail, ce que Kora a repéré et la bonne action
+// (voir l'élément existant, ou créer une tâche / un rappel / un événement — jamais de doublon).
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icon';
-import { FontFamily, Radius, Serene, Shadow, Space, Typography } from '@/constants/design';
+import { BottomSheet, Chip, IconButton, SecondaryButton, SheetOption, TopBar, UndoToast, kitStyles } from '@/components/ui/kit';
+import { SettingsRow, SettingsSection } from '@/components/ui/settings';
+import { FontFamily, Radius, Serene, Tint } from '@/constants/design';
+import { atTime, addDays, formatDay } from '@/lib/demo-dates';
 
-const EXTRACTED_FIELDS = [
-  { icon: 'description', label: 'Type', value: 'Attestation de domicile' },
-  { icon: 'apartment', label: 'Émetteur', value: 'Foncia' },
-  { icon: 'event', label: 'Date du document', value: '9 mai 2024' },
-  { icon: 'task_alt', label: 'Action attendue', value: 'Signer et renvoyer avant le 15 mai' },
-];
+import { LINK_META, receivedLabel } from '../data';
+import { integrationActions, useIntegrationsState } from '../store';
+import type { ImportedEmail } from '../types';
 
 export default function EmailViewerScreen() {
-  const [saved, setSaved] = useState(false);
+  const { id } = useLocalSearchParams<{ id?: string }>();
+  return id ? <EmailDetail id={id} /> : <EmailList />;
+}
+
+function Avatar({ name }: { name: string }) {
+  return (
+    <View style={styles.avatar}>
+      <Text style={styles.avatarText}>{name[0]}</Text>
+    </View>
+  );
+}
+
+function EmailList() {
+  const { emails, flash } = useIntegrationsState();
+  const [filter, setFilter] = useState<'all' | 'review' | 'done'>('all');
+  const [toast, setToast] = useState<{ text: string; undo?: () => void } | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (flash) {
+        setToast(flash);
+        integrationActions.setFlash(null);
+      }
+    }, [flash]),
+  );
+  // Du plus récent au plus ancien.
+  const list = emails
+    .filter((email) => filter === 'all' || email.status === filter)
+    .sort((a, b) => b.receivedAt.getTime() - a.receivedAt.getTime());
+  const review = emails.filter((email) => email.status === 'review').length;
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
-        <Pressable
-          style={styles.headerButton}
-          accessibilityRole="button"
-          accessibilityLabel="Retour"
-          onPress={() => router.back()}>
-          <Icon name="arrow_back" size={22} color={Serene.onSurface} />
-        </Pressable>
-        <Text style={styles.headerTitle}>E-mail importé</Text>
-        <Pressable style={styles.headerButton} accessibilityLabel="Plus d’options">
-          <Icon name="more_vert" size={22} color={Serene.onSurfaceVariant} />
-        </Pressable>
-      </View>
+    <SafeAreaView style={kitStyles.safe} edges={['top']}>
+      <TopBar title="E-mails importés" fallback="/integrations" />
+      <ScrollView contentContainerStyle={[kitStyles.content, styles.content]} showsVerticalScrollIndicator={false}>
+        <Text style={kitStyles.muted}>Seuls les e-mails de vos organismes autorisés sont importés.</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips} style={styles.chipsScroll}>
+          <Chip label="Tous" count={emails.length} selected={filter === 'all'} onPress={() => setFilter('all')} />
+          <Chip label="À vérifier" count={review} selected={filter === 'review'} onPress={() => setFilter('review')} />
+          <Chip label="Traités" count={emails.length - review} selected={filter === 'done'} onPress={() => setFilter('done')} />
+        </ScrollView>
 
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}>
-        <View style={styles.mailCard}>
-          <View style={styles.mailTopRow}>
-            <View style={styles.senderAvatar}>
-              <Text style={styles.senderInitial}>F</Text>
-            </View>
-            <View style={styles.senderBody}>
-              <Text style={styles.senderName}>Foncia</Text>
-              <Text style={styles.senderEmail}>contact@foncia.fr</Text>
-            </View>
-            <Text style={styles.mailTime}>08:42</Text>
+        {list.length === 0 ? (
+          <View style={[kitStyles.card, styles.empty]}>
+            <Icon name="mark_email_read" size={28} color={Tint.primary} />
+            <Text style={kitStyles.title}>Tout est traité</Text>
+            <Text style={[kitStyles.muted, styles.center]}>Aucun e-mail ne demande votre attention.</Text>
           </View>
-
-          <Text style={styles.subject}>Votre attestation de domicile 2024</Text>
-
-          <View style={styles.mailLabels}>
-            <View style={styles.labelPill}>
-              <Icon name="inbox" size={11} color={Serene.onSurfaceVariant} />
-              <Text style={styles.labelText}>Boîte de réception</Text>
-            </View>
-            <View style={styles.labelPill}>
-              <Icon name="auto_awesome" size={11} color={Serene.secondary} />
-              <Text style={[styles.labelText, styles.labelTextAccent]}>Importé par Bringo Mind</Text>
-            </View>
-          </View>
-
-          <View style={styles.divider} />
-
-          <Text style={styles.mailBody}>Bonjour Madame Martin,</Text>
-          <Text style={styles.mailBody}>
-            Veuillez trouver ci-joint votre attestation de domicile pour l’année 2024. Nous vous
-            remercions de bien vouloir la signer et nous la retourner avant le 15 mai 2024.
-          </Text>
-          <Text style={styles.mailBody}>
-            Pour toute question, notre service reste à votre disposition.
-          </Text>
-          <Text style={styles.mailSign}>Cordialement,</Text>
-          <Text style={styles.mailSign}>Service locataires — Foncia</Text>
-        </View>
-
-        <Pressable
-          style={styles.attachment}
-          accessibilityRole="button"
-          onPress={() => router.push('/documents/detail')}>
-          <View style={styles.attachmentIcon}>
-            <Icon name="picture_as_pdf" size={22} color={Serene.error} />
-          </View>
-          <View style={styles.attachmentBody}>
-            <Text style={styles.attachmentName} numberOfLines={1}>
-              Attestation_domicile_2024.pdf
-            </Text>
-            <Text style={styles.attachmentMeta}>PDF • 248 Ko • 2 pages</Text>
-          </View>
-          <Icon name="download" size={20} color={Serene.onSurfaceVariant} />
-        </Pressable>
-
-        <View style={styles.aiCard}>
-          <View style={styles.aiHeader}>
-            <View style={styles.aiIcon}>
-              <Icon name="auto_awesome" size={18} color={Serene.onPrimary} />
-            </View>
-            <View style={styles.aiHeaderBody}>
-              <Text style={styles.aiTitle}>Analyse de Kora</Text>
-              <Text style={styles.aiSub}>4 informations extraites • fiabilité 98,4 %</Text>
-            </View>
-            <View style={styles.confidencePill}>
-              <Text style={styles.confidenceText}>98%</Text>
-            </View>
-          </View>
-
-          <View style={styles.aiFields}>
-            {EXTRACTED_FIELDS.map((field, index) => (
-              <View key={field.label}>
-                {index > 0 ? <View style={styles.divider} /> : null}
-                <View style={styles.aiRow}>
-                  <View style={styles.aiRowIcon}>
-                    <Icon name={field.icon} size={15} color={Serene.secondary} />
+        ) : (
+          <View style={[kitStyles.card, styles.list]}>
+            {list.map((email, index) => (
+              <Pressable
+                key={email.id}
+                style={({ pressed }) => [styles.row, index > 0 && styles.rowBorder, pressed && styles.rowPressed]}
+                accessibilityRole="button"
+                accessibilityLabel={`${email.from} : ${email.subject}${email.status === 'review' ? ', à vérifier' : ''}`}
+                onPress={() => router.push({ pathname: '/integrations/email', params: { id: email.id } })}>
+                <Avatar name={email.from} />
+                <View style={styles.flex}>
+                  <View style={styles.rowTop}>
+                    <Text style={styles.from} numberOfLines={1}>
+                      {email.from}
+                    </Text>
+                    <Text style={styles.time}>{receivedLabel(email.receivedAt)}</Text>
                   </View>
-                  <Text style={styles.aiLabel}>{field.label}</Text>
-                  <Text style={styles.aiValue} numberOfLines={2}>
-                    {field.value}
+                  <Text style={styles.subject} numberOfLines={1}>
+                    {email.subject}
                   </Text>
+                  <Text style={styles.preview} numberOfLines={1}>
+                    {email.preview}
+                  </Text>
+                  <View style={styles.rowTags}>
+                    {email.status === 'review' ? (
+                      <View style={styles.reviewTag}>
+                        <Text style={styles.reviewTagText}>À vérifier</Text>
+                      </View>
+                    ) : (
+                      <View style={styles.doneTag}>
+                        <Icon name="check" size={13} color={Tint.primary} />
+                        <Text style={styles.doneTagText}>Traité</Text>
+                      </View>
+                    )}
+                    {email.attachment ? <Icon name="attach_file" size={16} color={Serene.onSurfaceVariant} /> : null}
+                  </View>
                 </View>
-              </View>
+              </Pressable>
             ))}
           </View>
+        )}
+      </ScrollView>
+      {toast ? (
+        <UndoToast key={toast.text} text={toast.text} onUndo={toast.undo} onHide={() => setToast(null)} bottom={24} />
+      ) : null}
+    </SafeAreaView>
+  );
+}
 
-          <View style={styles.suggestion}>
-            <Icon name="lightbulb" size={15} color={Serene.warning} />
-            <Text style={styles.suggestionText}>
-              Kora suggère de créer une tâche avec rappel pour ne pas oublier l’envoi.
-            </Text>
-          </View>
+function linkHref(link: ImportedEmail['links'][number]) {
+  if (link.kind === 'task') return { pathname: '/tasks/detail' as const, params: { id: link.id } };
+  if (link.kind === 'event') return { pathname: '/calendar/detail' as const, params: { id: link.id } };
+  return { pathname: '/documents/detail' as const, params: { id: link.id } };
+}
 
-          <View style={styles.aiActions}>
-            <Pressable
-              style={styles.aiPrimary}
-              accessibilityRole="button"
-              onPress={() => router.push('/tasks/add')}>
-              <Icon name="add_task" size={16} color={Serene.onPrimary} />
-              <Text style={styles.aiPrimaryText}>Créer une tâche</Text>
-            </Pressable>
-            <Pressable
-              style={styles.aiSecondary}
-              accessibilityRole="button"
-              onPress={() => setSaved(true)}>
-              <Icon
-                name={saved ? 'check' : 'bookmark_add'}
-                size={16}
-                color={Serene.onSurface}
-              />
-              <Text style={styles.aiSecondaryText}>
-                {saved ? 'Enregistré' : 'Classer le document'}
-              </Text>
-            </Pressable>
+function EmailDetail({ id }: { id: string }) {
+  const { emails } = useIntegrationsState();
+  const email = emails.find((entry) => entry.id === id);
+  const [sheet, setSheet] = useState<'menu' | 'block' | null>(null);
+  const [toast, setToast] = useState<{ text: string; undo?: () => void } | null>(null);
+
+  if (!email) {
+    return (
+      <SafeAreaView style={kitStyles.safe} edges={['top']}>
+        <TopBar title="E-mail importé" fallback="/integrations/email" />
+        <View style={[kitStyles.content, styles.content]}>
+          <View style={[kitStyles.card, styles.empty]}>
+            <Icon name="unsubscribe" size={28} color={Tint.primary} />
+            <Text style={kitStyles.title}>E-mail introuvable</Text>
+            <SecondaryButton label="Voir les e-mails importés" onPress={() => router.replace('/integrations/email')} />
           </View>
         </View>
+      </SafeAreaView>
+    );
+  }
 
-        {saved ? (
-          <View style={styles.successBanner}>
-            <Icon name="check_circle" size={18} color={Serene.success} />
-            <Text style={styles.successText}>
-              Document classé dans « Logement » et lié à la tâche créée.
-            </Text>
+  const hasTask = email.links.some((link) => link.kind === 'task');
+  const hasEvent = email.links.some((link) => link.kind === 'event');
+  const suggestion = email.suggestion;
+  const reminderAt = suggestion?.due ? atTime(addDays(suggestion.due, -1), 9) : undefined;
+  const nothingToCreate = !suggestion || (hasTask && hasEvent);
+
+  return (
+    <SafeAreaView style={kitStyles.safe} edges={['top']}>
+      <TopBar
+        title="E-mail importé"
+        fallback="/integrations/email"
+        right={<IconButton icon="more_horiz" label="Plus d’actions" onPress={() => setSheet('menu')} />}
+      />
+      <ScrollView contentContainerStyle={[kitStyles.content, styles.content]} showsVerticalScrollIndicator={false}>
+        <View style={[kitStyles.card, styles.mail]}>
+          <View style={styles.mailHead}>
+            <Avatar name={email.from} />
+            <View style={styles.flex}>
+              <Text style={styles.from}>{email.from}</Text>
+              <Text style={styles.preview}>{email.address}</Text>
+            </View>
+            <Text style={styles.time}>{receivedLabel(email.receivedAt)}</Text>
           </View>
+          <Text style={styles.mailSubject}>{email.subject}</Text>
+          {email.body.map((paragraph) => (
+            <Text key={paragraph} style={styles.body}>
+              {paragraph}
+            </Text>
+          ))}
+          {email.attachment ? (
+            <View style={styles.attachment}>
+              <Icon name="picture_as_pdf" size={22} color={Serene.error} />
+              <View style={styles.flex}>
+                <Text style={styles.attachmentName}>{email.attachment.name}</Text>
+                <Text style={styles.preview}>{email.attachment.size} • enregistré dans Documents</Text>
+              </View>
+            </View>
+          ) : null}
+        </View>
+
+        <SettingsSection title="Repéré par Kora" icon="auto_awesome" footer="Kora propose, vous décidez. Rien n’est créé sans votre accord.">
+          {email.extracted.map((field, index) => (
+            <SettingsRow key={field.label} first={index === 0} icon={field.icon} title={field.value} subtitle={field.label} />
+          ))}
+        </SettingsSection>
+
+        {email.links.length > 0 ? (
+          <SettingsSection title="Déjà dans Bringo Mind" icon="link">
+            {email.links.map((link, index) => (
+              <SettingsRow
+                key={`${link.kind}-${link.id}`}
+                first={index === 0}
+                icon={LINK_META[link.kind].icon}
+                title={link.title}
+                subtitle={LINK_META[link.kind].label}
+                onPress={() => router.push(linkHref(link))}
+              />
+            ))}
+          </SettingsSection>
         ) : null}
 
-        <View style={styles.mailActions}>
-          <Pressable style={styles.mailAction}>
-            <Icon name="reply" size={18} color={Serene.onSurfaceVariant} />
-            <Text style={styles.mailActionText}>Répondre</Text>
-          </Pressable>
-          <Pressable style={styles.mailAction}>
-            <Icon name="forward" size={18} color={Serene.onSurfaceVariant} />
-            <Text style={styles.mailActionText}>Transférer</Text>
-          </Pressable>
-          <Pressable style={styles.mailAction}>
-            <Icon name="archive" size={18} color={Serene.onSurfaceVariant} />
-            <Text style={styles.mailActionText}>Archiver</Text>
-          </Pressable>
-        </View>
+        {!nothingToCreate && suggestion ? (
+          <SettingsSection title="Passer à l’action" icon="bolt">
+            {!hasTask ? (
+              <SettingsRow
+                first
+                icon="add_task"
+                title="Créer une tâche"
+                subtitle={suggestion.due ? `${suggestion.title} • pour le ${formatDay(suggestion.due)}` : suggestion.title}
+                onPress={() =>
+                  router.push({
+                    pathname: '/tasks/add',
+                    params: {
+                      title: suggestion.title,
+                      description: `D’après l’e-mail de ${email.from} : ${email.subject}`,
+                      ...(suggestion.due ? { due: suggestion.due.toISOString() } : {}),
+                    },
+                  })
+                }
+              />
+            ) : null}
+            <SettingsRow
+              first={hasTask}
+              icon="notifications"
+              title="Créer un rappel"
+              subtitle={reminderAt ? `Proposé le ${formatDay(reminderAt)} à 9h00, la veille` : 'Rattaché à cet e-mail'}
+              onPress={() =>
+                router.push({
+                  pathname: '/reminders/add',
+                  params: {
+                    ...(email.links.find((link) => link.kind === 'document')
+                      ? {
+                          linkKind: 'document',
+                          linkId: email.links.find((link) => link.kind === 'document')?.id ?? '',
+                          linkTitle: suggestion.title,
+                        }
+                      : { title: suggestion.title }),
+                    ...(reminderAt ? { at: reminderAt.toISOString() } : {}),
+                  },
+                })
+              }
+            />
+            {!hasEvent && suggestion.due ? (
+              <SettingsRow
+                icon="event"
+                title="Ajouter au calendrier"
+                subtitle={`Journée du ${formatDay(suggestion.due)}`}
+                onPress={() =>
+                  router.push({
+                    pathname: '/calendar/add',
+                    params: {
+                      title: suggestion.title,
+                      date: suggestion.due?.toISOString() ?? '',
+                      allDay: '1',
+                      description: `D’après l’e-mail de ${email.from}`,
+                    },
+                  })
+                }
+              />
+            ) : null}
+          </SettingsSection>
+        ) : null}
 
-        <View style={styles.privacyCard}>
-          <Icon name="lock" size={15} color={Serene.onSurfaceVariant} />
-          <Text style={styles.privacyText}>
-            Cet e-mail est traité localement pour l’extraction. Aucun contenu n’est partagé avec
-            des tiers.
-          </Text>
-        </View>
+        {email.status === 'review' ? (
+          <SecondaryButton
+            label="Marquer comme traité"
+            icon="done_all"
+            style={styles.done}
+            onPress={() => {
+              integrationActions.markDone(email.id);
+              setToast({ text: 'E-mail marqué comme traité' });
+            }}
+          />
+        ) : (
+          <View style={styles.doneInfo}>
+            <Icon name="check_circle" size={20} color={Tint.primary} filled />
+            <Text style={styles.doneInfoText}>Cet e-mail est traité.</Text>
+          </View>
+        )}
       </ScrollView>
+
+      <BottomSheet visible={sheet === 'menu'} title={email.from} subtitle={email.address} onClose={() => setSheet(null)}>
+        <SheetOption
+          icon="open_in_new"
+          label="Ouvrir dans Gmail"
+          hint="Pour répondre ou transférer"
+          onPress={() => {
+            setSheet(null);
+            setToast({ text: 'Démo : ouverture de Gmail' });
+          }}
+        />
+        <SheetOption icon="block" label="Ne plus importer cet expéditeur" danger onPress={() => setSheet('block')} />
+      </BottomSheet>
+
+      <BottomSheet
+        visible={sheet === 'block'}
+        title={`Ne plus importer ${email.from} ?`}
+        subtitle="Ses prochains e-mails resteront dans Gmail. Les documents déjà enregistrés sont conservés."
+        onClose={() => setSheet(null)}>
+        <SecondaryButton
+          label="Ne plus importer"
+          icon="block"
+          danger
+          onPress={() => {
+            const undo = integrationActions.blockSender(email.from);
+            integrationActions.setFlash({ text: `${email.from} ne sera plus importé`, undo });
+            setSheet(null);
+            if (router.canGoBack()) router.back();
+            else router.replace('/integrations/email');
+          }}
+        />
+        <SecondaryButton label="Continuer à importer" onPress={() => setSheet(null)} />
+      </BottomSheet>
+
+      {toast ? (
+        <UndoToast key={toast.text} text={toast.text} onUndo={toast.undo} onHide={() => setToast(null)} bottom={24} />
+      ) : null}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: Serene.surface,
-  },
-  header: {
-    height: 56,
-    paddingHorizontal: Space.gutter,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Serene.surface,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Serene.surfaceContainerHigh,
-  },
-  headerButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    flex: 1,
-    textAlign: 'center',
-    ...Typography.titleMd,
-    color: Serene.onSurface,
-  },
-  scroll: {
-    flex: 1,
-  },
-  content: {
-    paddingHorizontal: Space.gutter,
-    paddingTop: Space.md,
-    paddingBottom: Space.lg,
-    gap: Space.md,
-  },
-  mailCard: {
-    padding: 14,
-    borderRadius: Radius.xl,
-    backgroundColor: Serene.surfaceContainerLowest,
-    ...Shadow.card,
-  },
-  mailTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  senderAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  senderInitial: {
-    fontFamily: FontFamily.bodyBold,
-    fontSize: 16,
-    lineHeight: 20,
-    color: Serene.onPrimary,
-  },
-  senderBody: {
+  flex: {
     flex: 1,
     minWidth: 0,
   },
-  senderName: {
+  center: {
+    textAlign: 'center',
+  },
+  content: {
+    paddingTop: 4,
+    paddingBottom: 40,
+  },
+  chipsScroll: {
+    marginTop: 12,
+    marginBottom: 14,
+  },
+  chips: {
+    gap: 8,
+  },
+  empty: {
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 24,
+  },
+  list: {
+    paddingVertical: 4,
+    paddingHorizontal: 0,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  rowBorder: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Tint.border,
+  },
+  rowPressed: {
+    backgroundColor: Tint.soft,
+  },
+  rowTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.full,
+    backgroundColor: Tint.lavender,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: {
+    fontFamily: FontFamily.headingBold,
+    fontSize: 17,
+    lineHeight: 22,
+    color: Tint.navy,
+  },
+  from: {
+    flex: 1,
     fontFamily: FontFamily.bodySemiBold,
-    fontSize: 14,
-    lineHeight: 19,
-    color: Serene.onSurface,
+    fontSize: 16,
+    lineHeight: 21,
+    color: Tint.navy,
   },
-  senderEmail: {
+  time: {
     fontFamily: FontFamily.body,
-    fontSize: 11,
-    lineHeight: 15,
-    color: Serene.onSurfaceVariant,
-  },
-  mailTime: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 11,
-    lineHeight: 15,
+    fontSize: 13,
+    lineHeight: 18,
     color: Serene.onSurfaceVariant,
   },
   subject: {
-    ...Typography.titleMd,
-    color: Serene.onSurface,
-    marginTop: 12,
+    fontFamily: FontFamily.bodySemiBold,
+    fontSize: 14,
+    lineHeight: 19,
+    color: Tint.navy,
   },
-  mailLabels: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 8,
+  preview: {
+    fontFamily: FontFamily.body,
+    fontSize: 13,
+    lineHeight: 18,
+    color: Serene.onSurfaceVariant,
   },
-  labelPill: {
+  rowTags: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 8,
+    marginTop: 6,
+  },
+  reviewTag: {
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 2,
     borderRadius: Radius.full,
-    backgroundColor: Serene.surfaceContainerLow,
+    backgroundColor: '#fef3c7',
   },
-  labelText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 10,
-    lineHeight: 14,
-    color: Serene.onSurfaceVariant,
-  },
-  labelTextAccent: {
-    color: Serene.secondary,
-  },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: Serene.surfaceContainerHigh,
-    marginVertical: 10,
-  },
-  mailBody: {
-    fontFamily: FontFamily.body,
+  reviewTagText: {
+    fontFamily: FontFamily.bodySemiBold,
     fontSize: 13,
-    lineHeight: 20,
-    color: Serene.onSurface,
-    marginBottom: 8,
+    lineHeight: 17,
+    color: '#92400e',
   },
-  mailSign: {
-    fontFamily: FontFamily.body,
+  doneTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: Radius.full,
+    backgroundColor: '#e6f6f3',
+  },
+  doneTagText: {
+    fontFamily: FontFamily.bodySemiBold,
     fontSize: 13,
-    lineHeight: 20,
-    color: Serene.onSurfaceVariant,
+    lineHeight: 17,
+    color: Tint.primary,
+  },
+  mail: {
+    gap: 10,
+  },
+  mailHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  mailSubject: {
+    marginTop: 4,
+    fontFamily: FontFamily.headingBold,
+    fontSize: 19,
+    lineHeight: 25,
+    color: Tint.navy,
+  },
+  body: {
+    fontFamily: FontFamily.body,
+    fontSize: 15,
+    lineHeight: 22,
+    color: Tint.navy,
   },
   attachment: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
     padding: 12,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.surfaceContainerLowest,
-    ...Shadow.card,
-  },
-  attachmentIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.md,
-    backgroundColor: Serene.errorContainer,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  attachmentBody: {
-    flex: 1,
-    minWidth: 0,
+    borderRadius: 14,
+    backgroundColor: Tint.soft,
+    borderWidth: 1,
+    borderColor: Tint.border,
   },
   attachmentName: {
     fontFamily: FontFamily.bodySemiBold,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurface,
-  },
-  attachmentMeta: {
-    fontFamily: FontFamily.body,
-    fontSize: 11,
-    lineHeight: 15,
-    color: Serene.onSurfaceVariant,
-  },
-  aiCard: {
-    padding: 14,
-    borderRadius: Radius.xl,
-    backgroundColor: Serene.surfaceContainerLowest,
-    borderWidth: 1,
-    borderColor: Serene.secondaryContainer,
-    ...Shadow.card,
-  },
-  aiHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  aiIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  aiHeaderBody: {
-    flex: 1,
-    minWidth: 0,
-  },
-  aiTitle: {
-    fontFamily: FontFamily.bodySemiBold,
     fontSize: 14,
     lineHeight: 19,
-    color: Serene.onSurface,
+    color: Tint.navy,
   },
-  aiSub: {
-    fontFamily: FontFamily.body,
-    fontSize: 11,
-    lineHeight: 15,
-    color: Serene.onSurfaceVariant,
+  done: {
+    marginTop: 22,
   },
-  confidencePill: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.secondaryContainer,
+  doneInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 22,
   },
-  confidenceText: {
+  doneInfoText: {
     fontFamily: FontFamily.bodySemiBold,
-    fontSize: 10,
-    lineHeight: 14,
-    color: Serene.onSecondaryContainer,
-  },
-  aiFields: {
-    marginTop: 10,
-  },
-  aiRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 7,
-  },
-  aiRowIcon: {
-    width: 26,
-    height: 26,
-    borderRadius: Radius.md,
-    backgroundColor: Serene.surfaceContainerLow,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  aiLabel: {
-    width: 108,
-    fontFamily: FontFamily.body,
-    fontSize: 11,
-    lineHeight: 15,
-    color: Serene.onSurfaceVariant,
-  },
-  aiValue: {
-    flex: 1,
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 12,
-    lineHeight: 16,
-    color: Serene.onSurface,
-    textAlign: 'right',
-  },
-  suggestion: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 6,
-    marginTop: 8,
-    padding: 9,
-    borderRadius: Radius.md,
-    backgroundColor: Serene.warningContainer,
-  },
-  suggestionText: {
-    flex: 1,
-    fontFamily: FontFamily.body,
-    fontSize: 11,
-    lineHeight: 16,
-    color: Serene.warning,
-  },
-  aiActions: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 10,
-  },
-  aiPrimary: {
-    flex: 1,
-    height: 40,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.primary,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 5,
-  },
-  aiPrimaryText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 12,
-    lineHeight: 16,
-    color: Serene.onPrimary,
-  },
-  aiSecondary: {
-    flex: 1,
-    height: 40,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.surfaceContainerLow,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 5,
-  },
-  aiSecondaryText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 12,
-    lineHeight: 16,
-    color: Serene.onSurface,
-  },
-  successBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    padding: 12,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.successContainer,
-  },
-  successText: {
-    flex: 1,
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 12,
-    lineHeight: 17,
-    color: Serene.success,
-  },
-  mailActions: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  mailAction: {
-    flex: 1,
-    height: 48,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.surfaceContainerLowest,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 3,
-    ...Shadow.card,
-  },
-  mailActionText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 11,
-    lineHeight: 15,
-    color: Serene.onSurfaceVariant,
-  },
-  privacyCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 7,
-    padding: 10,
-    borderRadius: Radius.md,
-    backgroundColor: Serene.surfaceContainerLow,
-  },
-  privacyText: {
-    flex: 1,
-    fontFamily: FontFamily.body,
-    fontSize: 11,
-    lineHeight: 16,
-    color: Serene.onSurfaceVariant,
+    fontSize: 15,
+    lineHeight: 20,
+    color: Tint.primary,
   },
 });

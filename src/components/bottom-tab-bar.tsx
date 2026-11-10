@@ -36,6 +36,7 @@ const HIDDEN_ON = [
   '/household/transfer',
   '/household/invitation',
   '/profile/preferences',
+  '/profile/complete',
   '/notifications/settings',
 ];
 

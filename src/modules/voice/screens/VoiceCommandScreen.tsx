@@ -1,546 +1,414 @@
-// S-28 - Commande vocale | Module M14 Assistant & Voix | Phase S10
-import { router } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+// S-28 - Commande vocale | Module M14 Voix | Phase S11
+// Démo complète : écoute → transcription → ce que Kora a compris → confirmation (formulaire prérempli).
+import { router, type Href } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { AccessibilityInfo, Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icon';
-import { FontFamily, Radius, Serene, Shadow, Space, Typography } from '@/constants/design';
+import { PrimaryButton, SecondaryButton, TopBar, kitStyles } from '@/components/ui/kit';
+import { FontFamily, Radius, Serene, Tint } from '@/constants/design';
+import { DEMO_TODAY, addDays, atTime } from '@/lib/demo-dates';
 
-type VoiceState = 'idle' | 'listening' | 'processing' | 'result';
+type Phase = 'idle' | 'listening' | 'transcribing' | 'understood';
 
-const EXAMPLES = [
-  'Crée une tâche pour payer la taxe foncière vendredi',
-  'Qu’est-ce que j’ai prévu demain ?',
-  'Ajoute un rappel pour appeler le médecin',
+type Command = {
+  id: string;
+  say: string;
+  icon: string;
+  kind: string;
+  title: string;
+  detail: string;
+  confirm: string;
+  href: Href;
+};
+
+const COMMANDS: Command[] = [
+  {
+    id: 'tax',
+    say: 'Crée une tâche pour payer la taxe foncière vendredi',
+    icon: 'add_task',
+    kind: 'Créer une tâche',
+    title: 'Payer la taxe foncière',
+    detail: 'Échéance : vendredi 17 mai',
+    confirm: 'Ouvrir la tâche préremplie',
+    href: {
+      pathname: '/tasks/add',
+      params: { title: 'Payer la taxe foncière', due: atTime(addDays(DEMO_TODAY, 3), 12).toISOString(), description: 'Créée par commande vocale.' },
+    },
+  },
+  {
+    id: 'tomorrow',
+    say: 'Qu’est-ce que j’ai prévu demain ?',
+    icon: 'event',
+    kind: 'Consulter le planning',
+    title: 'Demain, mercredi 15 mai',
+    detail: 'Contrôle technique à 9h00 • kinésithérapie à 18h30',
+    confirm: 'Voir le planning',
+    href: '/calendar/agenda',
+  },
+  {
+    id: 'doctor',
+    say: 'Rappelle-moi d’appeler le médecin jeudi à 9h',
+    icon: 'notifications',
+    kind: 'Créer un rappel',
+    title: 'Appeler le médecin',
+    detail: 'Jeudi 16 mai à 9h00',
+    confirm: 'Ouvrir le rappel prérempli',
+    href: { pathname: '/reminders/add', params: { title: 'Appeler le médecin', at: atTime(addDays(DEMO_TODAY, 2), 9).toISOString() } },
+  },
 ];
 
-const WAVE_BARS = [12, 22, 38, 52, 30, 18, 44, 60, 36, 24, 48, 32, 20, 42, 28];
+const BARS = [10, 18, 28, 16, 34, 22, 12, 26, 38, 20, 14, 30, 18, 10];
 
 export default function VoiceCommandScreen() {
-  const [state, setState] = useState<VoiceState>('idle');
-  const [transcript, setTranscript] = useState(
-    'Rappelle-moi demain à 8 heures d’appeler le médecin',
-  );
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [phase, setPhase] = useState<Phase>('idle');
+  const [command, setCommand] = useState<Command>(COMMANDS[0]);
+  const [words, setWords] = useState(0);
+  const [reduceMotion, setReduceMotion] = useState(false);
+  const [pulse] = useState(() => new Animated.Value(0));
 
   useEffect(() => {
-    return () => {
-      if (timer.current) clearTimeout(timer.current);
-    };
+    AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion).catch(() => undefined);
   }, []);
 
-  const start = () => {
-    if (state === 'processing') return;
-    setState('listening');
-    timer.current = setTimeout(() => {
-      setState('processing');
-      timer.current = setTimeout(() => setState('result'), 1200);
-    }, 2200);
-  };
-
-  const stop = () => {
-    if (timer.current) clearTimeout(timer.current);
-    if (state === 'listening') {
-      setState('processing');
-      timer.current = setTimeout(() => setState('result'), 900);
+  // Enchaînement de la démo : écoute (1,2 s) puis transcription mot à mot, puis compréhension.
+  useEffect(() => {
+    if (phase === 'listening') {
+      const timer = setTimeout(() => setPhase('transcribing'), 1200);
+      return () => clearTimeout(timer);
     }
+    if (phase === 'transcribing') {
+      const total = command.say.split(' ').length;
+      if (words >= total) {
+        const timer = setTimeout(() => setPhase('understood'), 400);
+        return () => clearTimeout(timer);
+      }
+      const timer = setTimeout(() => setWords((count) => count + 1), reduceMotion ? 0 : 110);
+      return () => clearTimeout(timer);
+    }
+    return undefined;
+  }, [phase, words, command, reduceMotion]);
+
+  // Onde animée pendant l'écoute (désactivée si « réduire les animations »).
+  useEffect(() => {
+    if (reduceMotion || (phase !== 'listening' && phase !== 'transcribing')) {
+      pulse.setValue(0);
+      return undefined;
+    }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 500, easing: Easing.inOut(Easing.ease), useNativeDriver: false }),
+        Animated.timing(pulse, { toValue: 0, duration: 500, easing: Easing.inOut(Easing.ease), useNativeDriver: false }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [phase, pulse, reduceMotion]);
+
+  const start = (next: Command) => {
+    setCommand(next);
+    setWords(0);
+    setPhase('listening');
   };
 
-  const reset = () => {
-    if (timer.current) clearTimeout(timer.current);
-    setState('idle');
-  };
-
-  const applyExample = (example: string) => {
-    if (timer.current) clearTimeout(timer.current);
-    setTranscript(example);
-    setState('result');
-  };
-
-  const active = state === 'listening' || state === 'processing';
+  const active = phase === 'listening' || phase === 'transcribing';
+  const transcript = command.say.split(' ').slice(0, words).join(' ');
+  const status =
+    phase === 'idle'
+      ? 'Appuyez et parlez à Kora'
+      : phase === 'listening'
+        ? 'J’écoute…'
+        : phase === 'transcribing'
+          ? 'Je transcris…'
+          : 'Voici ce que j’ai compris';
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
-        <Pressable
-          style={styles.headerButton}
-          accessibilityRole="button"
-          accessibilityLabel="Retour"
-          onPress={() => router.back()}>
-          <Icon name="arrow_back" size={22} color={Serene.onSurface} />
-        </Pressable>
-        <Text style={styles.headerTitle}>Commande vocale</Text>
-        <Pressable style={styles.headerButton} accessibilityLabel="Paramètres vocaux">
-          <Icon name="settings" size={21} color={Serene.onSurfaceVariant} />
-        </Pressable>
-      </View>
-
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}>
-        <View style={styles.stage}>
-          <View style={[styles.ring, styles.ringOuter, active && styles.ringActive]} />
-          <View style={[styles.ring, styles.ringMiddle, active && styles.ringActive]} />
-          <Pressable
-            onPress={state === 'listening' ? stop : state === 'result' ? reset : start}
-            style={[styles.micButton, state === 'listening' && styles.micButtonActive]}
-            accessibilityRole="button"
-            accessibilityLabel={
-              state === 'listening' ? 'Arrêter l’écoute' : 'Démarrer la commande vocale'
-            }>
-            <Icon
-              name={state === 'listening' ? 'stop' : state === 'processing' ? 'graphic_eq' : 'mic'}
-              size={40}
-              color={Serene.onPrimary}
-            />
-          </Pressable>
-
-          <Text style={styles.status}>
-            {state === 'idle'
-              ? 'Appuyez pour parler'
-              : state === 'listening'
-                ? 'Je vous écoute...'
-                : state === 'processing'
-                  ? 'Kora analyse votre demande...'
-                  : 'Commande comprise'}
+    <SafeAreaView style={kitStyles.safe} edges={['top']}>
+      <TopBar title="Commande vocale" fallback="/assistant" />
+      <ScrollView contentContainerStyle={[kitStyles.content, styles.content]} showsVerticalScrollIndicator={false}>
+        <View style={styles.micZone}>
+          <Animated.View
+            style={[
+              styles.halo,
+              active && styles.haloActive,
+              { transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.08] }) }] },
+            ]}>
+            <Pressable
+              style={({ pressed }) => [styles.mic, active && styles.micActive, pressed && styles.pressed]}
+              accessibilityRole="button"
+              accessibilityLabel={active ? 'Arrêter l’écoute' : 'Parler à Kora'}
+              onPress={() => (active ? setPhase('idle') : start(command))}>
+              <Icon name={active ? 'stop' : 'mic'} size={40} color={Serene.onPrimary} />
+            </Pressable>
+          </Animated.View>
+          <Text style={styles.status} accessibilityLiveRegion="polite">
+            {status}
           </Text>
-
-          <View style={styles.wave}>
-            {WAVE_BARS.map((height, index) => (
-              <View
+          <View style={styles.wave} accessibilityElementsHidden importantForAccessibility="no">
+            {BARS.map((height, index) => (
+              <Animated.View
                 key={index}
                 style={[
-                  styles.waveBar,
-                  { height: active ? height : height * 0.45 },
-                  active && index % 3 === 0 && styles.waveBarAccent,
+                  styles.bar,
+                  active ? styles.barActive : null,
+                  {
+                    height: active
+                      ? pulse.interpolate({ inputRange: [0, 1], outputRange: [height * 0.5, height] })
+                      : 6,
+                  },
                 ]}
               />
             ))}
           </View>
         </View>
 
-        <View style={styles.transcriptCard}>
-          <View style={styles.cardHeader}>
-            <Icon name="record_voice_over" size={16} color={Serene.onSurfaceVariant} />
-            <Text style={styles.cardHeaderText}>Transcription</Text>
-            {state === 'listening' ? (
-              <View style={styles.livePill}>
-                <View style={styles.liveDot} />
-                <Text style={styles.liveText}>En direct</Text>
-              </View>
-            ) : null}
+        <View style={[kitStyles.card, styles.transcript]}>
+          <View style={styles.cardHead}>
+            <Icon name="record_voice_over" size={18} color={Serene.onSurfaceVariant} />
+            <Text style={styles.cardLabel}>Transcription</Text>
           </View>
-          <Text style={styles.transcript}>
-            {state === 'idle' ? '« Votre voix apparaîtra ici… »' : `« ${transcript} »`}
+          <Text style={[styles.transcriptText, !transcript && styles.placeholder]}>
+            {transcript ? `« ${transcript} »` : '« Votre voix apparaîtra ici… »'}
           </Text>
         </View>
 
-        {state === 'result' ? (
-          <View style={styles.intentCard}>
-            <View style={styles.intentHeader}>
+        {phase === 'understood' ? (
+          <View style={styles.understood}>
+            <View style={styles.cardHead}>
+              <Icon name="auto_awesome" size={18} color={Tint.primary} />
+              <Text style={[styles.cardLabel, styles.understoodLabel]}>Kora a compris</Text>
+            </View>
+            <View style={styles.intent}>
               <View style={styles.intentIcon}>
-                <Icon name="auto_awesome" size={18} color={Serene.onPrimary} />
+                <Icon name={command.icon} size={22} color={Tint.primary} />
               </View>
-              <View style={styles.intentHeaderBody}>
-                <Text style={styles.intentTitle}>Intention détectée</Text>
-                <Text style={styles.intentSub}>Créer un rappel • fiabilité 97 %</Text>
-              </View>
-              <View style={styles.confidencePill}>
-                <Text style={styles.confidenceText}>97%</Text>
+              <View style={styles.flex}>
+                <Text style={styles.intentKind}>{command.kind}</Text>
+                <Text style={styles.intentTitle}>{command.title}</Text>
+                <Text style={styles.intentDetail}>{command.detail}</Text>
               </View>
             </View>
-
-            <View style={styles.intentFields}>
-              <IntentRow icon="label" label="Objet" value="Appeler le médecin" />
-              <IntentRow icon="schedule" label="Quand" value="Demain 10 mai • 08:00" />
-              <IntentRow icon="notifications" label="Rappel" value="Push + e-mail" />
+            <PrimaryButton label={command.confirm} icon="check" onPress={() => router.push(command.href)} />
+            <View style={styles.row}>
+              <SecondaryButton label="Corriger" icon="mic" style={styles.flex} onPress={() => start(command)} />
+              <SecondaryButton label="Annuler" style={styles.flex} onPress={() => setPhase('idle')} />
             </View>
-
-            <View style={styles.intentActions}>
-              <Pressable
-                style={styles.primaryButton}
-                accessibilityRole="button"
-                onPress={() => router.push('/reminders/add')}>
-                <Icon name="check" size={17} color={Serene.onPrimary} />
-                <Text style={styles.primaryButtonText}>Confirmer</Text>
-              </Pressable>
-              <Pressable
-                style={styles.secondaryButton}
-                accessibilityRole="button"
-                onPress={() => router.push('/reminders/edit')}>
-                <Icon name="edit" size={17} color={Serene.onSurface} />
-                <Text style={styles.secondaryButtonText}>Modifier</Text>
-              </Pressable>
-              <Pressable
-                style={styles.ghostButton}
-                accessibilityRole="button"
-                accessibilityLabel="Annuler"
-                onPress={reset}>
-                <Icon name="close" size={17} color={Serene.onSurfaceVariant} />
-              </Pressable>
-            </View>
+            <Text style={styles.hint}>Rien n’est enregistré tant que vous n’avez pas validé le formulaire.</Text>
           </View>
         ) : null}
 
-        <Text style={styles.sectionLabel}>Exemples de commandes</Text>
-        <View style={styles.examples}>
-          {EXAMPLES.map((example) => (
+        <Text style={styles.sectionLabel}>Exemples à essayer</Text>
+        <View style={[kitStyles.card, styles.examples]}>
+          {COMMANDS.map((entry, index) => (
             <Pressable
-              key={example}
-              style={styles.exampleCard}
+              key={entry.id}
+              style={({ pressed }) => [styles.example, index > 0 && styles.exampleBorder, pressed && styles.examplePressed]}
               accessibilityRole="button"
-              onPress={() => applyExample(example)}>
-              <Icon name="mic_none" size={16} color={Serene.secondary} />
-              <Text style={styles.exampleText}>{example}</Text>
-              <Icon name="north_east" size={14} color={Serene.onSurfaceVariant} />
+              accessibilityLabel={`Essayer : ${entry.say}`}
+              onPress={() => start(entry)}>
+              <Icon name="mic_none" size={20} color={Tint.primary} />
+              <Text style={styles.exampleText}>{entry.say}</Text>
+              <Icon name="play_arrow" size={20} color={Serene.onSurfaceVariant} />
             </Pressable>
           ))}
         </View>
 
-        <View style={styles.infoCard}>
-          <Icon name="lock" size={15} color={Serene.onSurfaceVariant} />
-          <Text style={styles.infoText}>
-            L’audio est traité en direct pour la transcription, puis supprimé. Aucun
-            enregistrement n’est conservé.
-          </Text>
+        <View style={styles.note}>
+          <Icon name="lock" size={18} color={Tint.primary} />
+          <Text style={styles.noteText}>L’audio sert seulement à la transcription, puis il est supprimé. Aucun enregistrement n’est conservé.</Text>
         </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function IntentRow({ icon, label, value }: { icon: string; label: string; value: string }) {
-  return (
-    <View style={styles.intentRow}>
-      <View style={styles.intentRowIcon}>
-        <Icon name={icon} size={15} color={Serene.secondary} />
-      </View>
-      <Text style={styles.intentLabel}>{label}</Text>
-      <Text style={styles.intentValue}>{value}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  safe: {
+  flex: {
     flex: 1,
-    backgroundColor: Serene.surface,
   },
-  header: {
-    height: 56,
-    paddingHorizontal: Space.gutter,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Serene.surface,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Serene.surfaceContainerHigh,
-  },
-  headerButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    flex: 1,
-    textAlign: 'center',
-    ...Typography.titleMd,
-    color: Serene.onSurface,
-  },
-  scroll: {
-    flex: 1,
+  pressed: {
+    opacity: 0.85,
   },
   content: {
-    paddingHorizontal: Space.gutter,
-    paddingTop: Space.lg,
-    paddingBottom: Space.lg,
+    paddingTop: 4,
+    paddingBottom: 40,
   },
-  stage: {
+  micZone: {
     alignItems: 'center',
-    paddingVertical: Space.md,
+    gap: 12,
+    paddingVertical: 14,
   },
-  ring: {
-    position: 'absolute',
+  halo: {
+    width: 150,
+    height: 150,
     borderRadius: Radius.full,
-    backgroundColor: Serene.secondaryContainer,
-    opacity: 0.35,
-  },
-  ringOuter: {
-    top: 4,
-    width: 168,
-    height: 168,
-    opacity: 0.18,
-  },
-  ringMiddle: {
-    top: 26,
-    width: 124,
-    height: 124,
-    opacity: 0.3,
-  },
-  ringActive: {
-    backgroundColor: Serene.secondary,
-    opacity: 0.22,
-  },
-  micButton: {
-    marginTop: 26,
-    width: 92,
-    height: 92,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.primary,
+    backgroundColor: Tint.soft,
     alignItems: 'center',
     justifyContent: 'center',
-    ...Shadow.floating,
   },
-  micButtonActive: {
-    backgroundColor: Serene.error,
+  haloActive: {
+    backgroundColor: '#ccfbf1',
+  },
+  mic: {
+    width: 104,
+    height: 104,
+    borderRadius: Radius.full,
+    backgroundColor: Tint.black,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  micActive: {
+    backgroundColor: Tint.primary,
   },
   status: {
-    marginTop: Space.md,
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurfaceVariant,
+    fontFamily: FontFamily.headingBold,
+    fontSize: 18,
+    lineHeight: 24,
+    color: Tint.navy,
   },
   wave: {
+    height: 40,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
-    height: 64,
-    marginTop: 6,
+    gap: 4,
   },
-  waveBar: {
-    width: 4,
+  bar: {
+    width: 5,
     borderRadius: Radius.full,
-    backgroundColor: Serene.secondary,
+    backgroundColor: '#b9c4d6',
   },
-  waveBarAccent: {
-    backgroundColor: Serene.primary,
+  barActive: {
+    backgroundColor: Tint.primary,
   },
-  transcriptCard: {
-    padding: 14,
-    borderRadius: Radius.xl,
-    backgroundColor: Serene.surfaceContainerLowest,
-    ...Shadow.card,
+  transcript: {
+    gap: 8,
   },
-  cardHeader: {
+  cardHead: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
-  cardHeaderText: {
-    flex: 1,
+  cardLabel: {
     fontFamily: FontFamily.bodySemiBold,
-    fontSize: 11,
-    lineHeight: 15,
+    fontSize: 13,
+    lineHeight: 18,
     letterSpacing: 0.4,
     textTransform: 'uppercase',
     color: Serene.onSurfaceVariant,
   },
-  livePill: {
+  transcriptText: {
+    fontFamily: FontFamily.headingBold,
+    fontSize: 18,
+    lineHeight: 25,
+    color: Tint.navy,
+  },
+  placeholder: {
+    color: Serene.onSurfaceVariant,
+  },
+  understood: {
+    marginTop: 14,
+    gap: 12,
+    padding: 16,
+    borderRadius: 20,
+    backgroundColor: '#f0fdfa',
+    borderWidth: 1,
+    borderColor: '#99f6e4',
+  },
+  understoodLabel: {
+    color: Tint.primary,
+  },
+  intent: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.errorContainer,
+    gap: 12,
   },
-  liveDot: {
-    width: 5,
-    height: 5,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.error,
-  },
-  liveText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 9,
-    lineHeight: 13,
-    color: Serene.error,
-  },
-  transcript: {
-    fontFamily: FontFamily.heading,
-    fontSize: 17,
-    lineHeight: 25,
-    color: Serene.onSurface,
-    marginTop: 8,
-  },
-  intentCard: {
-    marginTop: Space.md,
-    padding: 14,
-    borderRadius: Radius.xl,
+  intentIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     backgroundColor: Serene.surfaceContainerLowest,
-    borderWidth: 1,
-    borderColor: Serene.secondaryContainer,
-    ...Shadow.card,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  intentHeader: {
+  intentKind: {
+    fontFamily: FontFamily.bodySemiBold,
+    fontSize: 13,
+    lineHeight: 18,
+    color: Tint.primary,
+  },
+  intentTitle: {
+    fontFamily: FontFamily.headingBold,
+    fontSize: 18,
+    lineHeight: 24,
+    color: Tint.navy,
+  },
+  intentDetail: {
+    fontFamily: FontFamily.body,
+    fontSize: 14,
+    lineHeight: 19,
+    color: Tint.navy,
+  },
+  row: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  hint: {
+    fontFamily: FontFamily.body,
+    fontSize: 13,
+    lineHeight: 18,
+    color: Serene.onSurfaceVariant,
+    textAlign: 'center',
+  },
+  sectionLabel: {
+    marginTop: 22,
+    marginBottom: 8,
+    fontFamily: FontFamily.bodySemiBold,
+    fontSize: 13,
+    lineHeight: 18,
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+    color: Serene.onSurfaceVariant,
+  },
+  examples: {
+    paddingVertical: 4,
+    paddingHorizontal: 0,
+  },
+  example: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
   },
-  intentIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
+  exampleBorder: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Tint.border,
   },
-  intentHeaderBody: {
-    flex: 1,
-    minWidth: 0,
-  },
-  intentTitle: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 14,
-    lineHeight: 19,
-    color: Serene.onSurface,
-  },
-  intentSub: {
-    fontFamily: FontFamily.body,
-    fontSize: 11,
-    lineHeight: 15,
-    color: Serene.onSurfaceVariant,
-  },
-  confidencePill: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.secondaryContainer,
-  },
-  confidenceText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 10,
-    lineHeight: 14,
-    color: Serene.onSecondaryContainer,
-  },
-  intentFields: {
-    marginTop: 8,
-    backgroundColor: Serene.surfaceContainerLow,
-    borderRadius: Radius.lg,
-    paddingHorizontal: 10,
-  },
-  intentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Serene.surfaceContainerHigh,
-  },
-  intentRowIcon: {
-    width: 24,
-    height: 24,
-    borderRadius: Radius.md,
-    backgroundColor: Serene.surfaceContainerLowest,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  intentLabel: {
-    flex: 1,
-    fontFamily: FontFamily.body,
-    fontSize: 11,
-    lineHeight: 15,
-    color: Serene.onSurfaceVariant,
-  },
-  intentValue: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 12,
-    lineHeight: 16,
-    color: Serene.onSurface,
-  },
-  intentActions: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 12,
-  },
-  primaryButton: {
-    flex: 1,
-    height: 42,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.primary,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 5,
-  },
-  primaryButtonText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onPrimary,
-  },
-  secondaryButton: {
-    flex: 1,
-    height: 42,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.surfaceContainerLow,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 5,
-  },
-  secondaryButtonText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurface,
-  },
-  ghostButton: {
-    width: 42,
-    height: 42,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.surfaceContainerLowest,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...Shadow.card,
-  },
-  sectionLabel: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 11,
-    lineHeight: 14,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-    color: Serene.onSurfaceVariant,
-    marginTop: Space.lg,
-    marginBottom: Space.sm,
-  },
-  examples: {
-    gap: 8,
-  },
-  exampleCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 11,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.surfaceContainerLowest,
-    ...Shadow.card,
+  examplePressed: {
+    backgroundColor: Tint.soft,
   },
   exampleText: {
     flex: 1,
-    fontFamily: FontFamily.body,
-    fontSize: 12,
-    lineHeight: 17,
-    color: Serene.onSurface,
+    fontFamily: FontFamily.bodyMedium,
+    fontSize: 15,
+    lineHeight: 21,
+    color: Tint.navy,
   },
-  infoCard: {
+  note: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 7,
-    marginTop: Space.md,
-    padding: 10,
-    borderRadius: Radius.md,
-    backgroundColor: Serene.surfaceContainerLow,
+    gap: 8,
+    marginTop: 18,
+    padding: 14,
+    borderRadius: 16,
+    backgroundColor: Tint.soft,
   },
-  infoText: {
+  noteText: {
     flex: 1,
     fontFamily: FontFamily.body,
-    fontSize: 11,
-    lineHeight: 16,
-    color: Serene.onSurfaceVariant,
+    fontSize: 13,
+    lineHeight: 18,
+    color: Tint.navy,
   },
 });
