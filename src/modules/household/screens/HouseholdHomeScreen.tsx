@@ -1,1136 +1,726 @@
-// S-16 - Tableau de bord foyer | Module M08 Foyer partagé | Phase S7
+// S-16 - Foyer partagé | Module M08 Foyer | Phase S7
+// Le foyer est optionnel : sans foyer, l'écran explique simplement à quoi il sert.
 import { router } from 'expo-router';
+import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { AppHeader } from '@/components/app-header';
 import { Icon } from '@/components/icon';
-import { FontFamily, Radius, Serene, Shadow, Space, Typography } from '@/constants/design';
+import {
+  BottomSheet,
+  Chip,
+  IconButton,
+  PrimaryButton,
+  SecondaryButton,
+  SheetOption,
+  Tag,
+  TopBar,
+  UndoToast,
+  kitStyles,
+} from '@/components/ui/kit';
+import { FontFamily, Radius, Serene, Tint } from '@/constants/design';
+import { dayOffset, formatDay, formatTime } from '@/lib/demo-dates';
+
+import {
+  Avatar,
+  SectionHeader,
+  SmallButton,
+  householdStyles,
+  useFlashToast,
+} from '../components/household-ui';
+import { ROLE_LABELS, SHARED_DOCS, SHARED_EVENTS, SHARED_TASKS, WEEKDAY_SHORT, firstName } from '../data';
+import { householdActions, useHouseholdState } from '../store';
+import type { SharedTask } from '../types';
+
 
 export default function HouseholdHomeScreen() {
-  return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <AppHeader />
+  const { hasHousehold } = useHouseholdState();
+  const [toast, setToast] = useFlashToast();
 
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}>
-        <ContextSwitcher />
-        <MembersRail />
-        <AiAlertCard />
-        <SharedTasks />
-        <SharedCalendar />
-        <SharedDocuments />
-        <PrivacyBanner />
-      </ScrollView>
+  return (
+    <SafeAreaView style={kitStyles.safe} edges={['top']}>
+      {hasHousehold ? <HouseholdHome /> : <NoHousehold />}
+      {toast ? (
+        <UndoToast key={toast.text} text={toast.text} onUndo={toast.undo} onHide={() => setToast(null)} bottom={24} />
+      ) : null}
     </SafeAreaView>
   );
 }
 
-function ContextSwitcher() {
+/** Mode personnel : le foyer est présenté comme une option, jamais une obligation. */
+function NoHousehold() {
   return (
-    <View style={styles.contextBlock}>
-      <View style={styles.contextHeader}>
-        <View style={styles.contextTitleRow}>
-          <Icon name="family_restroom" size={18} color={Serene.secondary} />
-          <Text style={styles.contextTitle} numberOfLines={1}>
-            Foyer Delorme-Martin
-          </Text>
-        </View>
-        <View style={styles.sharedPill}>
-          <Text style={styles.sharedPillText}>Partagé</Text>
-        </View>
-      </View>
-
-      <View style={styles.switcher}>
-        <Pressable
-          style={styles.switcherTab}
-          accessibilityRole="button"
-          onPress={() => router.push('/dashboard')}>
-          <Text style={styles.switcherTabText}>Mon Espace</Text>
-        </Pressable>
-        <View style={[styles.switcherTab, styles.switcherTabActive]}>
-          <View style={styles.switcherDot} />
-          <Text style={styles.switcherTabTextActive}>Foyer Partagé</Text>
-        </View>
-      </View>
-    </View>
-  );
-}
-
-function MembersRail() {
-  return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.membersRow}
-      style={styles.membersScroll}>
-      <MemberCard name="Claire" role="Vous • Admin" initial="C" online />
-      <MemberCard name="Thomas" role="Co-gestion" initial="T" />
-      <MemberCard name="Léo" role="Enfant • 6ème" initial="L" />
-
-      <Pressable
-        style={styles.inviteButton}
-        accessibilityRole="button"
-        onPress={() => router.push('/household/invite')}>
-        <Icon name="person_add" size={18} color={Serene.onSurfaceVariant} />
-        <Text style={styles.inviteText}>Inviter</Text>
-      </Pressable>
-
-      <Pressable
-        style={styles.inviteButton}
-        accessibilityRole="button"
-        onPress={() => router.push('/household/activity')}>
-        <Icon name="history" size={18} color={Serene.onSurfaceVariant} />
-        <Text style={styles.inviteText}>Activité</Text>
-      </Pressable>
-    </ScrollView>
-  );
-}
-
-function MemberCard({
-  name,
-  role,
-  initial,
-  online,
-}: {
-  name: string;
-  role: string;
-  initial: string;
-  online?: boolean;
-}) {
-  return (
-    <Pressable
-      style={styles.memberCard}
-      accessibilityRole="button"
-      onPress={() => router.push('/household/members')}>
-      <View style={styles.memberAvatar}>
-        <Text style={styles.memberInitial}>{initial}</Text>
-        {online ? <View style={styles.onlineDot} /> : null}
-      </View>
-      <View style={styles.memberInfo}>
-        <Text style={styles.memberName} numberOfLines={1}>
-          {name}
-        </Text>
-        <Text style={styles.memberRole} numberOfLines={1}>
-          {role}
-        </Text>
-      </View>
-    </Pressable>
-  );
-}
-
-function AiAlertCard() {
-  return (
-    <View style={styles.alertWrap}>
-      <View style={styles.alertCard}>
-        <View style={styles.alertTop}>
-          <View style={styles.alertIcon}>
-            <Icon name="arrow_back_ios_new" size={17} color={Serene.onSecondary} />
+    <>
+      <TopBar title="Foyer" />
+      <ScrollView contentContainerStyle={[kitStyles.content, styles.content]} showsVerticalScrollIndicator={false}>
+        <View style={[kitStyles.card, styles.emptyCard]}>
+          <View style={styles.emptyIcon}>
+            <Icon name="family_restroom" size={34} color={Tint.primary} />
           </View>
-          <View style={styles.alertBodyWrap}>
-            <View style={styles.alertLabelRow}>
-              <Text style={styles.alertLabel}>IA Partagée Kora</Text>
-              <View style={styles.alertDot} />
-              <Text style={styles.alertContext}>Priorité foyer</Text>
+          <Text style={styles.emptyTitle}>Le foyer est optionnel</Text>
+          <Text style={styles.emptyText}>
+            Bringo Mind fonctionne entièrement en mode personnel. Créez un foyer seulement si vous voulez partager
+            certaines tâches, événements ou documents avec vos proches.
+          </Text>
+          <View style={styles.benefits}>
+            {[
+              { icon: 'lock', text: 'Vos éléments personnels restent privés' },
+              { icon: 'tune', text: 'Vous choisissez ce que vous partagez' },
+              { icon: 'logout', text: 'Vous pouvez quitter le foyer à tout moment' },
+            ].map((item) => (
+              <View key={item.text} style={styles.benefit}>
+                <Icon name={item.icon} size={20} color={Tint.primary} />
+                <Text style={styles.benefitText}>{item.text}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+        <View style={styles.emptyActions}>
+          <PrimaryButton label="Créer un foyer" icon="add_home" onPress={() => router.push('/household/create')} />
+          <SecondaryButton
+            label="J’ai reçu une invitation"
+            icon="mail"
+            onPress={() => router.push('/household/invitation')}
+          />
+        </View>
+      </ScrollView>
+    </>
+  );
+}
+
+function HouseholdHome() {
+  const { name, members, invitations, koraDismissed, createdAt: created, demoContent } = useHouseholdState();
+  // Un seul filtre par personne, pour les tâches ET les événements.
+  const [person, setPerson] = useState<string>('all');
+  const [menu, setMenu] = useState(false);
+
+  const me = members.find((member) => member.you);
+  const canManage = me?.role === 'owner' || me?.role === 'admin';
+  const concerns = (people: string[]) => person === 'all' || people.includes(person);
+  const upcoming = SHARED_EVENTS.filter((event) => dayOffset(event.start) >= 0);
+  const openTasks = SHARED_TASKS.filter((task) => !task.done);
+  const countFor = (id: string) =>
+    openTasks.filter((task) => task.people.includes(id)).length +
+    upcoming.filter((event) => event.people.includes(id)).length;
+  const tasks = SHARED_TASKS.filter((task) => concerns(task.people));
+  const events = upcoming.filter((event) => concerns(event.people)).slice(0, person === 'all' ? 3 : 4);
+  const personName = members.find((member) => member.id === person);
+  const forWhom = personName ? (personName.you ? 'vous' : firstName(personName.name)) : '';
+
+  return (
+    <>
+      <TopBar
+        title="Foyer"
+        right={<IconButton icon="more_horiz" label="Options du foyer" onPress={() => setMenu(true)} />}
+      />
+      <ScrollView contentContainerStyle={[kitStyles.content, styles.content]} showsVerticalScrollIndicator={false}>
+        {/* Carte du foyer : qui en fait partie et les trois raccourcis */}
+        <View style={[kitStyles.card, styles.hero]}>
+          <View style={styles.heroTop}>
+            <View style={styles.heroIcon}>
+              <Icon name="family_restroom" size={26} color={Tint.primary} />
             </View>
-            <Text style={styles.alertBody}>
-              Renouvellement inscription scolaire de <Text style={styles.bold}>Léo</Text> : date
-              limite <Text style={styles.alertAccent}>25 mai</Text>. Certificat de domicile vérifié
-              &amp; valide.
+            <View style={styles.flex}>
+              <Text style={styles.heroName} numberOfLines={1}>
+                {name}
+              </Text>
+              <Text style={kitStyles.muted}>
+                {members.length} membre{members.length > 1 ? 's' : ''} • depuis {formatDay(created)}
+              </Text>
+            </View>
+            <Tag label="Partagé" icon="group" tone="teal" />
+          </View>
+
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.people}>
+            {members.map((member) => (
+              <Pressable
+                key={member.id}
+                style={({ pressed }) => [styles.person, pressed && styles.pressed]}
+                accessibilityRole="button"
+                accessibilityLabel={`${member.name}, ${ROLE_LABELS[member.role]}`}
+                onPress={() => router.push('/household/members')}>
+                <Avatar name={member.name} color={member.color} size={48} />
+                <Text style={styles.personName} numberOfLines={1}>
+                  {member.you ? 'Vous' : firstName(member.name)}
+                </Text>
+                <Text style={styles.personRole} numberOfLines={1}>
+                  {ROLE_LABELS[member.role]}
+                </Text>
+              </Pressable>
+            ))}
+            {invitations.length > 0 ? (
+              <Pressable
+                style={({ pressed }) => [styles.person, pressed && styles.pressed]}
+                accessibilityRole="button"
+                accessibilityLabel={`${invitations.length} invitation en attente`}
+                onPress={() => router.push('/household/members')}>
+                <View style={styles.pendingAvatar}>
+                  <Icon name="schedule_send" size={22} color={Serene.onSurfaceVariant} />
+                </View>
+                <Text style={styles.personName}>Invitée</Text>
+                <Text style={styles.personRole}>En attente</Text>
+              </Pressable>
+            ) : null}
+          </ScrollView>
+
+          <View style={styles.shortcuts}>
+            {canManage ? (
+              <Shortcut icon="person_add" label="Inviter" onPress={() => router.push('/household/invite')} />
+            ) : null}
+            <Shortcut icon="group" label="Membres" onPress={() => router.push('/household/members')} />
+            <Shortcut icon="history" label="Activité" onPress={() => router.push('/household/activity')} />
+          </View>
+        </View>
+
+        {/* Kora propose, la personne décide */}
+        {!koraDismissed ? (
+          <View style={styles.kora}>
+            <View style={styles.koraHead}>
+              <Avatar name="Kora" color={Tint.black} size={30} kora />
+              <Text style={styles.koraLabel}>Kora • Suggestion pour le foyer</Text>
+            </View>
+            <Text style={styles.koraText}>
+              L’inscription scolaire de Léo est à rendre le 25 mai. L’attestation d’assurance habitation est déjà
+              dans les documents partagés : Thomas peut la joindre au dossier.
+            </Text>
+            <View style={styles.koraActions}>
+              <SmallButton
+                label="Voir la tâche"
+                icon="arrow_forward"
+                onPress={() => router.push({ pathname: '/tasks/detail', params: { id: 'inscription' } })}
+              />
+              <Pressable hitSlop={8} accessibilityRole="button" onPress={() => householdActions.dismissKora()}>
+                <Text style={styles.koraLater}>Plus tard</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
+
+        {demoContent ? (
+          <>
+        {/* Tâches partagées */}
+        <Text style={styles.filterLabel}>Afficher pour</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+          <Chip label="Tout le foyer" selected={person === 'all'} onPress={() => setPerson('all')} />
+          {members.map((member) => (
+            <Chip
+              key={member.id}
+              label={member.you ? 'Moi' : firstName(member.name)}
+              count={countFor(member.id)}
+              selected={person === member.id}
+              onPress={() => setPerson(member.id)}
+            />
+          ))}
+        </ScrollView>
+
+        <SectionHeader title="Tâches partagées" count={tasks.filter((task) => !task.done).length} action="Tout voir" href="/tasks" />
+        <View style={styles.stack}>
+          {tasks.length === 0 ? (
+            <Text style={[kitStyles.muted, styles.none]}>Aucune tâche partagée pour {forWhom}.</Text>
+          ) : (
+            tasks.map((task) => <TaskRow key={task.id} task={task} />)
+          )}
+        </View>
+
+        {/* Prochains événements partagés */}
+        <SectionHeader title="Événements partagés" count={events.length} action="Calendrier" href="/calendar" />
+        <View style={styles.stack}>
+          {events.length === 0 ? (
+            <Text style={[kitStyles.muted, styles.none]}>Aucun événement partagé à venir pour {forWhom}.</Text>
+          ) : null}
+          {events.map((event) => (
+            <Pressable
+              key={event.id}
+              style={({ pressed }) => [kitStyles.card, styles.event, pressed && kitStyles.cardPressed]}
+              accessibilityRole="button"
+              accessibilityLabel={`${event.title}, ${formatDay(event.start)} à ${formatTime(event.start)}`}
+              onPress={() => router.push({ pathname: '/calendar/detail', params: { id: event.id } })}>
+              <View style={[styles.dateBlock, dayOffset(event.start) === 0 && styles.dateBlockToday]}>
+                <Text style={[styles.dateDay, dayOffset(event.start) === 0 && styles.dateTodayText]}>
+                  {WEEKDAY_SHORT[event.start.getDay()]}
+                </Text>
+                <Text style={[styles.dateNumber, dayOffset(event.start) === 0 && styles.dateTodayText]}>
+                  {event.start.getDate()}
+                </Text>
+              </View>
+              <View style={styles.flex}>
+                <Text style={kitStyles.title} numberOfLines={2}>
+                  {event.title}
+                </Text>
+                <Text style={styles.meta} numberOfLines={1}>
+                  {event.allDay ? 'Toute la journée' : `${formatTime(event.start)} – ${formatTime(event.end)}`} •{' '}
+                  {event.location}
+                </Text>
+                <View style={styles.whoRow}>
+                  <Icon name="group" size={16} color={Tint.primary} />
+                  <Text style={styles.who}>{event.who}</Text>
+                </View>
+              </View>
+              <Icon name="chevron_right" size={22} color={Serene.onSurfaceVariant} />
+            </Pressable>
+          ))}
+        </View>
+
+        {/* Documents partagés */}
+        <SectionHeader title="Documents partagés" count={SHARED_DOCS.length} action="Documents" href="/documents" />
+        <View style={styles.docs}>
+          {SHARED_DOCS.map((doc) => (
+            <Pressable
+              key={doc.id}
+              style={({ pressed }) => [kitStyles.card, styles.doc, pressed && kitStyles.cardPressed]}
+              accessibilityRole="button"
+              accessibilityLabel={doc.title}
+              onPress={() => router.push({ pathname: '/documents/detail', params: { id: doc.id } })}>
+              <View style={styles.docIcon}>
+                <Icon name={doc.icon} size={22} color={Tint.primary} />
+              </View>
+              <Text style={styles.docTitle} numberOfLines={2}>
+                {doc.title}
+              </Text>
+              <Text style={styles.docMeta} numberOfLines={2}>
+                {doc.meta}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+
+          </>
+        ) : (
+          <View style={[kitStyles.card, styles.nothing]}>
+            <Icon name="share" size={28} color={Tint.primary} />
+            <Text style={kitStyles.title}>Rien n’est encore partagé</Text>
+            <Text style={[kitStyles.muted, styles.center]}>
+              Depuis une tâche, un événement ou un document, choisissez « Foyer » pour le partager ici.
             </Text>
           </View>
-        </View>
+        )}
 
-        <View style={styles.alertBottom}>
-          <Text style={styles.alertHint}>Prêt à téléverser</Text>
-          <Pressable
-            style={styles.alertButton}
-            accessibilityRole="button"
-            onPress={() => router.push('/documents')}>
-            <Text style={styles.alertButtonText}>Voir le dossier</Text>
-            <Icon name="arrow_forward" size={16} color={Serene.onSecondary} />
-          </Pressable>
+        <View style={[householdStyles.note, styles.privacy]}>
+          <Icon name="lock" size={20} color={Tint.primary} />
+          <Text style={householdStyles.noteText}>
+            Vos éléments personnels (santé, impôts, fiches de paie) restent privés. Seul ce que vous choisissez de
+            partager apparaît ici.
+          </Text>
         </View>
-      </View>
-    </View>
-  );
-}
-
-function SharedTasks() {
-  return (
-    <View style={styles.section}>
-      <View style={styles.sectionHeader}>
-        <View style={styles.sectionTitleRow}>
-          <Icon name="task_alt" size={20} color={Serene.onSurface} />
-          <Text style={styles.sectionTitle}>Tâches réparties</Text>
-        </View>
-        <View style={styles.countPill}>
-          <Text style={styles.countText}>3 actives</Text>
-        </View>
-      </View>
-
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.filtersRow}
-        style={styles.filtersScroll}>
-        <View style={[styles.filterChip, styles.filterChipActive]}>
-          <Text style={styles.filterChipTextActive}>Toutes</Text>
-        </View>
-        <Pressable style={styles.filterChip} onPress={() => router.push('/tasks')}>
-          <Text style={styles.filterChipText}>À moi (2)</Text>
-        </Pressable>
-        <Pressable style={styles.filterChip} onPress={() => router.push('/tasks')}>
-          <Text style={styles.filterChipText}>Thomas (1)</Text>
-        </Pressable>
       </ScrollView>
 
-      <View style={styles.list}>
-        <TaskCard
-          status="urgent"
-          due="Échéance demain"
-          title="Déclaration de sinistre fuite d'eau"
-          footer="Assigné à Claire (Vous)"
-          trailing="Ouvrir"
+      <BottomSheet visible={menu} title={name} subtitle="Options du foyer" onClose={() => setMenu(false)}>
+        <SheetOption
+          icon="group"
+          label="Membres et invitations"
+          onPress={() => {
+            setMenu(false);
+            router.push('/household/members');
+          }}
         />
-        <TaskCard
-          status="progress"
-          due="17 mai"
-          title="Vaccin rappel 11 ans (Léo)"
-          footer="Assigné à Thomas"
-          trailing="Santé"
-          avatar="T"
+        {me?.role === 'owner' ? (
+          <SheetOption
+            icon="swap_horiz"
+            label="Transférer la propriété"
+            hint="Confier le foyer à un autre membre"
+            onPress={() => {
+              setMenu(false);
+              router.push('/household/transfer');
+            }}
+          />
+        ) : null}
+        <SheetOption
+          icon="visibility"
+          label="Aperçu sans foyer (démo)"
+          hint="Voir l’écran d’une personne qui n’a pas de foyer"
+          onPress={() => {
+            setMenu(false);
+            householdActions.previewWithoutHousehold();
+          }}
         />
-        <CompletedTaskCard />
-      </View>
-    </View>
+      </BottomSheet>
+    </>
   );
 }
 
-function TaskCard({
-  status,
-  due,
-  title,
-  footer,
-  trailing,
-  avatar,
-}: {
-  status: 'urgent' | 'progress';
-  due: string;
-  title: string;
-  footer: string;
-  trailing: string;
-  avatar?: string;
-}) {
-  const urgent = status === 'urgent';
-
+function Shortcut({ icon, label, onPress }: { icon: string; label: string; onPress: () => void }) {
   return (
     <Pressable
-      style={styles.taskCard}
+      style={({ pressed }) => [styles.shortcut, pressed && styles.shortcutPressed]}
       accessibilityRole="button"
-      onPress={() => router.push('/tasks/detail')}>
-      <View style={styles.checkbox} />
-
-      <View style={styles.taskBody}>
-        <View style={styles.taskTopRow}>
-          <View style={[styles.taskPill, urgent ? styles.taskPillUrgent : styles.taskPillProgress]}>
-            {urgent ? <View style={styles.taskPillDot} /> : null}
-            <Text
-              style={[
-                styles.taskPillText,
-                urgent ? styles.taskPillTextUrgent : styles.taskPillTextProgress,
-              ]}>
-              {urgent ? 'Urgent' : 'En cours'}
-            </Text>
-          </View>
-          <Text style={[styles.taskDue, urgent && styles.taskDueUrgent]}>{due}</Text>
-        </View>
-
-        <Text style={styles.taskTitle} numberOfLines={1}>
-          {title}
-        </Text>
-
-        <View style={styles.taskBottomRow}>
-          <View style={styles.taskAssignee}>
-            {avatar ? (
-              <View style={styles.assigneeAvatar}>
-                <Text style={styles.assigneeInitial}>{avatar}</Text>
-              </View>
-            ) : (
-              <Icon name="assignment_ind" size={15} color={Serene.onSurfaceVariant} />
-            )}
-            <Text style={styles.taskFooter} numberOfLines={1}>
-              {footer}
-            </Text>
-          </View>
-          <Pressable onPress={() => router.push('/tasks/detail')}>
-            <Text style={styles.taskTrailing}>{trailing}</Text>
-          </Pressable>
-        </View>
-      </View>
+      onPress={onPress}>
+      <Icon name={icon} size={22} color={Tint.navy} />
+      <Text style={styles.shortcutText}>{label}</Text>
     </Pressable>
   );
 }
 
-function CompletedTaskCard() {
+function TaskRow({ task }: { task: SharedTask }) {
+  const offset = dayOffset(task.due);
+  const late = !task.done && offset < 0;
+  const status = task.done
+    ? `Terminée le ${formatDay(task.due)}`
+    : offset === 0
+      ? `Aujourd’hui${task.hasTime ? ` • ${formatTime(task.due)}` : ''}`
+      : late
+        ? `En retard • ${formatDay(task.due)}`
+        : `Pour le ${formatDay(task.due)}`;
+  const who = task.assignee === 'claire' ? 'Vous' : 'Thomas';
   return (
     <Pressable
-      style={[styles.taskCard, styles.taskCardDone]}
+      style={({ pressed }) => [kitStyles.card, styles.task, pressed && kitStyles.cardPressed]}
       accessibilityRole="button"
-      onPress={() => router.push('/tasks/detail')}>
-      <View style={styles.checkboxDone}>
-        <Icon name="check" size={14} color={Serene.onSecondary} />
+      accessibilityLabel={`${task.title}, ${status}, assignée à ${who}`}
+      onPress={() => router.push({ pathname: '/tasks/detail', params: { id: task.id } })}>
+      <View style={[styles.taskState, task.done && styles.taskStateDone]}>
+        {task.done ? <Icon name="check" size={16} color={Serene.onPrimary} /> : null}
       </View>
-
-      <View style={styles.taskBody}>
-        <View style={styles.taskTopRow}>
-          <Text style={styles.doneText}>Clôturé le 12 mai</Text>
-          <Icon name="verified" size={15} color={Serene.secondary} />
-        </View>
-
-        <Text style={styles.taskTitleDone} numberOfLines={1}>
-          Règlement cantine scolaire 2ème trimestre
+      <View style={styles.flex}>
+        <Text style={[styles.taskTitle, task.done && styles.taskTitleDone]} numberOfLines={2}>
+          {task.title}
         </Text>
-        <Text style={styles.taskFooter}>Payé 148,50 € • Reçu archivé</Text>
-      </View>
-    </Pressable>
-  );
-}
-
-function SharedCalendar() {
-  return (
-    <View style={styles.section}>
-      <View style={styles.sectionHeader}>
-        <View style={styles.sectionTitleRow}>
-          <Icon name="calendar_month" size={20} color={Serene.onSurface} />
-          <Text style={styles.sectionTitle}>Calendrier &amp; RDV</Text>
-        </View>
-        <Pressable onPress={() => router.push('/calendar')}>
-          <Text style={styles.sectionAction}>Tout voir</Text>
-        </Pressable>
-      </View>
-
-      <View style={styles.list}>
-        <EventCard
-          day="Ven"
-          date="17"
-          month="Mai"
-          title="Réunion parents d'élèves 6ème B"
-          icon="schedule"
-          detail="18h00 • Collège Victor Hugo"
-          people="Claire & Thomas"
-          accentDay
-        />
-        <EventCard
-          day="Mar"
-          date="21"
-          month="Mai"
-          title="Passage ramoneur cheminée"
-          icon="home"
-          detail="À domicile • Présence requise"
-          people="Thomas assure l'accueil"
-        />
-      </View>
-    </View>
-  );
-}
-
-function EventCard({
-  day,
-  date,
-  month,
-  title,
-  icon,
-  detail,
-  people,
-  accentDay,
-}: {
-  day: string;
-  date: string;
-  month: string;
-  title: string;
-  icon: string;
-  detail: string;
-  people: string;
-  accentDay?: boolean;
-}) {
-  return (
-    <Pressable
-      style={styles.eventCard}
-      accessibilityRole="button"
-      onPress={() => router.push('/calendar/detail')}>
-      <View style={styles.eventDate}>
-        <Text style={[styles.eventDay, accentDay && styles.eventDayAccent]}>{day}</Text>
-        <Text style={styles.eventNumber}>{date}</Text>
-        <Text style={styles.eventMonth}>{month}</Text>
-      </View>
-
-      <View style={styles.eventBody}>
-        <Text style={styles.eventTitle} numberOfLines={1}>
-          {title}
-        </Text>
-        <View style={styles.eventMeta}>
-          <Icon name={icon} size={14} color={Serene.onSurfaceVariant} />
-          <Text style={styles.eventMetaText} numberOfLines={1}>
-            {detail}
+        <View style={styles.taskMeta}>
+          <Text
+            style={[
+              styles.taskStatus,
+              (late || (offset === 0 && !task.done)) && styles.taskStatusUrgent,
+              task.done && styles.taskStatusDone,
+            ]}>
+            {status}
           </Text>
-        </View>
-        <View style={styles.eventPeople}>
-          {accentDay ? (
-            <View style={styles.avatarGroup}>
-              <View style={[styles.miniAvatar, styles.miniAvatarPrimary]}>
-                <Text style={styles.miniAvatarText}>C</Text>
-              </View>
-              <View style={[styles.miniAvatar, styles.miniAvatarSecondary, styles.miniAvatarOverlap]}>
-                <Text style={styles.miniAvatarText}>T</Text>
-              </View>
-            </View>
-          ) : (
-            <View style={[styles.miniAvatar, styles.miniAvatarSecondary]}>
-              <Text style={styles.miniAvatarText}>T</Text>
-            </View>
-          )}
-          <Text style={styles.eventPeopleText} numberOfLines={1}>
-            {people}
-          </Text>
+          <Text style={styles.meta}>• {who}</Text>
         </View>
       </View>
+      <Icon name="chevron_right" size={22} color={Serene.onSurfaceVariant} />
     </Pressable>
-  );
-}
-
-function SharedDocuments() {
-  return (
-    <View style={styles.section}>
-      <View style={styles.sectionHeader}>
-        <View style={styles.sectionTitleRow}>
-          <Icon name="folder_shared" size={20} color={Serene.onSurface} />
-          <Text style={styles.sectionTitle}>Documents communs récents</Text>
-        </View>
-        <Pressable
-          style={styles.addButton}
-          accessibilityRole="button"
-          accessibilityLabel="Ajouter un document"
-          onPress={() => router.push('/documents')}>
-          <Icon name="add" size={18} color={Serene.onSurfaceVariant} />
-        </Pressable>
-      </View>
-
-      <View style={styles.docsGrid}>
-        <Pressable
-          style={styles.docCard}
-          accessibilityRole="button"
-          onPress={() => router.push('/documents/detail')}>
-          <View style={styles.docTop}>
-            <View style={styles.docIcon}>
-              <Icon name="description" size={20} color={Serene.secondary} />
-            </View>
-            <Icon name="more_vert" size={18} color={Serene.onSurfaceVariant} />
-          </View>
-          <View>
-            <Text style={styles.docTitle} numberOfLines={1}>
-              Bail locatif signé
-            </Text>
-            <Text style={styles.docMeta}>PDF • Partagé foyer</Text>
-          </View>
-        </Pressable>
-
-        <Pressable
-          style={styles.docCard}
-          accessibilityRole="button"
-          onPress={() => router.push('/documents/detail')}>
-          <View style={styles.docTop}>
-            <View style={styles.docIconTeal}>
-              <Icon name="menu_book" size={20} color={Serene.secondary} />
-            </View>
-            <Icon name="more_vert" size={18} color={Serene.onSurfaceVariant} />
-          </View>
-          <View>
-            <Text style={styles.docTitle} numberOfLines={1}>
-              Livret de famille num.
-            </Text>
-            <Text style={styles.docMeta}>Certifié • 3 pages</Text>
-          </View>
-        </Pressable>
-      </View>
-    </View>
-  );
-}
-
-function PrivacyBanner() {
-  return (
-    <View style={styles.privacyWrap}>
-      <View style={styles.privacyCard}>
-        <View style={styles.privacyIcon}>
-          <Icon name="lock" size={16} color={Serene.secondary} />
-        </View>
-        <Text style={styles.privacyText}>
-          <Text style={styles.bold}>Cloisonnement garanti :</Text> vos bulletins de paie, santé et
-          impôts individuels restent strictement privés.
-        </Text>
-      </View>
-    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: {
+  flex: {
     flex: 1,
-    backgroundColor: Serene.surface,
   },
-  scroll: {
-    flex: 1,
+  pressed: {
+    opacity: 0.8,
   },
   content: {
-    paddingBottom: Space.lg,
-  },
-  contextBlock: {
-    paddingHorizontal: Space.gutter,
-    paddingTop: Space.sm,
-    paddingBottom: Space.md,
-  },
-  contextHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Space.xs,
-    marginBottom: Space.sm,
-  },
-  contextTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flex: 1,
-    minWidth: 0,
-  },
-  contextTitle: {
-    ...Typography.headlineSm,
-    color: Serene.onSurface,
-    flexShrink: 1,
-  },
-  sharedPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.secondaryContainer,
-  },
-  sharedPillText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 10,
-    lineHeight: 14,
-    color: Serene.onSecondaryContainer,
-  },
-  switcher: {
-    padding: 4,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.surfaceContainer,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    ...Shadow.card,
-  },
-  switcherTab: {
-    flex: 1,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: Radius.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-  },
-  switcherTabActive: {
-    backgroundColor: Serene.surfaceContainerLowest,
-    ...Shadow.card,
-  },
-  switcherDot: {
-    width: 6,
-    height: 6,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.secondary,
-  },
-  switcherTabText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurfaceVariant,
-  },
-  switcherTabTextActive: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurface,
-  },
-  membersScroll: {
-    marginBottom: Space.sm,
-  },
-  membersRow: {
-    paddingLeft: Space.gutter,
-    paddingRight: Space.gutter,
-    paddingBottom: Space.sm,
-    gap: 10,
-  },
-  memberCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.surfaceContainerLowest,
-    ...Shadow.card,
-  },
-  memberAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.surfaceContainerHigh,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  memberInitial: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 13,
-    lineHeight: 16,
-    color: Serene.onSurface,
-  },
-  onlineDot: {
-    position: 'absolute',
-    right: -1,
-    bottom: -1,
-    width: 10,
-    height: 10,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.secondary,
-    borderWidth: 1,
-    borderColor: Serene.surfaceContainerLowest,
-  },
-  memberInfo: {
-    minWidth: 0,
-  },
-  memberName: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 13,
-    lineHeight: 16,
-    color: Serene.onSurface,
-  },
-  memberRole: {
-    fontFamily: FontFamily.body,
-    fontSize: 11,
-    lineHeight: 15,
-    color: Serene.onSurfaceVariant,
-  },
-  inviteButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.surfaceContainer,
-    alignSelf: 'center',
-  },
-  inviteText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurfaceVariant,
-  },
-  alertWrap: {
-    paddingHorizontal: Space.gutter,
-    marginTop: Space.sm,
-  },
-  alertCard: {
-    padding: 14,
-    borderRadius: Radius.xl,
-    backgroundColor: 'rgba(134, 242, 228, 0.32)',
-    gap: 10,
-    ...Shadow.card,
-  },
-  alertTop: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-  },
-  alertIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: Radius.md,
-    backgroundColor: Serene.secondary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 2,
-  },
-  alertBodyWrap: {
-    flex: 1,
-    minWidth: 0,
-  },
-  alertLabelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  alertLabel: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 10,
-    lineHeight: 14,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-    color: Serene.secondary,
-  },
-  alertDot: {
-    width: 4,
-    height: 4,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.secondary,
-  },
-  alertContext: {
-    fontFamily: FontFamily.body,
-    fontSize: 12,
-    lineHeight: 16,
-    color: Serene.onSurfaceVariant,
-  },
-  alertBody: {
-    ...Typography.bodyMd,
-    color: Serene.onSurface,
-    marginTop: 4,
-  },
-  bold: {
-    fontFamily: FontFamily.bodySemiBold,
-    color: Serene.onSurface,
-  },
-  alertAccent: {
-    fontFamily: FontFamily.bodySemiBold,
-    color: Serene.secondary,
-  },
-  alertBottom: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     paddingTop: 4,
+    paddingBottom: 40,
   },
-  alertHint: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 11,
-    lineHeight: 14,
-    color: Serene.onSurfaceVariant,
+  hero: {
+    gap: 16,
   },
-  alertButton: {
+  heroTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: Radius.md,
-    backgroundColor: Serene.secondary,
-    ...Shadow.card,
-  },
-  alertButtonText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSecondary,
-  },
-  section: {
-    paddingHorizontal: Space.gutter,
-    marginTop: Space.lg,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-    marginBottom: Space.sm,
-  },
-  sectionTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flex: 1,
-    minWidth: 0,
-  },
-  sectionTitle: {
-    ...Typography.headlineSm,
-    color: Serene.onSurface,
-    flexShrink: 1,
-  },
-  countPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.surfaceContainer,
-  },
-  countText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 11,
-    lineHeight: 14,
-    color: Serene.onSurfaceVariant,
-  },
-  sectionAction: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.secondary,
-  },
-  filtersScroll: {
-    marginBottom: Space.sm,
-    marginHorizontal: -Space.gutter,
-  },
-  filtersRow: {
-    paddingHorizontal: Space.gutter,
-    gap: 6,
-  },
-  filterChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.surfaceContainer,
-  },
-  filterChipActive: {
-    backgroundColor: Serene.primary,
-  },
-  filterChipText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurfaceVariant,
-  },
-  filterChipTextActive: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onPrimary,
-  },
-  list: {
-    gap: 10,
-  },
-  taskCard: {
-    padding: 14,
-    borderRadius: Radius.xl,
-    backgroundColor: Serene.surfaceContainerLowest,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
     gap: 12,
-    ...Shadow.card,
   },
-  taskCardDone: {
-    backgroundColor: Serene.surfaceContainerLow,
-    opacity: 0.85,
-  },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 6,
-    backgroundColor: Serene.surfaceContainerHigh,
-    marginTop: 2,
-    flexShrink: 0,
-  },
-  checkboxDone: {
-    width: 20,
-    height: 20,
-    borderRadius: 6,
-    backgroundColor: Serene.secondary,
+  heroIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: Serene.secondaryContainer,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 2,
-    flexShrink: 0,
   },
-  taskBody: {
+  heroName: {
+    fontFamily: FontFamily.headingBold,
+    fontSize: 22,
+    lineHeight: 28,
+    letterSpacing: -0.3,
+    color: Tint.navy,
+  },
+  people: {
+    gap: 8,
+  },
+  person: {
+    width: 82,
+    alignItems: 'center',
+    gap: 4,
+  },
+  personName: {
+    fontFamily: FontFamily.bodySemiBold,
+    fontSize: 14,
+    lineHeight: 19,
+    color: Tint.navy,
+  },
+  personRole: {
+    fontFamily: FontFamily.body,
+    fontSize: 13,
+    lineHeight: 17,
+    color: Serene.onSurfaceVariant,
+  },
+  pendingAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: Radius.full,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: '#b9c4d6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  shortcuts: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  shortcut: {
     flex: 1,
-    minWidth: 0,
+    height: 64,
+    borderRadius: 16,
+    backgroundColor: Tint.soft,
+    borderWidth: 1,
+    borderColor: Tint.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
   },
-  taskTopRow: {
+  shortcutPressed: {
+    backgroundColor: Tint.lavender,
+  },
+  shortcutText: {
+    fontFamily: FontFamily.bodySemiBold,
+    fontSize: 14,
+    lineHeight: 19,
+    color: Tint.navy,
+  },
+  kora: {
+    marginTop: 16,
+    padding: 16,
+    gap: 10,
+    borderRadius: 20,
+    backgroundColor: '#f0fdfa',
+    borderWidth: 1,
+    borderColor: '#99f6e4',
+  },
+  koraHead: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 4,
-    marginBottom: 4,
+    gap: 8,
   },
-  taskPill: {
+  koraLabel: {
+    fontFamily: FontFamily.bodySemiBold,
+    fontSize: 13,
+    lineHeight: 18,
+    color: Tint.primary,
+  },
+  koraText: {
+    fontFamily: FontFamily.body,
+    fontSize: 15,
+    lineHeight: 22,
+    color: Tint.navy,
+  },
+  koraActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: Radius.full,
+    gap: 18,
   },
-  taskPillUrgent: {
-    backgroundColor: Serene.errorContainer,
-  },
-  taskPillProgress: {
-    backgroundColor: Serene.surfaceContainerHighest,
-  },
-  taskPillDot: {
-    width: 4,
-    height: 4,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.error,
-  },
-  taskPillText: {
+  koraLater: {
     fontFamily: FontFamily.bodySemiBold,
-    fontSize: 10,
-    lineHeight: 14,
-  },
-  taskPillTextUrgent: {
-    color: Serene.onErrorContainer,
-  },
-  taskPillTextProgress: {
+    fontSize: 15,
+    lineHeight: 20,
     color: Serene.onSurfaceVariant,
   },
-  taskDue: {
+  filterLabel: {
+    marginTop: 24,
+    marginBottom: 8,
     fontFamily: FontFamily.bodySemiBold,
-    fontSize: 11,
-    lineHeight: 14,
+    fontSize: 13,
+    lineHeight: 18,
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
     color: Serene.onSurfaceVariant,
   },
-  taskDueUrgent: {
-    color: Serene.error,
+  chips: {
+    gap: 8,
+  },
+  none: {
+    paddingVertical: 8,
+  },
+  stack: {
+    gap: 10,
+  },
+  task: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 14,
+  },
+  taskState: {
+    width: 24,
+    height: 24,
+    borderRadius: Radius.full,
+    borderWidth: 2,
+    borderColor: '#b9c4d6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  taskStateDone: {
+    backgroundColor: Tint.primary,
+    borderColor: Tint.primary,
   },
   taskTitle: {
     fontFamily: FontFamily.bodySemiBold,
-    fontSize: 14,
-    lineHeight: 20,
-    color: Serene.onSurface,
+    fontSize: 16,
+    lineHeight: 21,
+    color: Tint.navy,
   },
   taskTitleDone: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 14,
-    lineHeight: 20,
-    color: 'rgba(11, 28, 48, 0.7)',
+    color: Serene.onSurfaceVariant,
     textDecorationLine: 'line-through',
   },
-  taskBottomRow: {
+  taskMeta: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-    marginTop: 8,
-    paddingTop: 4,
+    flexWrap: 'wrap',
+    gap: 4,
+    marginTop: 2,
   },
-  taskAssignee: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flex: 1,
-    minWidth: 0,
-  },
-  assigneeAvatar: {
-    width: 16,
-    height: 16,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.surfaceContainer,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  assigneeInitial: {
-    fontFamily: FontFamily.bodyBold,
-    fontSize: 9,
-    lineHeight: 12,
-    color: Serene.onSurfaceVariant,
-  },
-  taskFooter: {
-    fontFamily: FontFamily.body,
-    fontSize: 11,
-    lineHeight: 15,
-    color: Serene.onSurfaceVariant,
-  },
-  taskTrailing: {
+  taskStatus: {
     fontFamily: FontFamily.bodySemiBold,
-    fontSize: 11,
-    lineHeight: 14,
-    color: Serene.secondary,
-    textDecorationLine: 'underline',
+    fontSize: 13,
+    lineHeight: 18,
+    color: Tint.navy,
   },
-  doneText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 10,
-    lineHeight: 14,
-    color: Serene.secondary,
+  taskStatusUrgent: {
+    color: Serene.error,
   },
-  eventCard: {
-    padding: 14,
-    borderRadius: Radius.xl,
-    backgroundColor: Serene.surfaceContainerLowest,
+  taskStatusDone: {
+    color: Tint.primary,
+  },
+  meta: {
+    fontFamily: FontFamily.body,
+    fontSize: 13,
+    lineHeight: 18,
+    color: Serene.onSurfaceVariant,
+  },
+  event: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    ...Shadow.card,
   },
-  eventDate: {
-    width: 48,
-    height: 52,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.surfaceContainer,
+  dateBlock: {
+    width: 54,
+    paddingVertical: 8,
+    borderRadius: 14,
+    backgroundColor: Tint.soft,
     alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
   },
-  eventDay: {
-    fontFamily: FontFamily.bodyBold,
-    fontSize: 10,
-    lineHeight: 12,
-    textTransform: 'uppercase',
+  dateBlockToday: {
+    backgroundColor: Tint.primary,
+  },
+  dateDay: {
+    fontFamily: FontFamily.bodySemiBold,
+    fontSize: 13,
+    lineHeight: 17,
     color: Serene.onSurfaceVariant,
   },
-  eventDayAccent: {
-    color: Serene.secondary,
-  },
-  eventNumber: {
+  dateNumber: {
     fontFamily: FontFamily.headingBold,
     fontSize: 22,
-    lineHeight: 24,
-    color: Serene.onSurface,
+    lineHeight: 28,
+    color: Tint.navy,
   },
-  eventMonth: {
-    fontFamily: FontFamily.body,
-    fontSize: 9,
-    lineHeight: 12,
-    color: Serene.onSurfaceVariant,
+  dateTodayText: {
+    color: Serene.onPrimary,
   },
-  eventBody: {
-    flex: 1,
-    minWidth: 0,
-  },
-  eventTitle: {
-    fontFamily: FontFamily.heading,
-    fontSize: 16,
-    lineHeight: 22,
-    color: Serene.onSurface,
-  },
-  eventMeta: {
+  whoRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     marginTop: 4,
   },
-  eventMetaText: {
-    fontFamily: FontFamily.body,
-    fontSize: 12,
-    lineHeight: 16,
-    color: Serene.onSurfaceVariant,
-    flexShrink: 1,
+  who: {
+    fontFamily: FontFamily.bodySemiBold,
+    fontSize: 13,
+    lineHeight: 18,
+    color: Tint.primary,
   },
-  eventPeople: {
+  docs: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 6,
-  },
-  avatarGroup: {
-    flexDirection: 'row',
-  },
-  miniAvatar: {
-    width: 16,
-    height: 16,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  miniAvatarPrimary: {
-    backgroundColor: Serene.primary,
-  },
-  miniAvatarSecondary: {
-    backgroundColor: Serene.secondary,
-  },
-  miniAvatarOverlap: {
-    marginLeft: -4,
-  },
-  miniAvatarText: {
-    fontFamily: FontFamily.bodyBold,
-    fontSize: 9,
-    lineHeight: 12,
-    color: Serene.onPrimary,
-  },
-  eventPeopleText: {
-    fontFamily: FontFamily.body,
-    fontSize: 11,
-    lineHeight: 15,
-    color: Serene.onSurfaceVariant,
-    flexShrink: 1,
-  },
-  addButton: {
-    width: 28,
-    height: 28,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.surfaceContainer,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  docsGrid: {
-    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 10,
   },
-  docCard: {
-    flex: 1,
-    height: 112,
-    padding: 12,
-    borderRadius: Radius.xl,
-    backgroundColor: Serene.surfaceContainerLowest,
-    justifyContent: 'space-between',
-    ...Shadow.card,
-  },
-  docTop: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
+  doc: {
+    flexBasis: '47%',
+    flexGrow: 1,
+    gap: 6,
   },
   docIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: Radius.md,
-    backgroundColor: Serene.surfaceContainer,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  docIconTeal: {
-    width: 32,
-    height: 32,
-    borderRadius: Radius.md,
-    backgroundColor: 'rgba(134, 242, 228, 0.5)',
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: Serene.secondaryContainer,
     alignItems: 'center',
     justifyContent: 'center',
   },
   docTitle: {
-    fontFamily: FontFamily.heading,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurface,
+    fontFamily: FontFamily.bodySemiBold,
+    fontSize: 15,
+    lineHeight: 20,
+    color: Tint.navy,
   },
   docMeta: {
     fontFamily: FontFamily.body,
-    fontSize: 10,
-    lineHeight: 14,
+    fontSize: 13,
+    lineHeight: 18,
     color: Serene.onSurfaceVariant,
-    marginTop: 2,
   },
-  privacyWrap: {
-    paddingHorizontal: Space.gutter,
-    marginTop: Space.lg,
+  nothing: {
+    marginTop: 22,
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 24,
   },
-  privacyCard: {
-    padding: 12,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.surfaceContainer,
+  center: {
+    textAlign: 'center',
+  },
+  privacy: {
+    marginTop: 22,
+  },
+  emptyCard: {
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 26,
+  },
+  emptyIcon: {
+    width: 72,
+    height: 72,
+    borderRadius: 24,
+    backgroundColor: Serene.secondaryContainer,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyTitle: {
+    fontFamily: FontFamily.headingBold,
+    fontSize: 22,
+    lineHeight: 28,
+    color: Tint.navy,
+    textAlign: 'center',
+  },
+  emptyText: {
+    fontFamily: FontFamily.body,
+    fontSize: 15,
+    lineHeight: 22,
+    color: Serene.onSurfaceVariant,
+    textAlign: 'center',
+  },
+  benefits: {
+    alignSelf: 'stretch',
+    gap: 10,
+    marginTop: 6,
+  },
+  benefit: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    padding: 12,
+    borderRadius: 14,
+    backgroundColor: Tint.soft,
   },
-  privacyIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.surfaceContainerHighest,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  privacyText: {
+  benefitText: {
     flex: 1,
-    fontFamily: FontFamily.body,
-    fontSize: 11,
-    lineHeight: 15,
-    color: Serene.onSurfaceVariant,
+    fontFamily: FontFamily.bodyMedium,
+    fontSize: 15,
+    lineHeight: 20,
+    color: Tint.navy,
+  },
+  emptyActions: {
+    gap: 10,
+    marginTop: 18,
   },
 });

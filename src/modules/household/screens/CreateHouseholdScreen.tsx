@@ -1,490 +1,184 @@
-// S-17 - Création d'un foyer | Module M08 Foyer partagé | Phase S7
+// S-17 - Créer un foyer | Module M08 Foyer | Phase S7
+// Démo : champs préremplis. Créer un foyer ne change rien aux éléments personnels.
 import { router } from 'expo-router';
 import { useState } from 'react';
-import {
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icon';
-import { FontFamily, Radius, Serene, Shadow, Space, Typography } from '@/constants/design';
+import { Chip, PrimaryButton, TopBar, kitStyles } from '@/components/ui/kit';
+import { FontFamily, Serene, Tint } from '@/constants/design';
 
-const CURRENCIES = ['EUR • €', 'CHF • Fr.', 'CAD • $'];
-const TIMEZONES = ['Europe/Paris', 'Europe/Zurich', 'America/Montreal'];
+import { householdStyles } from '../components/household-ui';
+import { isValidEmail } from '../data';
+import { householdActions } from '../store';
+
+const KINDS = [
+  { key: 'family', label: 'Famille', icon: 'family_restroom' },
+  { key: 'couple', label: 'Couple', icon: 'favorite' },
+  { key: 'coloc', label: 'Colocation', icon: 'apartment' },
+  { key: 'other', label: 'Autre', icon: 'groups' },
+];
 
 export default function CreateHouseholdScreen() {
-  const [name, setName] = useState('');
-  const [currency, setCurrency] = useState(CURRENCIES[0]);
-  const [timezone, setTimezone] = useState(TIMEZONES[0]);
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [pendingInvites, setPendingInvites] = useState<string[]>([]);
+  const [name, setName] = useState('Foyer Martin');
+  const [kind, setKind] = useState('family');
+  const [inviteNow, setInviteNow] = useState(true);
+  const [email, setEmail] = useState('thomas.martin@email.fr');
+  const [focus, setFocus] = useState<'name' | 'email' | null>(null);
 
-  const canCreate = name.trim().length >= 2;
-
-  const addInvite = () => {
-    const email = inviteEmail.trim();
-    if (!email.includes('@')) return;
-    setPendingInvites((current) => [...current, email]);
-    setInviteEmail('');
-  };
+  const nameOk = name.trim().length >= 2;
+  const emailOk = !inviteNow || isValidEmail(email);
+  const canCreate = nameOk && emailOk;
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
-        <Pressable
-          style={styles.headerButton}
-          accessibilityRole="button"
-          accessibilityLabel="Fermer"
-          onPress={() => router.back()}>
-          <Icon name="close" size={22} color={Serene.onSurface} />
-        </Pressable>
-        <Text style={styles.headerTitle}>Créer un foyer</Text>
-        <View style={styles.headerButton} />
-      </View>
-
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <SafeAreaView style={kitStyles.safe} edges={['top', 'bottom']}>
+      <TopBar title="Créer un foyer" close fallback="/household" />
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={styles.content}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled">
-          <View style={styles.hero}>
-            <View style={styles.heroIcon}>
-              <Icon name="family_restroom" size={30} color={Serene.secondary} />
+          contentContainerStyle={[kitStyles.content, styles.content]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}>
+          <Text style={kitStyles.muted}>
+            Un foyer sert à partager certaines tâches, événements et documents. Vous en serez le propriétaire.
+          </Text>
+
+          <Text style={[kitStyles.label, styles.label]}>Nom du foyer</Text>
+          <TextInput
+            style={[kitStyles.input, focus === 'name' && kitStyles.inputFocused, !nameOk && kitStyles.inputError]}
+            value={name}
+            onChangeText={setName}
+            onFocus={() => setFocus('name')}
+            onBlur={() => setFocus(null)}
+            maxLength={40}
+            placeholder="Ex. Foyer Martin"
+            placeholderTextColor={Serene.onSurfaceVariant}
+            selectionColor={Tint.primary}
+            accessibilityLabel="Nom du foyer"
+          />
+          {!nameOk ? <Text style={styles.error}>Donnez un nom d’au moins 2 caractères.</Text> : null}
+
+          <Text style={[kitStyles.label, styles.label]}>Type de foyer</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+            {KINDS.map((entry) => (
+              <Chip key={entry.key} label={entry.label} icon={entry.icon} selected={kind === entry.key} onPress={() => setKind(entry.key)} />
+            ))}
+          </ScrollView>
+
+          <View style={[kitStyles.card, styles.inviteCard]}>
+            <View style={styles.switchRow}>
+              <Icon name="person_add" size={22} color={Tint.navy} />
+              <View style={styles.flex}>
+                <Text style={kitStyles.label}>Inviter quelqu’un maintenant</Text>
+                <Text style={styles.hint}>Vous pourrez aussi le faire plus tard.</Text>
+              </View>
+              <Switch
+                value={inviteNow}
+                onValueChange={setInviteNow}
+                trackColor={{ false: '#cbd5e1', true: Tint.primary }}
+                thumbColor="#ffffff"
+                {...(Platform.OS === 'web' ? { activeThumbColor: '#ffffff' } : {})}
+                accessibilityLabel="Inviter quelqu’un maintenant"
+              />
             </View>
-            <Text style={styles.heroTitle}>Un espace pour votre foyer</Text>
-            <Text style={styles.heroText}>
-              Coordonnez vos tâches, rendez-vous et documents partagés sans jamais exposer vos
-              données personnelles.
+            {inviteNow ? (
+              <>
+                <TextInput
+                  style={[kitStyles.input, focus === 'email' && kitStyles.inputFocused, !emailOk && kitStyles.inputError]}
+                  value={email}
+                  onChangeText={setEmail}
+                  onFocus={() => setFocus('email')}
+                  onBlur={() => setFocus(null)}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  placeholder="prenom.nom@email.fr"
+                  placeholderTextColor={Serene.onSurfaceVariant}
+                  selectionColor={Tint.primary}
+                  accessibilityLabel="Adresse e-mail à inviter"
+                />
+                {!emailOk ? <Text style={styles.error}>Saisissez une adresse e-mail valide.</Text> : null}
+                <Text style={styles.hint}>Invité comme admin : il pourra aussi gérer les membres.</Text>
+              </>
+            ) : null}
+          </View>
+
+          <View style={[householdStyles.note, styles.note]}>
+            <Icon name="lock" size={20} color={Tint.primary} />
+            <Text style={householdStyles.noteText}>
+              Rien n’est partagé automatiquement : vous choisissez, élément par élément, ce que le foyer peut voir.
             </Text>
           </View>
-
-          <Field label="Nom du foyer" required>
-            <TextInput
-              style={styles.textInput}
-              placeholder="Ex. Foyer Martin"
-              placeholderTextColor={Serene.onSurfaceVariant}
-              value={name}
-              onChangeText={setName}
-              selectionColor={Serene.secondary}
-            />
-          </Field>
-
-          <Field label="Devise">
-            <View style={styles.chipsWrap}>
-              {CURRENCIES.map((option) => {
-                const active = currency === option;
-
-                return (
-                  <Pressable
-                    key={option}
-                    style={[styles.chip, active && styles.chipActive]}
-                    onPress={() => setCurrency(option)}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: active }}>
-                    <Text style={[styles.chipText, active && styles.chipTextActive]}>
-                      {option}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </Field>
-
-          <Field label="Fuseau horaire">
-            <View style={styles.selectCard}>
-              {TIMEZONES.map((option, index) => {
-                const active = timezone === option;
-
-                return (
-                  <View key={option}>
-                    {index > 0 ? <View style={styles.divider} /> : null}
-                    <Pressable
-                      style={styles.radioRow}
-                      onPress={() => setTimezone(option)}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: active }}>
-                      <Text
-                        style={[
-                          styles.radioLabel,
-                          active && styles.radioLabelActive,
-                        ]}>
-                        {option}
-                      </Text>
-                      <View style={[styles.radio, active && styles.radioActive]}>
-                        {active ? <Icon name="check" size={12} color={Serene.onPrimary} /> : null}
-                      </View>
-                    </Pressable>
-                  </View>
-                );
-              })}
-            </View>
-          </Field>
-
-          <Field label="Inviter des membres (optionnel)">
-            <View style={styles.inviteRow}>
-              <View style={styles.inviteInputWrap}>
-                <Icon name="alternate_email" size={18} color={Serene.onSurfaceVariant} />
-                <TextInput
-                  style={styles.inviteInput}
-                  placeholder="email@exemple.fr"
-                  placeholderTextColor={Serene.onSurfaceVariant}
-                  value={inviteEmail}
-                  onChangeText={setInviteEmail}
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                  onSubmitEditing={addInvite}
-                  selectionColor={Serene.secondary}
-                />
-              </View>
-              <Pressable
-                style={styles.inviteButton}
-                onPress={addInvite}
-                accessibilityRole="button"
-                accessibilityLabel="Ajouter l'invitation">
-                <Icon name="add" size={20} color={Serene.onPrimary} />
-              </Pressable>
-            </View>
-
-            {pendingInvites.length > 0 ? (
-              <View style={styles.pendingList}>
-                {pendingInvites.map((email) => (
-                  <View key={email} style={styles.pendingChip}>
-                    <Icon name="mail" size={14} color={Serene.secondary} />
-                    <Text style={styles.pendingText} numberOfLines={1}>
-                      {email}
-                    </Text>
-                    <Pressable
-                      onPress={() =>
-                        setPendingInvites((current) =>
-                          current.filter((item) => item !== email),
-                        )
-                      }
-                      hitSlop={6}
-                      accessibilityLabel="Retirer l'invitation">
-                      <Icon name="close" size={14} color={Serene.onSurfaceVariant} />
-                    </Pressable>
-                  </View>
-                ))}
-              </View>
-            ) : null}
-          </Field>
-
-          <View style={styles.privacyCard}>
-            <Icon name="lock" size={18} color={Serene.secondary} />
-            <View style={styles.privacyBody}>
-              <Text style={styles.privacyTitle}>Vos données restent privées</Text>
-              <Text style={styles.privacyText}>
-                Vous choisissez ce qui est partagé. Les notes personnelles et documents privés
-                ne sont jamais visibles par les autres membres.
-              </Text>
-            </View>
-          </View>
-
-          <Pressable
-            style={[styles.submitButton, !canCreate && styles.submitButtonDisabled]}
-            onPress={() => router.replace('/household')}
-            disabled={!canCreate}
-            accessibilityRole="button">
-            <Icon name="group_add" size={18} color={Serene.onPrimary} />
-            <Text style={styles.submitButtonText}>Créer le foyer</Text>
-          </Pressable>
-
-          <Pressable style={styles.cancelButton} onPress={() => router.back()}>
-            <Text style={styles.cancelButtonText}>Plus tard</Text>
-          </Pressable>
         </ScrollView>
+
+        <View style={styles.footer}>
+          <PrimaryButton
+            label="Créer le foyer"
+            icon="add_home"
+            disabled={!canCreate}
+            onPress={() => {
+              householdActions.createHousehold(name, inviteNow ? email : undefined);
+              householdActions.setFlash({
+                text: inviteNow ? `Foyer créé • invitation envoyée à ${email.trim()}` : 'Foyer créé',
+              });
+              router.replace('/household');
+            }}
+          />
+        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
-function Field({
-  label,
-  required,
-  children,
-}: {
-  label: string;
-  required?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <View style={styles.field}>
-      <Text style={styles.fieldLabel}>
-        {label}
-        {required ? <Text style={styles.required}> *</Text> : null}
-      </Text>
-      {children}
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: Serene.surface,
-  },
   flex: {
     flex: 1,
   },
-  header: {
-    height: 56,
-    paddingHorizontal: Space.gutter,
+  content: {
+    paddingTop: 4,
+    paddingBottom: 24,
+  },
+  label: {
+    marginTop: 20,
+    marginBottom: 8,
+  },
+  chips: {
+    gap: 8,
+  },
+  inviteCard: {
+    marginTop: 20,
+    gap: 12,
+  },
+  switchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Serene.surface,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Serene.surfaceContainerHigh,
+    gap: 12,
   },
-  headerButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    flex: 1,
-    textAlign: 'center',
-    ...Typography.titleMd,
-    color: Serene.onSurface,
-  },
-  scroll: {
-    flex: 1,
-  },
-  content: {
-    paddingHorizontal: Space.gutter,
-    paddingTop: Space.md,
-    paddingBottom: Space.lg,
-    gap: Space.md,
-  },
-  hero: {
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: Space.sm,
-  },
-  heroIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.secondaryContainer,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
-  },
-  heroTitle: {
-    ...Typography.headlineSm,
-    color: Serene.onSurface,
-  },
-  heroText: {
+  hint: {
     fontFamily: FontFamily.body,
     fontSize: 13,
     lineHeight: 18,
     color: Serene.onSurfaceVariant,
-    textAlign: 'center',
-    maxWidth: 320,
   },
-  field: {
-    gap: 6,
-  },
-  fieldLabel: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 11,
-    lineHeight: 14,
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
-    color: Serene.onSurfaceVariant,
-  },
-  required: {
+  error: {
+    marginTop: 6,
+    fontFamily: FontFamily.bodyMedium,
+    fontSize: 13,
+    lineHeight: 18,
     color: Serene.error,
   },
-  textInput: {
-    minHeight: 48,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.surfaceContainerLowest,
-    fontFamily: FontFamily.body,
-    fontSize: 15,
-    color: Serene.onSurface,
-    ...Shadow.card,
+  note: {
+    marginTop: 18,
   },
-  chipsWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.surfaceContainerLowest,
-    ...Shadow.card,
-  },
-  chipActive: {
-    backgroundColor: Serene.primary,
-  },
-  chipText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurfaceVariant,
-  },
-  chipTextActive: {
-    color: Serene.onPrimary,
-  },
-  selectCard: {
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.surfaceContainerLowest,
-    paddingHorizontal: 12,
-    ...Shadow.card,
-  },
-  radioRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-    paddingVertical: 12,
-  },
-  radioLabel: {
-    fontFamily: FontFamily.body,
-    fontSize: 14,
-    lineHeight: 19,
-    color: Serene.onSurfaceVariant,
-  },
-  radioLabelActive: {
-    fontFamily: FontFamily.bodySemiBold,
-    color: Serene.onSurface,
-  },
-  radio: {
-    width: 20,
-    height: 20,
-    borderRadius: Radius.full,
-    borderWidth: 1.5,
-    borderColor: Serene.outlineVariant,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  radioActive: {
-    borderWidth: 0,
-    backgroundColor: Serene.secondary,
-  },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: Serene.surfaceContainerHigh,
-  },
-  inviteRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  inviteInputWrap: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    height: 46,
-    paddingHorizontal: 12,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.surfaceContainerLowest,
-    ...Shadow.card,
-  },
-  inviteInput: {
-    flex: 1,
-    height: 46,
-    fontFamily: FontFamily.body,
-    fontSize: 14,
-    color: Serene.onSurface,
-  },
-  inviteButton: {
-    width: 46,
-    height: 46,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...Shadow.card,
-  },
-  pendingList: {
-    gap: 6,
-    marginTop: 2,
-  },
-  pendingChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: Radius.md,
-    backgroundColor: Serene.surfaceContainerLow,
-  },
-  pendingText: {
-    flex: 1,
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 12,
-    lineHeight: 16,
-    color: Serene.onSurface,
-  },
-  privacyCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    padding: 12,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.secondaryContainer,
-  },
-  privacyBody: {
-    flex: 1,
-  },
-  privacyTitle: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSecondaryContainer,
-  },
-  privacyText: {
-    fontFamily: FontFamily.body,
-    fontSize: 12,
-    lineHeight: 17,
-    color: Serene.onSecondaryContainer,
-    marginTop: 1,
-  },
-  submitButton: {
-    height: 48,
-    marginTop: Space.sm,
-    borderRadius: Radius.xl,
-    backgroundColor: Serene.primary,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    ...Shadow.floating,
-  },
-  submitButtonDisabled: {
-    backgroundColor: Serene.surfaceDim,
-  },
-  submitButtonText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 14,
-    lineHeight: 20,
-    color: Serene.onPrimary,
-  },
-  cancelButton: {
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cancelButtonText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurfaceVariant,
+  footer: {
+    width: '100%',
+    maxWidth: 560,
+    alignSelf: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Tint.border,
+    backgroundColor: Tint.softer,
   },
 });

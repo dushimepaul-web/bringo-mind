@@ -1,456 +1,285 @@
-// S-22 - Paramètres de notifications | Module M10 Notifications | Phase S8
-import { router } from 'expo-router';
+// S-22 - Réglages des notifications | Module M10 Notifications | Phase S8
+// Canaux, types (mêmes éléments que dans l'app), heures de silence réglables à la roue.
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icon';
-import { FontFamily, Radius, Serene, Shadow, Space, Typography } from '@/constants/design';
+import { PrimaryButton, SecondaryButton, TopBar, UndoToast, kitStyles } from '@/components/ui/kit';
+import { SettingsRow, SettingsSection, ToggleSwitch } from '@/components/ui/settings';
+import { TimeWheelSheet } from '@/components/ui/wheel-picker';
+import { FontFamily, Serene, Tint } from '@/constants/design';
+
+type Settings = {
+  enabled: boolean;
+  channels: Record<'push' | 'email' | 'sms', boolean>;
+  types: Record<'tasks' | 'reminders' | 'events' | 'documents' | 'household' | 'kora' | 'product', boolean>;
+  quiet: boolean;
+  quietStart: [number, number];
+  quietEnd: [number, number];
+  critical: boolean;
+};
+
+const CHANNELS: { key: keyof Settings['channels']; icon: string; title: string; subtitle: string }[] = [
+  { key: 'push', icon: 'phone_iphone', title: 'Notifications sur le téléphone', subtitle: 'iPhone 15 et MacBook Air' },
+  { key: 'email', icon: 'mail', title: 'E-mail', subtitle: 'claire.martin@email.fr' },
+  { key: 'sms', icon: 'sms', title: 'SMS', subtitle: '+33 6 12 34 56 78 • urgences uniquement' },
+];
+
+const TYPES: { key: keyof Settings['types']; icon: string; title: string; subtitle: string }[] = [
+  { key: 'tasks', icon: 'task_alt', title: 'Tâches', subtitle: 'Échéances du jour et retards' },
+  { key: 'reminders', icon: 'notifications', title: 'Rappels', subtitle: 'À l’heure que vous avez choisie' },
+  { key: 'events', icon: 'event', title: 'Événements', subtitle: 'Avant chaque événement et en cas de changement' },
+  { key: 'documents', icon: 'folder', title: 'Documents', subtitle: 'Analyse terminée, document partagé' },
+  { key: 'household', icon: 'family_restroom', title: 'Foyer', subtitle: 'Invitations et éléments partagés' },
+  { key: 'kora', icon: 'auto_awesome', title: 'Suggestions de Kora', subtitle: 'Conseils et résumé du matin' },
+  { key: 'product', icon: 'campaign', title: 'Nouveautés', subtitle: 'Évolutions de Bringo Mind' },
+];
+
+const INITIAL: Settings = {
+  enabled: true,
+  channels: { push: true, email: true, sms: false },
+  types: { tasks: true, reminders: true, events: true, documents: true, household: true, kora: false, product: false },
+  quiet: true,
+  quietStart: [22, 0],
+  quietEnd: [7, 0],
+  critical: true,
+};
+
+// Démo : les réglages enregistrés restent en mémoire tant que l'app est ouverte.
+let savedSettings: Settings = INITIAL;
+
+const hhmm = ([hours, minutes]: [number, number]) => `${String(hours).padStart(2, '0')}h${String(minutes).padStart(2, '0')}`;
 
 export default function NotificationSettingsScreen() {
-  const [master, setMaster] = useState(true);
-  const [push, setPush] = useState(true);
-  const [email, setEmail] = useState(true);
-  const [sms, setSms] = useState(false);
-  const [silence, setSilence] = useState(true);
-  const [criticalDuringSilence, setCriticalDuringSilence] = useState(true);
+  const [saved, setSaved] = useState<Settings>(savedSettings);
+  const [draft, setDraft] = useState<Settings>(savedSettings);
+  const [picker, setPicker] = useState<'start' | 'end' | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
 
-  const [types, setTypes] = useState<Record<string, boolean>>({
-    tasks: true,
-    events: true,
-    documents: true,
-    household: true,
-    assistant: false,
-    product: false,
-  });
+  const dirty = JSON.stringify(draft) !== JSON.stringify(saved);
+  const off = !draft.enabled;
+  const activeChannels = Object.values(draft.channels).filter(Boolean).length;
 
-  const toggleType = (key: string) => {
-    setTypes((current) => ({ ...current, [key]: !current[key] }));
-  };
+  const setChannel = (key: keyof Settings['channels'], value: boolean) =>
+    setDraft((current) => ({ ...current, channels: { ...current.channels, [key]: value } }));
+  const setType = (key: keyof Settings['types'], value: boolean) =>
+    setDraft((current) => ({ ...current, types: { ...current.types, [key]: value } }));
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
-        <Pressable
-          style={styles.headerButton}
-          accessibilityRole="button"
-          accessibilityLabel="Retour"
-          onPress={() => router.back()}>
-          <Icon name="arrow_back" size={22} color={Serene.onSurface} />
-        </Pressable>
-        <Text style={styles.headerTitle}>Notifications</Text>
-        <Pressable style={styles.saveButton} onPress={() => router.back()}>
-          <Text style={styles.saveButtonText}>Enregistrer</Text>
-        </Pressable>
-      </View>
-
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}>
-        <View style={styles.masterCard}>
-          <View style={styles.masterIcon}>
-            <Icon name="notifications_active" size={24} color={Serene.onPrimary} />
+    <SafeAreaView style={kitStyles.safe} edges={['top', 'bottom']}>
+      <TopBar title="Notifications" fallback="/profile" />
+      <ScrollView contentContainerStyle={[kitStyles.content, styles.content]} showsVerticalScrollIndicator={false}>
+        <View style={[kitStyles.card, styles.master]}>
+          <View style={[styles.masterIcon, off && styles.masterIconOff]}>
+            <Icon name={off ? 'notifications_off' : 'notifications_active'} size={24} color={off ? Tint.navy : Serene.onPrimary} />
           </View>
-          <View style={styles.masterBody}>
-            <Text style={styles.masterTitle}>Activer les notifications</Text>
-            <Text style={styles.masterText}>
-              Recevez les rappels et mises à jour importantes
-            </Text>
+          <View style={styles.flex}>
+            <Text style={kitStyles.title}>Activer les notifications</Text>
+            <Text style={styles.meta}>{off ? 'Vous ne recevrez plus rien de Bringo Mind' : 'Rappels et mises à jour importantes'}</Text>
           </View>
-          <Switch
-            value={master}
-            onValueChange={setMaster}
-            trackColor={{ false: Serene.surfaceContainerHigh, true: Serene.secondary }}
-            thumbColor={Serene.surfaceContainerLowest}
+          <ToggleSwitch
+            value={draft.enabled}
+            label="Activer les notifications"
+            onValueChange={(value) => setDraft((current) => ({ ...current, enabled: value }))}
           />
         </View>
 
-        <View style={master ? undefined : styles.disabledSection}>
-          <SectionTitle icon="send" title="Canaux" />
-          <View style={styles.card}>
-            <ToggleRow
-              icon="phone_iphone"
-              label="Notifications push"
-              hint="Sur tous vos appareils"
-              value={push}
-              onChange={setPush}
-            />
-            <View style={styles.divider} />
-            <ToggleRow
-              icon="mail"
-              label="E-mail"
-              hint="claire.martin@email.fr"
-              value={email}
-              onChange={setEmail}
-            />
-            <View style={styles.divider} />
-            <ToggleRow
-              icon="sms"
-              label="SMS"
-              hint="+33 6 12 34 56 78 • urgences uniquement"
-              value={sms}
-              onChange={setSms}
-            />
-          </View>
-
-          <SectionTitle icon="category" title="Types de notifications" />
-          <View style={styles.card}>
-            <ToggleRow
-              icon="task_alt"
-              label="Tâches"
-              hint="Échéances, retards et rappels"
-              value={types.tasks}
-              onChange={() => toggleType('tasks')}
-            />
-            <View style={styles.divider} />
-            <ToggleRow
-              icon="event"
-              label="Rendez-vous"
-              hint="Nouveaux événements et modifications"
-              value={types.events}
-              onChange={() => toggleType('events')}
-            />
-            <View style={styles.divider} />
-            <ToggleRow
-              icon="folder"
-              label="Documents"
-              hint="Analyses IA terminées, partages"
-              value={types.documents}
-              onChange={() => toggleType('documents')}
-            />
-            <View style={styles.divider} />
-            <ToggleRow
-              icon="family_restroom"
-              label="Foyer"
-              hint="Invitations et activité partagée"
-              value={types.household}
-              onChange={() => toggleType('household')}
-            />
-            <View style={styles.divider} />
-            <ToggleRow
-              icon="auto_awesome"
-              label="Suggestions de l’assistant"
-              hint="Conseils et résumés de Kora"
-              value={types.assistant}
-              onChange={() => toggleType('assistant')}
-            />
-            <View style={styles.divider} />
-            <ToggleRow
-              icon="campaign"
-              label="Nouveautés produit"
-              hint="Conseils et évolutions de Bringo Mind"
-              value={types.product}
-              onChange={() => toggleType('product')}
-            />
-          </View>
-
-          <SectionTitle icon="bedtime" title="Heures de silence" />
-          <View style={styles.silenceCard}>
-            <ToggleRow
-              icon="do_not_disturb_on"
-              label="Activer les heures de silence"
-              hint="Aucune notification pendant cette plage"
-              value={silence}
-              onChange={setSilence}
-            />
-
-            {silence ? (
-              <>
-                <View style={styles.divider} />
-                <View style={styles.timeRow}>
-                  <View style={styles.timeBox}>
-                    <Text style={styles.timeLabel}>De</Text>
-                    <Text style={styles.timeValue}>22:00</Text>
-                  </View>
-                  <Icon name="arrow_forward" size={18} color={Serene.outlineVariant} />
-                  <View style={styles.timeBox}>
-                    <Text style={styles.timeLabel}>À</Text>
-                    <Text style={styles.timeValue}>07:00</Text>
-                  </View>
-                  <View style={styles.timezonePill}>
-                    <Text style={styles.timezoneText}>Europe/Paris</Text>
-                  </View>
-                </View>
-                <View style={styles.divider} />
-                <ToggleRow
-                  icon="priority_high"
-                  label="Rappels critiques autorisés"
-                  hint="Laisser passer les urgences pendant le silence"
-                  value={criticalDuringSilence}
-                  onChange={setCriticalDuringSilence}
+        <SettingsSection title="Canaux" icon="send" footer={!off && activeChannels === 0 ? 'Choisissez au moins un canal pour recevoir vos rappels.' : undefined}>
+          {CHANNELS.map((channel, index) => (
+            <SettingsRow
+              key={channel.key}
+              first={index === 0}
+              icon={channel.icon}
+              title={channel.title}
+              subtitle={channel.subtitle}
+              disabled={off}
+              right={
+                <ToggleSwitch
+                  value={draft.channels[channel.key]}
+                  disabled={off}
+                  label={channel.title}
+                  onValueChange={(value) => setChannel(channel.key, value)}
                 />
-              </>
-            ) : null}
-          </View>
-        </View>
+              }
+            />
+          ))}
+        </SettingsSection>
 
-        <View style={styles.infoCard}>
-          <Icon name="info" size={16} color={Serene.onSurfaceVariant} />
-          <Text style={styles.infoText}>
-            Les notifications critiques concernent les rappels de tâches en retard et les
-            échéances du jour. Vous pouvez les désactiver à tout moment.
-          </Text>
-        </View>
+        <SettingsSection title="Types de notifications" icon="category">
+          {TYPES.map((type, index) => (
+            <SettingsRow
+              key={type.key}
+              first={index === 0}
+              icon={type.icon}
+              title={type.title}
+              subtitle={type.subtitle}
+              disabled={off}
+              right={
+                <ToggleSwitch
+                  value={draft.types[type.key]}
+                  disabled={off}
+                  label={type.title}
+                  onValueChange={(value) => setType(type.key, value)}
+                />
+              }
+            />
+          ))}
+        </SettingsSection>
 
-        <Pressable style={styles.testButton} accessibilityRole="button">
-          <Icon name="notifications" size={18} color={Serene.onSurface} />
-          <Text style={styles.testButtonText}>Envoyer une notification de test</Text>
-        </Pressable>
+        <SettingsSection title="Heures de silence" icon="bedtime" footer="Heure de Paris (UTC+2). Les rappels critiques concernent les tâches en retard et les échéances du jour.">
+          <SettingsRow
+            first
+            icon="do_not_disturb_on"
+            title="Activer les heures de silence"
+            subtitle="Aucune notification pendant cette plage"
+            disabled={off}
+            right={
+              <ToggleSwitch
+                value={draft.quiet}
+                disabled={off}
+                label="Activer les heures de silence"
+                onValueChange={(value) => setDraft((current) => ({ ...current, quiet: value }))}
+              />
+            }
+          />
+          {draft.quiet && !off ? (
+            <View style={styles.range}>
+              <TimePill label="De" value={hhmm(draft.quietStart)} onPress={() => setPicker('start')} />
+              <Icon name="arrow_forward" size={20} color={Serene.onSurfaceVariant} />
+              <TimePill label="À" value={hhmm(draft.quietEnd)} onPress={() => setPicker('end')} />
+            </View>
+          ) : null}
+          <SettingsRow
+            icon="priority_high"
+            title="Laisser passer les rappels critiques"
+            subtitle="Même pendant les heures de silence"
+            disabled={off || !draft.quiet}
+            right={
+              <ToggleSwitch
+                value={draft.critical}
+                disabled={off || !draft.quiet}
+                label="Laisser passer les rappels critiques"
+                onValueChange={(value) => setDraft((current) => ({ ...current, critical: value }))}
+              />
+            }
+          />
+        </SettingsSection>
+
+        <SecondaryButton
+          label="Envoyer une notification de test"
+          icon="notifications"
+          style={styles.test}
+          onPress={() => setToast(off ? 'Les notifications sont désactivées' : 'Notification de test envoyée sur cet iPhone')}
+        />
       </ScrollView>
+
+      <View style={styles.footer}>
+        <PrimaryButton
+          label={dirty ? 'Enregistrer' : 'Réglages enregistrés'}
+          icon="check"
+          disabled={!dirty}
+          onPress={() => {
+            savedSettings = draft;
+            setSaved(draft);
+            setToast('Réglages des notifications enregistrés');
+          }}
+        />
+      </View>
+
+      <TimeWheelSheet
+        visible={picker === 'start'}
+        title="Début du silence"
+        hours={draft.quietStart[0]}
+        minutes={draft.quietStart[1]}
+        onConfirm={(hours, minutes) => setDraft((current) => ({ ...current, quietStart: [hours, minutes] }))}
+        onClose={() => setPicker(null)}
+      />
+      <TimeWheelSheet
+        visible={picker === 'end'}
+        title="Fin du silence"
+        hours={draft.quietEnd[0]}
+        minutes={draft.quietEnd[1]}
+        onConfirm={(hours, minutes) => setDraft((current) => ({ ...current, quietEnd: [hours, minutes] }))}
+        onClose={() => setPicker(null)}
+      />
+
+      {toast ? <UndoToast key={toast} text={toast} onHide={() => setToast(null)} bottom={100} /> : null}
     </SafeAreaView>
   );
 }
 
-function SectionTitle({ icon, title }: { icon: string; title: string }) {
+function TimePill({ label, value, onPress }: { label: string; value: string; onPress: () => void }) {
   return (
-    <View style={styles.sectionHeader}>
-      <Icon name={icon} size={17} color={Serene.onSurfaceVariant} />
-      <Text style={styles.sectionTitle}>{title}</Text>
-    </View>
-  );
-}
-
-function ToggleRow({
-  icon,
-  label,
-  hint,
-  value,
-  onChange,
-}: {
-  icon: string;
-  label: string;
-  hint: string;
-  value: boolean;
-  onChange: (value: boolean) => void;
-}) {
-  return (
-    <View style={styles.row}>
-      <View style={styles.rowIcon}>
-        <Icon name={icon} size={18} color={Serene.onSurfaceVariant} />
-      </View>
-      <View style={styles.rowBody}>
-        <Text style={styles.rowLabel}>{label}</Text>
-        <Text style={styles.rowHint}>{hint}</Text>
-      </View>
-      <Switch
-        value={value}
-        onValueChange={onChange}
-        trackColor={{ false: Serene.surfaceContainerHigh, true: Serene.secondary }}
-        thumbColor={Serene.surfaceContainerLowest}
-      />
+    <View style={styles.pillWrap}>
+      <Text style={styles.pillLabel}>{label}</Text>
+      <SecondaryButton label={value} onPress={onPress} style={styles.pill} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: Serene.surface,
-  },
-  header: {
-    height: 56,
-    paddingHorizontal: Space.gutter,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Serene.surface,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Serene.surfaceContainerHigh,
-  },
-  headerButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    flex: 1,
-    textAlign: 'center',
-    ...Typography.titleMd,
-    color: Serene.onSurface,
-  },
-  saveButton: {
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-  },
-  saveButtonText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.secondary,
-  },
-  scroll: {
+  flex: {
     flex: 1,
   },
   content: {
-    paddingHorizontal: Space.gutter,
-    paddingTop: Space.md,
-    paddingBottom: Space.lg,
+    paddingTop: 4,
+    paddingBottom: 24,
   },
-  masterCard: {
+  master: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    padding: 14,
-    borderRadius: Radius.xl,
-    backgroundColor: Serene.surfaceContainerLowest,
-    ...Shadow.card,
   },
   masterIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.primary,
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: Tint.black,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  masterBody: {
-    flex: 1,
-    minWidth: 0,
+  masterIconOff: {
+    backgroundColor: Tint.soft,
   },
-  masterTitle: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 14,
-    lineHeight: 19,
-    color: Serene.onSurface,
-  },
-  masterText: {
+  meta: {
     fontFamily: FontFamily.body,
-    fontSize: 11,
-    lineHeight: 15,
-    color: Serene.onSurfaceVariant,
-  },
-  disabledSection: {
-    opacity: 0.45,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: Space.lg,
-    marginBottom: Space.sm,
-  },
-  sectionTitle: {
-    ...Typography.headlineSm,
-    color: Serene.onSurface,
-  },
-  card: {
-    paddingHorizontal: Space.sm,
-    borderRadius: Radius.xl,
-    backgroundColor: Serene.surfaceContainerLowest,
-    ...Shadow.card,
-  },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: Serene.surfaceContainerHigh,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 4,
-  },
-  rowIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: Radius.md,
-    backgroundColor: Serene.surfaceContainerLow,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  rowBody: {
-    flex: 1,
-    minWidth: 0,
-  },
-  rowLabel: {
-    fontFamily: FontFamily.bodyMedium,
     fontSize: 13,
     lineHeight: 18,
-    color: Serene.onSurface,
-  },
-  rowHint: {
-    fontFamily: FontFamily.body,
-    fontSize: 11,
-    lineHeight: 15,
     color: Serene.onSurfaceVariant,
   },
-  silenceCard: {
-    paddingHorizontal: Space.sm,
-    borderRadius: Radius.xl,
-    backgroundColor: Serene.surfaceContainerLowest,
-    ...Shadow.card,
-  },
-  timeRow: {
+  range: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 4,
-  },
-  timeBox: {
+    alignItems: 'flex-end',
+    gap: 12,
     paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.surfaceContainerLow,
-    alignItems: 'center',
+    paddingBottom: 14,
   },
-  timeLabel: {
-    fontFamily: FontFamily.body,
-    fontSize: 9,
-    lineHeight: 13,
-    color: Serene.onSurfaceVariant,
-  },
-  timeValue: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 17,
-    lineHeight: 22,
-    color: Serene.onSurface,
-  },
-  timezonePill: {
-    marginLeft: 'auto',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.surfaceContainerHigh,
-  },
-  timezoneText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 10,
-    lineHeight: 14,
-    color: Serene.onSurfaceVariant,
-  },
-  infoCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    marginTop: Space.lg,
-    padding: 12,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.surfaceContainerLow,
-  },
-  infoText: {
+  pillWrap: {
     flex: 1,
-    fontFamily: FontFamily.body,
-    fontSize: 12,
-    lineHeight: 17,
-    color: Serene.onSurfaceVariant,
+    gap: 4,
   },
-  testButton: {
-    height: 44,
-    marginTop: 10,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.surfaceContainerLowest,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    ...Shadow.card,
-  },
-  testButtonText: {
-    fontFamily: FontFamily.bodyMedium,
+  pillLabel: {
+    fontFamily: FontFamily.bodySemiBold,
     fontSize: 13,
     lineHeight: 18,
-    color: Serene.onSurface,
+    color: Serene.onSurfaceVariant,
+  },
+  pill: {
+    backgroundColor: Tint.soft,
+  },
+  test: {
+    marginTop: 22,
+  },
+  footer: {
+    width: '100%',
+    maxWidth: 560,
+    alignSelf: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Tint.border,
+    backgroundColor: Tint.softer,
   },
 });

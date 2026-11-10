@@ -121,8 +121,8 @@ export default function ReminderFormScreen() {
   const [draft, setDraft] = useState<ReminderDraft>(() => {
     if (existing) return draftOf(existing);
     const base = demoDraft();
-    // Rappel créé depuis une tâche ou un événement : déjà rattaché, à l'heure proposée.
-    if ((linkKind === 'event' || linkKind === 'task') && linkId && linkTitle) {
+    // Rappel créé depuis une tâche, un événement ou un document : déjà rattaché, à l'heure proposée.
+    if ((linkKind === 'event' || linkKind === 'task' || linkKind === 'document') && linkId && linkTitle) {
       return {
         ...base,
         title: linkTitle,
@@ -440,7 +440,7 @@ export default function ReminderFormScreen() {
               {linkTarget ? (
                 <Pressable hitSlop={6} accessibilityRole="link" onPress={() => router.push(linkTarget)}>
                   <Text style={kitStyles.link}>
-                    Ouvrir {draft.link.kind === 'task' ? 'la tâche' : 'le rendez-vous'}
+                    Ouvrir {draft.link.kind === 'task' ? 'la tâche' : draft.link.kind === 'document' ? 'le document' : 'l’événement'}
                   </Text>
                 </Pressable>
               ) : null}
@@ -515,7 +515,7 @@ export default function ReminderFormScreen() {
       <BottomSheet
         visible={sheet === 'link'}
         title="Associer le rappel"
-        subtitle="Choisissez une tâche ou un rendez-vous."
+        subtitle="Choisissez une tâche ou un événement."
         onClose={() => setSheet(null)}>
         <ScrollView style={styles.sheetList} contentContainerStyle={styles.sheetListContent}>
           <SheetOption

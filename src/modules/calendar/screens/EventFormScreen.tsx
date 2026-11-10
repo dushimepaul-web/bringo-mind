@@ -72,7 +72,14 @@ function draftOf(event: CalendarEvent): EventDraft {
 
 export default function EventFormScreen() {
   const pathname = usePathname();
-  const params = useLocalSearchParams<{ id?: string; start?: string; date?: string }>();
+  const params = useLocalSearchParams<{
+    id?: string;
+    start?: string;
+    date?: string;
+    title?: string;
+    allDay?: string;
+    description?: string;
+  }>();
   const isEdit = pathname.includes('/edit');
   const existing = useEvent(isEdit ? params.id : '__new__');
   const { events } = useCalendarState();
@@ -83,7 +90,19 @@ export default function EventFormScreen() {
     const start = params.start ? new Date(params.start) : undefined;
     const day = params.date ? new Date(params.date) : undefined;
     // Un jour passé n'est pas proposé : on se cale sur demain.
-    return demoDraft(day && dayOffset(day) >= 0 ? day : undefined, start);
+    const base = demoDraft(day && dayOffset(day) >= 0 ? day : undefined, start);
+    // Événement créé depuis un document (ex. échéance d'une facture).
+    if (params.title) {
+      return {
+        ...base,
+        title: params.title,
+        description: params.description ?? '',
+        location: '',
+        allDay: params.allDay === '1',
+        end: params.allDay === '1' ? base.start : base.end,
+      };
+    }
+    return base;
   });
   const [focused, setFocused] = useState<'title' | 'location' | 'description' | null>(null);
   const [titleTouched, setTitleTouched] = useState(false);

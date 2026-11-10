@@ -40,7 +40,7 @@ export function AppHeader() {
           accessibilityRole="button"
           accessibilityLabel="Mon profil"
           onPress={() => router.push('/profile')}>
-          <Icon name="person" size={20} color={Serene.onPrimary} />
+          <Text style={styles.avatarText}>CM</Text>
         </Pressable>
       </View>
     </View>
@@ -127,8 +127,14 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: Radius.full,
-    backgroundColor: Tint.black,
+    backgroundColor: Tint.primary,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  avatarText: {
+    fontFamily: FontFamily.headingBold,
+    fontSize: 14,
+    lineHeight: 18,
+    color: Serene.onPrimary,
   },
 });

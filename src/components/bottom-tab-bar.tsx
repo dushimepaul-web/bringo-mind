@@ -31,6 +31,12 @@ const HIDDEN_ON = [
   '/reminders/edit',
   '/calendar/add',
   '/calendar/edit',
+  '/household/invite',
+  '/household/create',
+  '/household/transfer',
+  '/household/invitation',
+  '/profile/preferences',
+  '/notifications/settings',
 ];
 
 export function BottomTabBar() {

@@ -1,559 +1,480 @@
-// S-20 - Paramètres du profil | Module M09 Profil et paramètres | Phase S8
-import { router } from 'expo-router';
-import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+// S-20 - Profil et paramètres | Module M09 Profil | Phase S8
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icon';
-import { FontFamily, Radius, Serene, Shadow, Space, Typography } from '@/constants/design';
+import {
+  BottomSheet,
+  PrimaryButton,
+  SecondaryButton,
+  Tag,
+  TopBar,
+  UndoToast,
+  kitStyles,
+} from '@/components/ui/kit';
+import { SettingsRow, SettingsSection, ToggleSwitch } from '@/components/ui/settings';
+import { FontFamily, Radius, Serene, Tint } from '@/constants/design';
+import { formatLongDay } from '@/lib/demo-dates';
+
+import { CALENDAR_VIEWS, CURRENCIES, LANGUAGES, STATS, THEMES, TIMEZONES, USER } from '../data';
+import { profileActions, useProfileState } from '../store';
+
+type Sheet = 'logout' | 'twoFactorOff' | 'sessions' | null;
 
 export default function ProfileSettingsScreen() {
-  const [biometric, setBiometric] = useState(true);
-  const [twoFactor, setTwoFactor] = useState(false);
+  const { preferences, biometric, twoFactor, sessions, deletionAt, flash } = useProfileState();
+  const [sheet, setSheet] = useState<Sheet>(null);
+  const [toast, setToast] = useState<{ text: string; undo?: () => void } | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (flash) {
+        setToast(flash);
+        profileActions.setFlash(null);
+      }
+    }, [flash]),
+  );
+
+  const language = LANGUAGES.find((entry) => entry.key === preferences.language)?.title;
+  const zone = TIMEZONES.find((entry) => entry.key === preferences.timezone)?.title;
+  const currency = CURRENCIES.find((entry) => entry.key === preferences.currency)?.label.split(' ')[0];
+  const theme = THEMES.find((entry) => entry.key === preferences.theme)?.label.toLowerCase();
+  const view = CALENDAR_VIEWS.find((entry) => entry.key === preferences.calendarView)?.label.toLowerCase();
+  const otherSessions = sessions.filter((session) => !session.current);
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
-        <Pressable
-          style={styles.headerButton}
-          accessibilityRole="button"
-          accessibilityLabel="Retour"
-          onPress={() => router.back()}>
-          <Icon name="arrow_back" size={22} color={Serene.onSurface} />
-        </Pressable>
-        <Text style={styles.headerTitle}>Mon profil</Text>
-        <Pressable
-          style={styles.headerButton}
-          accessibilityLabel="Modifier le profil"
-          onPress={() => router.push('/profile/complete')}>
-          <Icon name="edit" size={20} color={Serene.onSurfaceVariant} />
-        </Pressable>
-      </View>
-
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}>
-        <View style={styles.heroCard}>
-          <View style={styles.avatarWrap}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarInitial}>C</Text>
+    <SafeAreaView style={kitStyles.safe} edges={['top']}>
+      <TopBar title="Mon profil" />
+      <ScrollView contentContainerStyle={[kitStyles.content, styles.content]} showsVerticalScrollIndicator={false}>
+        {deletionAt ? (
+          <View style={styles.deletion}>
+            <Icon name="warning" size={22} color={Serene.error} />
+            <View style={styles.flex}>
+              <Text style={styles.deletionTitle}>Suppression du compte prévue</Text>
+              <Text style={styles.deletionText}>Le {formatLongDay(deletionAt).toLowerCase()}. Vous pouvez encore changer d’avis.</Text>
             </View>
-            <Pressable style={styles.cameraBadge} accessibilityLabel="Changer la photo">
-              <Icon name="photo_camera" size={14} color={Serene.onPrimary} />
+            <Pressable
+              hitSlop={8}
+              accessibilityRole="button"
+              onPress={() => {
+                profileActions.cancelDeletion();
+                setToast({ text: 'Suppression annulée : votre compte est conservé' });
+              }}>
+              <Text style={styles.deletionAction}>Annuler</Text>
             </Pressable>
           </View>
+        ) : null}
 
-          <Text style={styles.name}>Claire Martin</Text>
-          <Text style={styles.email}>claire.martin@email.fr</Text>
-
-          <View style={styles.heroPills}>
-            <View style={styles.planPill}>
-              <Icon name="workspace_premium" size={12} color={Serene.onSecondaryContainer} />
-              <Text style={styles.planPillText}>Premium</Text>
+        {/* Identité */}
+        <View style={[kitStyles.card, styles.hero]}>
+          <Pressable
+            style={({ pressed }) => [styles.avatarWrap, pressed && styles.pressed]}
+            accessibilityRole="button"
+            accessibilityLabel="Modifier la photo et les informations"
+            onPress={() => router.push('/profile/complete')}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>CM</Text>
             </View>
-            <View style={styles.sincePill}>
-              <Text style={styles.sincePillText}>Membre depuis mai 2023</Text>
+            <View style={styles.avatarEdit}>
+              <Icon name="photo_camera" size={16} color={Serene.onPrimary} />
             </View>
+          </Pressable>
+          <Text style={styles.name}>{USER.name}</Text>
+          <Text style={kitStyles.muted}>{USER.email}</Text>
+          <View style={styles.tags}>
+            <Tag label={USER.plan} icon="workspace_premium" tone="teal" />
+            <Tag label={`Membre depuis ${USER.memberSince}`} />
           </View>
-
-          <View style={styles.statsRow}>
-            <View style={styles.stat}>
-              <Text style={styles.statValue}>42</Text>
-              <Text style={styles.statLabel}>Tâches</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.stat}>
-              <Text style={styles.statValue}>18</Text>
-              <Text style={styles.statLabel}>Documents</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.stat}>
-              <Text style={styles.statValue}>1</Text>
-              <Text style={styles.statLabel}>Foyer</Text>
-            </View>
+          <View style={styles.stats}>
+            {STATS.map((stat, index) => (
+              <Pressable
+                key={stat.key}
+                style={({ pressed }) => [styles.stat, index > 0 && styles.statBorder, pressed && styles.pressed]}
+                accessibilityRole="button"
+                accessibilityLabel={`${stat.value} ${stat.label}`}
+                onPress={() => router.push(stat.href)}>
+                <Text style={styles.statValue}>{stat.value}</Text>
+                <Text style={styles.statLabel}>{stat.label}</Text>
+              </Pressable>
+            ))}
           </View>
         </View>
 
-        <SectionTitle title="Compte" />
-        <View style={styles.card}>
-          <SettingRow
+        <SettingsSection title="Compte" icon="person">
+          <SettingsRow
+            first
             icon="badge"
-            label="Informations personnelles"
-            hint="Nom, prénom, téléphone"
+            title="Informations personnelles"
+            subtitle={`${USER.name} • ${USER.phone}`}
             onPress={() => router.push('/profile/complete')}
           />
-          <View style={styles.divider} />
-          <SettingRow
+          <SettingsRow
             icon="mail"
-            label="Adresse e-mail"
-            hint="claire.martin@email.fr"
-            badge="Vérifiée"
-            badgeTone="success"
+            title="Adresse e-mail"
+            subtitle={USER.email}
+            right={<Tag label="Vérifiée" icon="verified" tone="success" />}
           />
-          <View style={styles.divider} />
-          <SettingRow
+          <SettingsRow
             icon="lock"
-            label="Mot de passe"
-            hint="Modifié il y a 3 mois"
-            action="Modifier"
+            title="Mot de passe"
+            subtitle="Modifié il y a 3 mois"
+            onPress={() => router.push('/reset-password')}
           />
-        </View>
+        </SettingsSection>
 
-        <SectionTitle title="Sécurité" />
-        <View style={styles.card}>
-          <SettingRow
+        <SettingsSection title="Sécurité" icon="shield">
+          <SettingsRow
+            first
             icon="fingerprint"
-            label="Déverrouillage biométrique"
-            hint="Face ID / empreinte"
-            toggle={{ value: biometric, onChange: setBiometric }}
-            onPress={() => router.push('/profile/biometric')}
+            title="Déverrouillage biométrique"
+            subtitle={biometric ? 'Activé • Face ID' : 'Désactivé'}
+            right={
+              <ToggleSwitch
+                value={biometric}
+                label="Déverrouillage biométrique"
+                onValueChange={(value) => {
+                  profileActions.setBiometric(value);
+                  setToast({
+                    text: value ? 'Déverrouillage biométrique activé' : 'Déverrouillage biométrique désactivé',
+                    undo: () => profileActions.setBiometric(!value),
+                  });
+                }}
+              />
+            }
           />
-          <View style={styles.divider} />
-          <SettingRow
+          <SettingsRow
             icon="verified_user"
-            label="Double authentification"
-            hint={twoFactor ? 'Activée par SMS' : 'Recommandée'}
-            toggle={{ value: twoFactor, onChange: setTwoFactor }}
+            title="Double authentification"
+            subtitle={twoFactor ? 'Activée • code par SMS' : 'Recommandée pour protéger vos documents'}
+            right={
+              <ToggleSwitch
+                value={twoFactor}
+                label="Double authentification"
+                onValueChange={(value) => {
+                  if (!value) {
+                    setSheet('twoFactorOff');
+                    return;
+                  }
+                  profileActions.setTwoFactor(true);
+                  setToast({ text: 'Double authentification activée' });
+                }}
+              />
+            }
           />
-          <View style={styles.divider} />
-          <SettingRow
+          <SettingsRow
             icon="devices"
-            label="Sessions actives"
-            hint="iPhone 15 • Paris"
-            action="Voir"
+            title="Appareils connectés"
+            subtitle={`${sessions.length} appareil${sessions.length > 1 ? 's' : ''} • iPhone 15 (cet appareil)`}
+            onPress={() => setSheet('sessions')}
           />
-        </View>
+        </SettingsSection>
 
-        <SectionTitle title="Préférences" />
-        <View style={styles.card}>
-          <SettingRow
+        <SettingsSection title="Préférences" icon="tune">
+          <SettingsRow
+            first
             icon="language"
-            label="Langue"
-            hint="Français"
+            title="Langue et région"
+            subtitle={`${language} • ${zone} • ${currency}`}
             onPress={() => router.push('/profile/preferences')}
           />
-          <View style={styles.divider} />
-          <SettingRow
-            icon="public"
-            label="Fuseau horaire"
-            hint="Europe/Paris (UTC+2)"
+          <SettingsRow
+            icon="palette"
+            title="Affichage"
+            subtitle={`Thème ${theme} • calendrier en vue ${view}`}
             onPress={() => router.push('/profile/preferences')}
           />
-          <View style={styles.divider} />
-          <SettingRow
+          <SettingsRow
             icon="notifications"
-            label="Notifications"
-            hint="Push, e-mail, heures de silence"
+            title="Notifications"
+            subtitle="Canaux, types et heures de silence"
             onPress={() => router.push('/notifications/settings')}
           />
-          <View style={styles.divider} />
-          <SettingRow
+          <SettingsRow
             icon="cable"
-            label="Connexions externes"
-            hint="E-mail, calendrier"
+            title="Connexions externes"
+            subtitle="Messagerie et calendrier"
             onPress={() => router.push('/integrations')}
           />
-        </View>
+        </SettingsSection>
 
-        <SectionTitle title="Abonnement" />
-        <Pressable
-          style={styles.premiumCard}
-          accessibilityRole="button"
-          onPress={() => router.push('/billing')}>
-          <View style={styles.premiumIcon}>
-            <Icon name="workspace_premium" size={22} color={Serene.onSecondaryContainer} />
-          </View>
-          <View style={styles.premiumBody}>
-            <Text style={styles.premiumTitle}>Bringo Mind Premium</Text>
-            <Text style={styles.premiumText}>
-              Assistant IA illimité • Documents avancés • Foyer étendu
-            </Text>
-          </View>
-          <Icon name="chevron_right" size={20} color={Serene.onSecondaryContainer} />
-        </Pressable>
+        <SettingsSection title="Foyer" icon="family_restroom">
+          <SettingsRow
+            first
+            icon="home"
+            title={USER.household.name}
+            subtitle={`${USER.household.role} • ${USER.household.members} membres`}
+            onPress={() => router.push('/household')}
+          />
+        </SettingsSection>
 
-        <SectionTitle title="Confidentialité" />
-        <View style={styles.card}>
-          <SettingRow
+        <SettingsSection title="Abonnement" icon="workspace_premium">
+          <SettingsRow
+            first
+            icon="workspace_premium"
+            title="Bringo Mind Premium"
+            subtitle="Kora illimitée • documents avancés • foyer étendu"
+            onPress={() => router.push('/billing')}
+          />
+        </SettingsSection>
+
+        <SettingsSection title="Confidentialité et aide" icon="lock">
+          <SettingsRow
+            first
             icon="shield"
-            label="Confidentialité et données"
-            hint="Export, consentements, suppression"
+            title="Confidentialité et données"
+            subtitle="Consentements, export, suppression du compte"
             onPress={() => router.push('/profile/privacy')}
           />
-          <View style={styles.divider} />
-          <SettingRow
-            icon="help"
-            label="Aide et support"
-            hint="FAQ, contact, signalements"
-            onPress={() => router.push('/support')}
-          />
-        </View>
+          <SettingsRow icon="help" title="Aide et support" subtitle="Questions fréquentes, contact" onPress={() => router.push('/support')} />
+        </SettingsSection>
 
-        <Pressable
-          style={styles.logoutButton}
-          accessibilityRole="button"
-          onPress={() => router.replace('/welcome')}>
-          <Icon name="logout" size={18} color={Serene.onSurfaceVariant} />
-          <Text style={styles.logoutText}>Se déconnecter</Text>
-        </Pressable>
-
-        <Pressable
-          style={styles.deleteButton}
-          accessibilityRole="button"
-          onPress={() => router.push('/profile/privacy')}>
-          <Text style={styles.deleteText}>Supprimer mon compte</Text>
-        </Pressable>
-
-        <Text style={styles.version}>Bringo Mind 1.0.0 • Build 2026.11</Text>
+        <SecondaryButton label="Se déconnecter" icon="logout" style={styles.logout} onPress={() => setSheet('logout')} />
+        <Text style={styles.version}>Bringo Mind 1.0.0 • version de démonstration</Text>
       </ScrollView>
+
+      {/* Déconnexion */}
+      <BottomSheet
+        visible={sheet === 'logout'}
+        title="Se déconnecter ?"
+        subtitle="Vos données restent enregistrées. Vous pourrez vous reconnecter à tout moment."
+        onClose={() => setSheet(null)}>
+        <PrimaryButton
+          label="Se déconnecter"
+          icon="logout"
+          onPress={() => {
+            setSheet(null);
+            router.replace('/login');
+          }}
+        />
+        <SecondaryButton label="Rester connecté" onPress={() => setSheet(null)} />
+      </BottomSheet>
+
+      {/* Désactiver la double authentification */}
+      <BottomSheet
+        visible={sheet === 'twoFactorOff'}
+        title="Désactiver la double authentification ?"
+        subtitle="Votre compte sera protégé uniquement par votre mot de passe."
+        onClose={() => setSheet(null)}>
+        <SecondaryButton
+          label="Désactiver"
+          danger
+          onPress={() => {
+            profileActions.setTwoFactor(false);
+            setSheet(null);
+            setToast({ text: 'Double authentification désactivée', undo: () => profileActions.setTwoFactor(true) });
+          }}
+        />
+        <SecondaryButton label="Garder activée" onPress={() => setSheet(null)} />
+      </BottomSheet>
+
+      {/* Appareils connectés */}
+      <BottomSheet
+        visible={sheet === 'sessions'}
+        title="Appareils connectés"
+        subtitle="Déconnectez un appareil que vous ne reconnaissez pas."
+        onClose={() => setSheet(null)}>
+        {sessions.map((session) => (
+          <View key={session.id} style={styles.session}>
+            <View style={styles.sessionIcon}>
+              <Icon name={session.icon} size={22} color={Tint.navy} />
+            </View>
+            <View style={styles.flex}>
+              <Text style={styles.sessionTitle}>{session.device}</Text>
+              <Text style={styles.sessionMeta}>
+                {session.place} • {session.when}
+              </Text>
+            </View>
+            {session.current ? (
+              <Tag label="Cet appareil" tone="teal" />
+            ) : (
+              <Pressable
+                hitSlop={8}
+                accessibilityRole="button"
+                onPress={() => {
+                  const undo = profileActions.signOutSession(session.id);
+                  setSheet(null);
+                  setToast({ text: `${session.device} a été déconnecté`, undo });
+                }}>
+                <Text style={styles.sessionAction}>Déconnecter</Text>
+              </Pressable>
+            )}
+          </View>
+        ))}
+        {otherSessions.length === 0 ? <Text style={kitStyles.muted}>Aucun autre appareil connecté.</Text> : null}
+      </BottomSheet>
+
+      {toast ? (
+        <UndoToast key={toast.text} text={toast.text} onUndo={toast.undo} onHide={() => setToast(null)} bottom={24} />
+      ) : null}
     </SafeAreaView>
   );
 }
 
-function SectionTitle({ title }: { title: string }) {
-  return <Text style={styles.sectionTitle}>{title}</Text>;
-}
-
-function SettingRow({
-  icon,
-  label,
-  hint,
-  action,
-  badge,
-  badgeTone,
-  toggle,
-  onPress,
-}: {
-  icon: string;
-  label: string;
-  hint?: string;
-  action?: string;
-  badge?: string;
-  badgeTone?: 'success';
-  toggle?: { value: boolean; onChange: (value: boolean) => void };
-  onPress?: () => void;
-}) {
-  return (
-    <Pressable
-      style={styles.row}
-      onPress={onPress}
-      disabled={!onPress}
-      accessibilityRole={onPress ? 'button' : undefined}>
-      <View style={styles.rowIcon}>
-        <Icon name={icon} size={18} color={Serene.onSurfaceVariant} />
-      </View>
-      <View style={styles.rowBody}>
-        <Text style={styles.rowLabel}>{label}</Text>
-        {hint ? <Text style={styles.rowHint}>{hint}</Text> : null}
-      </View>
-      {badge ? (
-        <View style={styles.successBadge}>
-          <Icon name="verified" size={11} color={Serene.success} />
-          <Text style={styles.successBadgeText}>{badge}</Text>
-        </View>
-      ) : null}
-      {toggle ? (
-        <Switch
-          value={toggle.value}
-          onValueChange={toggle.onChange}
-          trackColor={{ false: Serene.surfaceContainerHigh, true: Serene.secondary }}
-          thumbColor={Serene.surfaceContainerLowest}
-        />
-      ) : action ? (
-        <Text style={styles.rowAction}>{action}</Text>
-      ) : onPress ? (
-        <Icon name="chevron_right" size={20} color={Serene.outlineVariant} />
-      ) : null}
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
-  safe: {
+  flex: {
     flex: 1,
-    backgroundColor: Serene.surface,
   },
-  header: {
-    height: 56,
-    paddingHorizontal: Space.gutter,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Serene.surface,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Serene.surfaceContainerHigh,
-  },
-  headerButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    flex: 1,
-    textAlign: 'center',
-    ...Typography.titleMd,
-    color: Serene.onSurface,
-  },
-  scroll: {
-    flex: 1,
+  pressed: {
+    opacity: 0.8,
   },
   content: {
-    paddingHorizontal: Space.gutter,
-    paddingTop: Space.md,
-    paddingBottom: Space.lg,
+    paddingTop: 4,
+    paddingBottom: 40,
   },
-  heroCard: {
+  deletion: {
+    flexDirection: 'row',
     alignItems: 'center',
-    padding: Space.md,
-    borderRadius: Radius.xxl,
-    backgroundColor: Serene.surfaceContainerLowest,
-    ...Shadow.card,
+    gap: 10,
+    marginBottom: 14,
+    padding: 14,
+    borderRadius: 16,
+    backgroundColor: '#fff5f5',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+  },
+  deletionTitle: {
+    fontFamily: FontFamily.bodySemiBold,
+    fontSize: 15,
+    lineHeight: 20,
+    color: Serene.error,
+  },
+  deletionText: {
+    fontFamily: FontFamily.body,
+    fontSize: 13,
+    lineHeight: 18,
+    color: Tint.navy,
+  },
+  deletionAction: {
+    fontFamily: FontFamily.bodyBold,
+    fontSize: 15,
+    lineHeight: 20,
+    color: Tint.primary,
+  },
+  hero: {
+    alignItems: 'center',
+    gap: 6,
+    paddingTop: 22,
   },
   avatarWrap: {
-    marginBottom: 8,
+    marginBottom: 6,
   },
   avatar: {
-    width: 72,
-    height: 72,
+    width: 88,
+    height: 88,
     borderRadius: Radius.full,
-    backgroundColor: Serene.primary,
+    backgroundColor: Tint.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarInitial: {
+  avatarText: {
     fontFamily: FontFamily.headingBold,
-    fontSize: 28,
-    lineHeight: 34,
+    fontSize: 32,
+    lineHeight: 40,
     color: Serene.onPrimary,
   },
-  cameraBadge: {
+  avatarEdit: {
     position: 'absolute',
     right: -2,
     bottom: -2,
-    width: 26,
-    height: 26,
+    width: 32,
+    height: 32,
     borderRadius: Radius.full,
-    backgroundColor: Serene.secondary,
-    borderWidth: 2,
+    backgroundColor: Tint.black,
+    borderWidth: 3,
     borderColor: Serene.surfaceContainerLowest,
     alignItems: 'center',
     justifyContent: 'center',
   },
   name: {
-    ...Typography.headlineSm,
-    color: Serene.onSurface,
+    fontFamily: FontFamily.headingBold,
+    fontSize: 24,
+    lineHeight: 30,
+    letterSpacing: -0.3,
+    color: Tint.navy,
   },
-  email: {
-    fontFamily: FontFamily.body,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurfaceVariant,
-    marginTop: 1,
-  },
-  heroPills: {
+  tags: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
-    gap: 6,
-    marginTop: 8,
+    gap: 8,
+    marginTop: 4,
   },
-  planPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 9,
-    paddingVertical: 3,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.secondaryContainer,
-  },
-  planPillText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 10,
-    lineHeight: 14,
-    color: Serene.onSecondaryContainer,
-  },
-  sincePill: {
-    paddingHorizontal: 9,
-    paddingVertical: 3,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.surfaceContainerHigh,
-  },
-  sincePillText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 10,
-    lineHeight: 14,
-    color: Serene.onSurfaceVariant,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  stats: {
     alignSelf: 'stretch',
-    marginTop: Space.md,
-    paddingTop: Space.md,
+    flexDirection: 'row',
+    marginTop: 12,
+    paddingTop: 12,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Serene.surfaceContainerHigh,
+    borderTopColor: Tint.border,
   },
   stat: {
     flex: 1,
     alignItems: 'center',
+    paddingVertical: 4,
+  },
+  statBorder: {
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderLeftColor: Tint.border,
   },
   statValue: {
     fontFamily: FontFamily.headingBold,
-    fontSize: 18,
-    lineHeight: 24,
-    color: Serene.onSurface,
+    fontSize: 22,
+    lineHeight: 28,
+    color: Tint.navy,
   },
   statLabel: {
     fontFamily: FontFamily.body,
-    fontSize: 11,
-    lineHeight: 15,
-    color: Serene.onSurfaceVariant,
-  },
-  statDivider: {
-    width: StyleSheet.hairlineWidth,
-    height: 28,
-    backgroundColor: Serene.surfaceContainerHigh,
-  },
-  sectionTitle: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 11,
-    lineHeight: 14,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-    color: Serene.onSurfaceVariant,
-    marginTop: Space.lg,
-    marginBottom: Space.sm,
-  },
-  card: {
-    paddingHorizontal: Space.sm,
-    borderRadius: Radius.xl,
-    backgroundColor: Serene.surfaceContainerLowest,
-    ...Shadow.card,
-  },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: Serene.surfaceContainerHigh,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 4,
-  },
-  rowIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: Radius.md,
-    backgroundColor: Serene.surfaceContainerLow,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  rowBody: {
-    flex: 1,
-    minWidth: 0,
-  },
-  rowLabel: {
-    fontFamily: FontFamily.bodyMedium,
     fontSize: 13,
     lineHeight: 18,
-    color: Serene.onSurface,
+    color: Serene.onSurfaceVariant,
+    textAlign: 'center',
   },
-  rowHint: {
+  logout: {
+    marginTop: 26,
+  },
+  version: {
+    marginTop: 14,
+    textAlign: 'center',
     fontFamily: FontFamily.body,
-    fontSize: 11,
-    lineHeight: 15,
+    fontSize: 13,
+    lineHeight: 18,
     color: Serene.onSurfaceVariant,
   },
-  rowAction: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 12,
-    lineHeight: 16,
-    color: Serene.secondary,
-  },
-  successBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.successContainer,
-  },
-  successBadgeText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 10,
-    lineHeight: 14,
-    color: Serene.success,
-  },
-  premiumCard: {
+  session: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    padding: 14,
-    borderRadius: Radius.xl,
-    backgroundColor: Serene.secondaryContainer,
+    padding: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Tint.border,
   },
-  premiumIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.surfaceContainerLowest,
+  sessionIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: Tint.soft,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  premiumBody: {
-    flex: 1,
-    minWidth: 0,
-  },
-  premiumTitle: {
+  sessionTitle: {
     fontFamily: FontFamily.bodySemiBold,
-    fontSize: 14,
-    lineHeight: 19,
-    color: Serene.onSecondaryContainer,
+    fontSize: 15,
+    lineHeight: 20,
+    color: Tint.navy,
   },
-  premiumText: {
+  sessionMeta: {
     fontFamily: FontFamily.body,
-    fontSize: 11,
-    lineHeight: 15,
-    color: Serene.onSecondaryContainer,
-  },
-  logoutButton: {
-    height: 46,
-    marginTop: Space.lg,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.surfaceContainerLowest,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    ...Shadow.card,
-  },
-  logoutText: {
-    fontFamily: FontFamily.bodyMedium,
     fontSize: 13,
     lineHeight: 18,
     color: Serene.onSurfaceVariant,
   },
-  deleteButton: {
-    height: 40,
-    marginTop: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  deleteText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 12,
-    lineHeight: 16,
+  sessionAction: {
+    fontFamily: FontFamily.bodySemiBold,
+    fontSize: 14,
+    lineHeight: 19,
     color: Serene.error,
-  },
-  version: {
-    marginTop: Space.sm,
-    textAlign: 'center',
-    fontFamily: FontFamily.body,
-    fontSize: 10,
-    lineHeight: 14,
-    color: Serene.outlineVariant,
   },
 });

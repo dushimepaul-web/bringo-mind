@@ -64,7 +64,7 @@ export default function DashboardScreen() {
         </View>
 
         <SectionHeader
-          title="Prochains rendez-vous & Échéances"
+          title="Prochains événements & échéances"
           action="Calendrier"
           onPressAction={() => router.push('/calendar')}
         />
@@ -257,7 +257,7 @@ function DeclarationCard() {
         <Pressable
           style={({ pressed }) => [styles.tealButton, pressed && styles.tealButtonPressed]}
           accessibilityRole="button"
-          onPress={() => router.push('/documents/detail')}>
+          onPress={() => router.push({ pathname: '/documents/detail', params: { id: 'attestation-domicile' } })}>
           <Text style={styles.tealButtonText}>Signer &amp; joindre</Text>
           <Icon name="send" size={16} color={Serene.onSecondary} />
         </Pressable>
@@ -333,7 +333,7 @@ function AppointmentCard() {
       <View style={styles.rowBetween}>
         <View style={styles.metaRow}>
           <Icon name="medical_services" size={20} color={Tint.primary} />
-          <Text style={styles.eyebrow}>RDV médical</Text>
+          <Text style={styles.eyebrow}>Événement santé</Text>
         </View>
         <View style={styles.jBadge}>
           <Text style={styles.jBadgeText}>J-2</Text>
@@ -448,14 +448,14 @@ function TaxDeadlineCard() {
 
 function RecentDocumentCard() {
   return (
-    <Card href="/documents/detail" label="Facture_Engie_Mai2024.pdf">
+    <Card href={{ pathname: '/documents/detail', params: { id: 'engie' } }} label="Facture d’électricité Engie — mai 2024">
       <View style={styles.rowCenter}>
         <View style={[styles.rowIcon, styles.iconSoft]}>
           <Icon name="picture_as_pdf" size={22} color={Tint.navy} />
         </View>
         <View style={styles.flexMin}>
           <Text style={styles.cardTitle} numberOfLines={1}>
-            Facture_Engie_Mai2024.pdf
+            Facture d’électricité Engie — mai 2024
           </Text>
           <View style={styles.metaRow}>
             <Icon name="auto_awesome" size={15} color={Tint.primary} />
@@ -468,7 +468,7 @@ function RecentDocumentCard() {
           style={({ pressed }) => [styles.squareButton, pressed && styles.outlinePressed]}
           accessibilityRole="button"
           accessibilityLabel="Voir le document"
-          onPress={() => router.push('/documents/detail')}>
+          onPress={() => router.push({ pathname: '/documents/detail', params: { id: 'engie' } })}>
           <Icon name="visibility" size={20} color={Tint.navy} />
         </Pressable>
       </View>

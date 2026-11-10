@@ -29,7 +29,7 @@ export const CHANNEL_META: Record<ReminderChannel, { label: string; icon: string
 export const WEEKDAY_LETTERS = ['D', 'L', 'M', 'M', 'J', 'V', 'S'];
 const WEEKDAY_SHORT = ['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.'];
 
-/** Tâches et rendez-vous de la démo auxquels un rappel peut être associé. */
+/** Tâches et événements de la démo auxquels un rappel peut être associé. */
 export const LINK_TARGETS: Exclude<ReminderLink, { kind: 'personal' }>[] = [
   { kind: 'task', id: 'attestation', title: 'Renvoyer l’attestation de domicile signée' },
   { kind: 'task', id: 'caf', title: 'Répondre au courrier de la CAF' },
@@ -42,19 +42,22 @@ export const LINK_TARGETS: Exclude<ReminderLink, { kind: 'personal' }>[] = [
 
 export function linkLabel(link: ReminderLink): string {
   if (link.kind === 'task') return 'Tâche';
-  if (link.kind === 'event') return 'Rendez-vous';
+  if (link.kind === 'event') return 'Événement';
+  if (link.kind === 'document') return 'Document';
   return 'Personnel';
 }
 
 export function linkIcon(link: ReminderLink): string {
   if (link.kind === 'task') return 'task_alt';
   if (link.kind === 'event') return 'event';
+  if (link.kind === 'document') return 'description';
   return 'person';
 }
 
 export function linkHref(link: ReminderLink): Href | null {
   if (link.kind === 'task') return { pathname: '/tasks/detail', params: { id: link.id } };
   if (link.kind === 'event') return { pathname: '/calendar/detail', params: { id: link.id } };
+  if (link.kind === 'document') return { pathname: '/documents/detail', params: { id: link.id } };
   return null;
 }
 

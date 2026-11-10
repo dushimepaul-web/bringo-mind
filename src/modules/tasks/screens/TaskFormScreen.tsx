@@ -97,12 +97,31 @@ const pad = (value: number) => String(value).padStart(2, '0');
 
 export default function TaskFormScreen() {
   const pathname = usePathname();
-  const { id } = useLocalSearchParams<{ id?: string }>();
+  const { id, title, due, description } = useLocalSearchParams<{
+    id?: string;
+    title?: string;
+    due?: string;
+    description?: string;
+  }>();
   const isEdit = pathname.includes('/edit');
   const existing = useTask(isEdit ? id : '__new__');
   const insets = useSafeAreaInsets();
 
-  const [draft, setDraft] = useState<TaskDraft>(() => (existing ? draftOf(existing) : demoDraft()));
+  const [draft, setDraft] = useState<TaskDraft>(() => {
+    if (existing) return draftOf(existing);
+    const base = demoDraft();
+    // Tâche créée depuis un document : titre et échéance déjà remplis.
+    if (title) {
+      return {
+        ...base,
+        title,
+        description: description ?? '',
+        dueAt: due ? atTime(new Date(due), 12) : base.dueAt,
+        hasTime: false,
+      };
+    }
+    return base;
+  });
   const [focused, setFocused] = useState<'title' | 'description' | null>(null);
   const [titleTouched, setTitleTouched] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);

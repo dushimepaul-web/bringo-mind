@@ -8,7 +8,8 @@ export type ReminderRepeat = 'once' | 'daily' | 'weekly' | 'monthly' | 'custom';
 export type ReminderLink =
   | { kind: 'personal' }
   | { kind: 'task'; id: string; title: string }
-  | { kind: 'event'; id: string; title: string };
+  | { kind: 'event'; id: string; title: string }
+  | { kind: 'document'; id: string; title: string };
 
 /** Résultat d'un envoi passé. */
 export type DeliveryStatus = 'sent' | 'missed';

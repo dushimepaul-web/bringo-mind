@@ -1,770 +1,375 @@
-// S-18 - Membres et invitations | Module M08 Foyer partagé | Phase S7
+// S-18 - Membres et invitations | Module M08 Foyer | Phase S7
+// Les actions sensibles (rôle, retrait, annulation) sont confirmées et peuvent être annulées.
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icon';
-import { FontFamily, Radius, Serene, Shadow, Space, Typography } from '@/constants/design';
+import {
+  BottomSheet,
+  IconButton,
+  PrimaryButton,
+  SecondaryButton,
+  SheetOption,
+  TopBar,
+  UndoToast,
+  kitStyles,
+} from '@/components/ui/kit';
+import { FontFamily, Serene, Tint } from '@/constants/design';
+import { dayOffset, formatDay } from '@/lib/demo-dates';
 
-type Role = 'Propriétaire' | 'Admin' | 'Membre';
+import {
+  Avatar,
+  ChoiceCard,
+  RoleTag,
+  SectionHeader,
+  SmallButton,
+  householdStyles,
+  useFlashToast,
+} from '../components/household-ui';
+import { ROLE_HINTS, ROLE_LABELS, firstName } from '../data';
+import { householdActions, useHouseholdState } from '../store';
+import type { HouseholdRole, Invitation, Member } from '../types';
 
-type Member = {
-  id: string;
-  initial: string;
-  name: string;
-  email: string;
-  role: Role;
-  you?: boolean;
-  child?: boolean;
-};
+type Step =
+  | { kind: 'menu'; member: Member }
+  | { kind: 'role'; member: Member; role: HouseholdRole }
+  | { kind: 'remove'; member: Member }
+  | null;
 
-const INITIAL_MEMBERS: Member[] = [
-  {
-    id: 'claire',
-    initial: 'C',
-    name: 'Claire Martin',
-    email: 'claire.martin@email.fr',
-    role: 'Propriétaire',
-    you: true,
-  },
-  {
-    id: 'thomas',
-    initial: 'T',
-    name: 'Thomas Martin',
-    email: 'thomas.martin@email.fr',
-    role: 'Admin',
-  },
-  {
-    id: 'leo',
-    initial: 'L',
-    name: 'Léo Martin',
-    email: 'leo.martin@email.fr',
-    role: 'Membre',
-    child: true,
-  },
-];
-
-const ROLES: Role[] = ['Admin', 'Membre'];
+function sentLabel(invitation: Invitation): string {
+  const sent = dayOffset(invitation.sentAt);
+  const left = dayOffset(invitation.expiresAt);
+  const when = sent === 0 ? 'aujourd’hui' : sent === -1 ? 'hier' : `le ${formatDay(invitation.sentAt)}`;
+  return `Envoyée ${when} • expire dans ${left} jour${left > 1 ? 's' : ''}`;
+}
 
 export default function MembersInvitationsScreen() {
-  const [members, setMembers] = useState<Member[]>(INITIAL_MEMBERS);
-  const [expandedId, setExpandedId] = useState<string | null>('thomas');
-  const [invitations, setInvitations] = useState([
-    { id: 'jeanne', email: 'jeanne.martin@email.fr', role: 'Membre' as Role, days: 2 },
-  ]);
-  const [resentId, setResentId] = useState<string | null>(null);
+  const { name, members, invitations } = useHouseholdState();
+  const [step, setStep] = useState<Step>(null);
+  const [toast, setToast] = useFlashToast();
 
-  const changeRole = (memberId: string, role: Role) => {
-    setMembers((current) =>
-      current.map((member) => (member.id === memberId ? { ...member, role } : member)),
-    );
-  };
+  const me = members.find((member) => member.you);
+  const canManage = me?.role === 'owner' || me?.role === 'admin';
+  const isOwner = me?.role === 'owner';
 
-  const removeMember = (memberId: string) => {
-    setMembers((current) => current.filter((member) => member.id !== memberId));
-    setExpandedId(null);
-  };
+  const close = () => setStep(null);
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
-        <Pressable
-          style={styles.headerButton}
-          accessibilityRole="button"
-          accessibilityLabel="Retour au foyer"
-          onPress={() => router.back()}>
-          <Icon name="arrow_back" size={22} color={Serene.onSurface} />
-        </Pressable>
-        <Text style={styles.headerTitle}>Membres & invitations</Text>
-        <Pressable
-          style={styles.headerButton}
-          accessibilityLabel="Inviter un membre"
-          onPress={() => router.push('/household/invite')}>
-          <Icon name="person_add" size={22} color={Serene.secondary} />
-        </Pressable>
-      </View>
+    <SafeAreaView style={kitStyles.safe} edges={['top']}>
+      <TopBar
+        title="Membres et invitations"
+        fallback="/household"
+        right={
+          canManage ? (
+            <IconButton icon="person_add" label="Inviter un membre" onPress={() => router.push('/household/invite')} />
+          ) : null
+        }
+      />
+      <ScrollView contentContainerStyle={[kitStyles.content, styles.content]} showsVerticalScrollIndicator={false}>
+        <Text style={kitStyles.muted}>
+          {name} • {members.length} membre{members.length > 1 ? 's' : ''}
+          {invitations.length ? ` • ${invitations.length} invitation${invitations.length > 1 ? 's' : ''} en attente` : ''}
+        </Text>
 
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}>
-        <View style={styles.foyerCard}>
-          <View style={styles.foyerAvatar}>
-            <Icon name="family_restroom" size={24} color={Serene.secondary} />
-          </View>
-          <View style={styles.foyerBody}>
-            <Text style={styles.foyerName}>Foyer Martin</Text>
-            <Text style={styles.foyerMeta}>
-              {members.length} membres • Créé le 12 mai 2023
-            </Text>
-          </View>
-          <View style={styles.foyerPill}>
-            <Text style={styles.foyerPillText}>Partagé</Text>
-          </View>
-        </View>
-
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Membres</Text>
-          <View style={styles.countPill}>
-            <Text style={styles.countText}>{members.length}</Text>
-          </View>
-        </View>
-
-        <View style={styles.list}>
+        <SectionHeader title="Membres" count={members.length} />
+        <View style={styles.stack}>
           {members.map((member) => {
-            const expanded = expandedId === member.id && !member.you;
-
+            const editable = canManage && !member.you && member.role !== 'owner';
             return (
-              <View key={member.id} style={styles.memberCard}>
-                <Pressable
-                  style={styles.memberRow}
-                  onPress={() =>
-                    setExpandedId((current) =>
-                      current === member.id || member.you ? current : member.id,
-                    )
-                  }
-                  accessibilityRole="button">
-                  <View
-                    style={[
-                      styles.avatar,
-                      member.role === 'Propriétaire'
-                        ? styles.avatarOwner
-                        : member.child
-                          ? styles.avatarChild
-                          : styles.avatarMember,
-                    ]}>
-                    <Text style={styles.avatarInitial}>{member.initial}</Text>
-                  </View>
-
-                  <View style={styles.memberBody}>
-                    <View style={styles.memberNameRow}>
-                      <Text style={styles.memberName} numberOfLines={1}>
-                        {member.name}
-                      </Text>
-                      {member.you ? <Text style={styles.youLabel}>Vous</Text> : null}
-                    </View>
-                    <Text style={styles.memberEmail} numberOfLines={1}>
-                      {member.email}
+              <Pressable
+                key={member.id}
+                disabled={!editable}
+                style={({ pressed }) => [kitStyles.card, styles.member, pressed && kitStyles.cardPressed]}
+                accessibilityRole={editable ? 'button' : undefined}
+                accessibilityLabel={`${member.name}, ${ROLE_LABELS[member.role]}${editable ? ', gérer' : ''}`}
+                onPress={() => setStep({ kind: 'menu', member })}>
+                <Avatar name={member.name} color={member.color} />
+                <View style={styles.flex}>
+                  <View style={styles.nameRow}>
+                    <Text style={kitStyles.title} numberOfLines={1}>
+                      {member.name}
                     </Text>
-                    <View style={styles.roleRow}>
-                      <View
-                        style={[
-                          styles.rolePill,
-                          member.role === 'Propriétaire'
-                            ? styles.roleOwner
-                            : member.role === 'Admin'
-                              ? styles.roleAdmin
-                              : styles.roleMember,
-                        ]}>
-                        <Text
-                          style={[
-                            styles.roleText,
-                            member.role === 'Propriétaire' && styles.roleTextOwner,
-                          ]}>
-                          {member.role}
-                        </Text>
-                      </View>
-                      {member.child ? <Text style={styles.childLabel}>Compte enfant</Text> : null}
-                    </View>
+                    {member.you ? <Text style={styles.you}>Vous</Text> : null}
                   </View>
-
-                  {member.you ? (
-                    <Icon name="lock" size={16} color={Serene.outlineVariant} />
-                  ) : (
-                    <Icon
-                      name={expanded ? 'expand_less' : 'expand_more'}
-                      size={20}
-                      color={Serene.onSurfaceVariant}
-                    />
-                  )}
-                </Pressable>
-
-                {expanded ? (
-                  <View style={styles.expanded}>
-                    <View style={styles.divider} />
-                    <Text style={styles.expandedLabel}>Rôle dans le foyer</Text>
-                    <View style={styles.rolesRow}>
-                      {ROLES.map((role) => {
-                        const active = member.role === role;
-
-                        return (
-                          <Pressable
-                            key={role}
-                            style={[styles.roleChip, active && styles.roleChipActive]}
-                            onPress={() => changeRole(member.id, role)}
-                            accessibilityRole="button"
-                            accessibilityState={{ selected: active }}>
-                            <Text
-                              style={[
-                                styles.roleChipText,
-                                active && styles.roleChipTextActive,
-                              ]}>
-                              {role}
-                            </Text>
-                          </Pressable>
-                        );
-                      })}
-                    </View>
-
-                    <Pressable
-                      style={styles.expandedAction}
-                      onPress={() => router.push('/household/transfer')}>
-                      <Icon name="swap_horiz" size={17} color={Serene.onSurface} />
-                      <Text style={styles.expandedActionText}>
-                        Transférer la propriété du foyer
-                      </Text>
-                      <Icon name="chevron_right" size={18} color={Serene.outlineVariant} />
-                    </Pressable>
-
-                    <Pressable
-                      style={styles.expandedDanger}
-                      onPress={() => removeMember(member.id)}>
-                      <Icon name="person_remove" size={16} color={Serene.error} />
-                      <Text style={styles.expandedDangerText}>Retirer du foyer</Text>
-                    </Pressable>
+                  <Text style={styles.meta} numberOfLines={1}>
+                    {member.detail ?? member.email}
+                  </Text>
+                  <View style={styles.tagRow}>
+                    <RoleTag role={member.role} />
                   </View>
-                ) : null}
-              </View>
+                </View>
+                {editable ? <Icon name="more_vert" size={22} color={Serene.onSurfaceVariant} /> : null}
+              </Pressable>
             );
           })}
         </View>
 
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Invitations en attente</Text>
-          <View style={styles.countPill}>
-            <Text style={styles.countText}>{invitations.length}</Text>
+        <SectionHeader title="Invitations en attente" count={invitations.length} />
+        {invitations.length === 0 ? (
+          <View style={[kitStyles.card, styles.empty]}>
+            <Icon name="mark_email_read" size={28} color={Tint.primary} />
+            <Text style={kitStyles.title}>Aucune invitation en attente</Text>
+            <Text style={[kitStyles.muted, styles.center]}>Invitez un proche pour partager certains éléments.</Text>
+            {canManage ? (
+              <SecondaryButton label="Inviter un membre" icon="person_add" onPress={() => router.push('/household/invite')} />
+            ) : null}
           </View>
-        </View>
-
-        {invitations.length > 0 ? (
-          <View style={styles.list}>
+        ) : (
+          <View style={styles.stack}>
             {invitations.map((invitation) => (
-              <View key={invitation.id} style={styles.inviteCard}>
-                <View style={styles.inviteTopRow}>
+              <View key={invitation.id} style={[kitStyles.card, styles.invite]}>
+                <View style={styles.inviteTop}>
                   <View style={styles.inviteIcon}>
-                    <Icon name="mail" size={18} color={Serene.warning} />
+                    <Icon name="schedule_send" size={22} color={Serene.onSurfaceVariant} />
                   </View>
-                  <View style={styles.inviteBody}>
-                    <Text style={styles.inviteEmail} numberOfLines={1}>
+                  <View style={styles.flex}>
+                    <Text style={kitStyles.title} numberOfLines={1}>
                       {invitation.email}
                     </Text>
-                    <Text style={styles.inviteMeta}>
-                      Invité·e comme {invitation.role} • il y a {invitation.days} jours
+                    <Text style={styles.meta}>
+                      Invitée comme {ROLE_LABELS[invitation.role].toLowerCase()}
                     </Text>
-                  </View>
-                  <View style={styles.pendingPill}>
-                    <Text style={styles.pendingPillText}>En attente</Text>
+                    <Text style={styles.meta}>{sentLabel(invitation)}</Text>
                   </View>
                 </View>
-
-                <View style={styles.inviteActions}>
-                  <Pressable
-                    style={styles.inviteAction}
-                    onPress={() => setResentId(invitation.id)}>
-                    <Icon
-                      name={resentId === invitation.id ? 'check' : 'send'}
-                      size={15}
-                      color={Serene.secondary}
+                {canManage ? (
+                  <View style={styles.inviteActions}>
+                    <SmallButton
+                      label="Renvoyer"
+                      icon="send"
+                      variant="light"
+                      onPress={() => {
+                        householdActions.resendInvitation(invitation.id);
+                        setToast({ text: `Invitation renvoyée à ${invitation.email}` });
+                      }}
                     />
-                    <Text style={styles.inviteActionText}>
-                      {resentId === invitation.id ? 'Renvoyée' : 'Renvoyer'}
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    style={styles.inviteAction}
-                    onPress={() =>
-                      setInvitations((current) =>
-                        current.filter((item) => item.id !== invitation.id),
-                      )
-                    }>
-                    <Icon name="cancel" size={15} color={Serene.error} />
-                    <Text style={[styles.inviteActionText, styles.inviteActionDanger]}>
-                      Annuler
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    style={styles.inviteAction}
-                    onPress={() => router.push('/household/invitation')}>
-                    <Icon name="visibility" size={15} color={Serene.onSurfaceVariant} />
-                    <Text style={[styles.inviteActionText, styles.inviteActionNeutral]}>
-                      Aperçu
-                    </Text>
-                  </Pressable>
-                </View>
+                    <SmallButton
+                      label="Annuler l’invitation"
+                      variant="danger"
+                      onPress={() => {
+                        const undo = householdActions.cancelInvitation(invitation.id);
+                        setToast({ text: 'Invitation annulée', undo });
+                      }}
+                    />
+                  </View>
+                ) : null}
               </View>
             ))}
           </View>
-        ) : (
-          <View style={styles.emptyInvites}>
-            <Text style={styles.emptyInvitesText}>Aucune invitation en attente.</Text>
-          </View>
         )}
 
-        <Pressable
-          style={styles.inviteCta}
-          accessibilityRole="button"
-          onPress={() => router.push('/household/invite')}>
-          <View style={styles.inviteCtaIcon}>
-            <Icon name="person_add" size={20} color={Serene.onPrimary} />
-          </View>
-          <View style={styles.inviteCtaBody}>
-            <Text style={styles.inviteCtaTitle}>Inviter un membre</Text>
-            <Text style={styles.inviteCtaText}>
-              Envoyez un lien sécurisé valable 7 jours
-            </Text>
-          </View>
-          <Icon name="chevron_right" size={20} color={Serene.outlineVariant} />
-        </Pressable>
-
-        <View style={styles.privacyCard}>
-          <Icon name="shield" size={18} color={Serene.onSurfaceVariant} />
-          <Text style={styles.privacyText}>
-            Les membres voient uniquement les éléments partagés. Les données personnelles de
-            chacun restent privées.
-          </Text>
+        <SectionHeader title="Qui peut faire quoi" />
+        <View style={[kitStyles.card, styles.roles]}>
+          {(['owner', 'admin', 'member', 'child'] as HouseholdRole[]).map((role) => (
+            <View key={role} style={styles.roleLine}>
+              <RoleTag role={role} />
+              <Text style={styles.roleHint}>{ROLE_HINTS[role]}</Text>
+            </View>
+          ))}
         </View>
 
-        <Pressable
-          style={styles.activityButton}
-          accessibilityRole="button"
-          onPress={() => router.push('/household/activity')}>
-          <Icon name="history" size={18} color={Serene.onSurface} />
-          <Text style={styles.activityButtonText}>Voir l’activité du foyer</Text>
-        </Pressable>
+        <View style={[householdStyles.note, styles.note]}>
+          <Icon name="lock" size={20} color={Tint.primary} />
+          <Text style={householdStyles.noteText}>
+            Aucun membre ne voit vos éléments personnels. Retirer quelqu’un du foyer ne supprime pas ses propres données.
+          </Text>
+        </View>
       </ScrollView>
+
+      {/* Gérer un membre */}
+      <BottomSheet
+        visible={step?.kind === 'menu'}
+        title={step?.member.name ?? ''}
+        subtitle={step ? `${ROLE_LABELS[step.member.role]} • ${step.member.detail ?? step.member.email}` : undefined}
+        onClose={close}>
+        {step && step.member.role !== 'child' ? (
+          <SheetOption
+            icon="manage_accounts"
+            label="Changer le rôle"
+            hint={`Actuellement : ${ROLE_LABELS[step.member.role]}`}
+            onPress={() => setStep({ kind: 'role', member: step.member, role: step.member.role })}
+          />
+        ) : null}
+        {step && isOwner && step.member.role !== 'child' ? (
+          <SheetOption
+            icon="swap_horiz"
+            label="Lui transférer la propriété"
+            hint="Vous deviendrez admin"
+            onPress={() => {
+              const id = step.member.id;
+              close();
+              router.push({ pathname: '/household/transfer', params: { to: id } });
+            }}
+          />
+        ) : null}
+        {step ? (
+          <SheetOption
+            icon="person_remove"
+            label="Retirer du foyer"
+            danger
+            onPress={() => setStep({ kind: 'remove', member: step.member })}
+          />
+        ) : null}
+      </BottomSheet>
+
+      {/* Changer le rôle, avec confirmation */}
+      <BottomSheet
+        visible={step?.kind === 'role'}
+        title="Changer le rôle"
+        subtitle={step ? `Rôle de ${firstName(step.member.name)} dans le foyer` : undefined}
+        onClose={close}>
+        {step?.kind === 'role' ? (
+          <>
+            {(['admin', 'member'] as HouseholdRole[]).map((role) => (
+              <ChoiceCard
+                key={role}
+                title={ROLE_LABELS[role]}
+                hint={ROLE_HINTS[role]}
+                selected={step.role === role}
+                onPress={() => setStep({ ...step, role })}
+              />
+            ))}
+            <PrimaryButton
+              label={
+                step.role === step.member.role
+                  ? 'Aucun changement'
+                  : `Passer ${firstName(step.member.name)} en ${ROLE_LABELS[step.role].toLowerCase()}`
+              }
+              disabled={step.role === step.member.role}
+              onPress={() => {
+                const previous = step.member.role;
+                const { id, name: memberName } = step.member;
+                householdActions.setRole(id, step.role);
+                close();
+                setToast({
+                  text: `${firstName(memberName)} est maintenant ${ROLE_LABELS[step.role].toLowerCase()}`,
+                  undo: () => householdActions.setRole(id, previous),
+                });
+              }}
+            />
+          </>
+        ) : null}
+      </BottomSheet>
+
+      {/* Retirer un membre, avec confirmation */}
+      <BottomSheet
+        visible={step?.kind === 'remove'}
+        title={step ? `Retirer ${firstName(step.member.name)} du foyer ?` : ''}
+        subtitle={
+          step
+            ? `${firstName(step.member.name)} ne verra plus les tâches, événements et documents partagés. Ses données personnelles ne sont pas touchées.`
+            : undefined
+        }
+        onClose={close}>
+        {step ? (
+          <>
+            <SecondaryButton
+              label="Retirer du foyer"
+              icon="person_remove"
+              danger
+              onPress={() => {
+                const memberName = step.member.name;
+                const undo = householdActions.removeMember(step.member.id);
+                close();
+                setToast({ text: `${firstName(memberName)} a été retiré du foyer`, undo });
+              }}
+            />
+            <SecondaryButton label="Garder dans le foyer" onPress={close} />
+          </>
+        ) : null}
+      </BottomSheet>
+
+      {toast ? (
+        <UndoToast key={toast.text} text={toast.text} onUndo={toast.undo} onHide={() => setToast(null)} bottom={24} />
+      ) : null}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: {
+  flex: {
     flex: 1,
-    backgroundColor: Serene.surface,
   },
-  header: {
-    height: 56,
-    paddingHorizontal: Space.gutter,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Serene.surface,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Serene.surfaceContainerHigh,
-  },
-  headerButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    flex: 1,
+  center: {
     textAlign: 'center',
-    ...Typography.titleMd,
-    color: Serene.onSurface,
-  },
-  scroll: {
-    flex: 1,
   },
   content: {
-    paddingHorizontal: Space.gutter,
-    paddingTop: Space.md,
-    paddingBottom: Space.lg,
+    paddingTop: 4,
+    paddingBottom: 40,
   },
-  foyerCard: {
+  stack: {
+    gap: 10,
+  },
+  member: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    padding: 14,
-    borderRadius: Radius.xl,
-    backgroundColor: Serene.surfaceContainerLowest,
-    ...Shadow.card,
   },
-  foyerAvatar: {
-    width: 46,
-    height: 46,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.secondaryContainer,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  foyerBody: {
-    flex: 1,
-    minWidth: 0,
-  },
-  foyerName: {
-    ...Typography.titleMd,
-    color: Serene.onSurface,
-  },
-  foyerMeta: {
-    fontFamily: FontFamily.body,
-    fontSize: 12,
-    lineHeight: 16,
-    color: Serene.onSurfaceVariant,
-  },
-  foyerPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.surfaceContainerHigh,
-  },
-  foyerPillText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 10,
-    lineHeight: 14,
-    color: Serene.onSurfaceVariant,
-  },
-  sectionHeader: {
+  nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginTop: Space.lg,
-    marginBottom: Space.sm,
   },
-  sectionTitle: {
-    ...Typography.headlineSm,
-    color: Serene.onSurface,
-  },
-  countPill: {
-    minWidth: 20,
-    height: 20,
-    paddingHorizontal: 5,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.surfaceContainerHigh,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  countText: {
-    fontFamily: FontFamily.bodyBold,
-    fontSize: 11,
-    lineHeight: 14,
-    color: Serene.onSurfaceVariant,
-  },
-  list: {
-    gap: 10,
-  },
-  memberCard: {
-    borderRadius: Radius.xl,
-    backgroundColor: Serene.surfaceContainerLowest,
-    ...Shadow.card,
-  },
-  memberRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-    padding: 14,
-  },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarOwner: {
-    backgroundColor: Serene.primary,
-  },
-  avatarMember: {
-    backgroundColor: Serene.secondary,
-  },
-  avatarChild: {
-    backgroundColor: Serene.warning,
-  },
-  avatarInitial: {
-    fontFamily: FontFamily.bodyBold,
-    fontSize: 15,
-    lineHeight: 20,
-    color: Serene.onPrimary,
-  },
-  memberBody: {
-    flex: 1,
-    minWidth: 0,
-    gap: 2,
-  },
-  memberNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  memberName: {
-    flexShrink: 1,
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 14,
-    lineHeight: 19,
-    color: Serene.onSurface,
-  },
-  youLabel: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 10,
-    lineHeight: 14,
-    color: Serene.secondary,
-  },
-  memberEmail: {
-    fontFamily: FontFamily.body,
-    fontSize: 12,
-    lineHeight: 16,
-    color: Serene.onSurfaceVariant,
-  },
-  roleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 3,
-  },
-  rolePill: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: Radius.full,
-  },
-  roleOwner: {
-    backgroundColor: Serene.primary,
-  },
-  roleAdmin: {
-    backgroundColor: Serene.secondaryContainer,
-  },
-  roleMember: {
-    backgroundColor: Serene.surfaceContainerHigh,
-  },
-  roleText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 10,
-    lineHeight: 14,
-    color: Serene.onSurfaceVariant,
-  },
-  roleTextOwner: {
-    color: Serene.onPrimary,
-  },
-  childLabel: {
-    fontFamily: FontFamily.body,
-    fontSize: 10,
-    lineHeight: 14,
-    color: Serene.onSurfaceVariant,
-  },
-  expanded: {
-    paddingHorizontal: 14,
-    paddingBottom: 12,
-  },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: Serene.surfaceContainerHigh,
-    marginBottom: 10,
-  },
-  expandedLabel: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 10,
-    lineHeight: 14,
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
-    color: Serene.onSurfaceVariant,
-    marginBottom: 6,
-  },
-  rolesRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  roleChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.surfaceContainerLow,
-  },
-  roleChipActive: {
-    backgroundColor: Serene.secondaryContainer,
-  },
-  roleChipText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 12,
-    lineHeight: 16,
-    color: Serene.onSurfaceVariant,
-  },
-  roleChipTextActive: {
-    color: Serene.onSecondaryContainer,
-    fontFamily: FontFamily.bodySemiBold,
-  },
-  expandedAction: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    height: 40,
-    marginTop: 8,
-    paddingHorizontal: 10,
-    borderRadius: Radius.md,
-    backgroundColor: Serene.surfaceContainerLow,
-  },
-  expandedActionText: {
-    flex: 1,
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 12,
-    lineHeight: 16,
-    color: Serene.onSurface,
-  },
-  expandedDanger: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    height: 36,
-    paddingHorizontal: 10,
-  },
-  expandedDangerText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 12,
-    lineHeight: 16,
-    color: Serene.error,
-  },
-  inviteCard: {
-    padding: 12,
-    borderRadius: Radius.xl,
-    backgroundColor: Serene.surfaceContainerLowest,
-    ...Shadow.card,
-  },
-  inviteTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  inviteIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: Radius.md,
-    backgroundColor: Serene.warningContainer,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  inviteBody: {
-    flex: 1,
-    minWidth: 0,
-  },
-  inviteEmail: {
+  you: {
     fontFamily: FontFamily.bodySemiBold,
     fontSize: 13,
     lineHeight: 18,
-    color: Serene.onSurface,
+    color: Tint.primary,
   },
-  inviteMeta: {
+  meta: {
     fontFamily: FontFamily.body,
-    fontSize: 11,
-    lineHeight: 15,
+    fontSize: 13,
+    lineHeight: 18,
     color: Serene.onSurfaceVariant,
   },
-  pendingPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.warningContainer,
+  tagRow: {
+    flexDirection: 'row',
+    marginTop: 6,
   },
-  pendingPillText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 9,
-    lineHeight: 13,
-    color: Serene.warning,
+  invite: {
+    gap: 12,
+  },
+  inviteTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  inviteIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: '#b9c4d6',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   inviteActions: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
-    marginTop: 10,
-    paddingTop: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Serene.surfaceContainerHigh,
   },
-  inviteAction: {
-    flexDirection: 'row',
+  empty: {
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.surfaceContainerLow,
+    gap: 8,
+    paddingVertical: 22,
   },
-  inviteActionText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 11,
-    lineHeight: 15,
-    color: Serene.secondary,
-  },
-  inviteActionDanger: {
-    color: Serene.error,
-  },
-  inviteActionNeutral: {
-    color: Serene.onSurfaceVariant,
-  },
-  emptyInvites: {
-    padding: 14,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.surfaceContainerLow,
-  },
-  emptyInvitesText: {
-    fontFamily: FontFamily.body,
-    fontSize: 12,
-    lineHeight: 16,
-    color: Serene.onSurfaceVariant,
-    textAlign: 'center',
-  },
-  inviteCta: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  roles: {
     gap: 12,
-    marginTop: Space.md,
-    padding: 12,
-    borderRadius: Radius.xl,
-    backgroundColor: Serene.surfaceContainerLowest,
-    borderWidth: 1,
-    borderColor: Serene.secondary,
   },
-  inviteCtaIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  inviteCtaBody: {
-    flex: 1,
-    minWidth: 0,
-  },
-  inviteCtaTitle: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 14,
-    lineHeight: 19,
-    color: Serene.onSurface,
-  },
-  inviteCtaText: {
-    fontFamily: FontFamily.body,
-    fontSize: 11,
-    lineHeight: 15,
-    color: Serene.onSurfaceVariant,
-  },
-  privacyCard: {
-    flexDirection: 'row',
+  roleLine: {
+    gap: 4,
     alignItems: 'flex-start',
-    gap: 8,
-    marginTop: Space.md,
-    padding: 12,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.surfaceContainerLow,
   },
-  privacyText: {
-    flex: 1,
+  roleHint: {
     fontFamily: FontFamily.body,
-    fontSize: 12,
-    lineHeight: 17,
-    color: Serene.onSurfaceVariant,
+    fontSize: 14,
+    lineHeight: 20,
+    color: Tint.navy,
   },
-  activityButton: {
-    height: 44,
-    marginTop: 10,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.surfaceContainerLowest,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    ...Shadow.card,
-  },
-  activityButtonText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurface,
+  note: {
+    marginTop: 18,
   },
 });

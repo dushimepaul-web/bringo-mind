@@ -49,11 +49,11 @@ const SUGGESTIONS: Suggestion[] = [
     id: 'edf',
     tone: 'document',
     icon: 'bolt',
-    title: 'Facture EDF reçue',
-    amount: '84,20 €',
-    detail: 'prévu le 21 mai • Prélèvement automatique',
+    title: 'Facture Engie à vérifier',
+    amount: '118,50 €',
+    detail: 'prélevé le 27 mai • lue par Kora',
     action: 'Vérifier',
-    href: '/documents/detail',
+    href: { pathname: '/documents/detail', params: { id: 'engie' } },
     secondary: 'ignore',
   },
   {
@@ -72,7 +72,7 @@ const SUGGESTIONS: Suggestion[] = [
         { icon: 'notifications_active', text: 'Rappel 1 heure avant' },
       ],
       source: 'E-mail du Cabinet Dr Lemoine reçu le 13 mai',
-      success: 'Rendez-vous ajouté au calendrier.',
+      success: 'Événement ajouté au calendrier.',
     },
   },
   {
@@ -117,7 +117,7 @@ const TONES: Record<
     border: '#d9d6fe',
     iconBg: '#e2dfff',
     iconFg: '#3323cc',
-    label: 'Rendez-vous',
+    label: 'Événement',
   },
   deadline: {
     card: '#fff6f5',

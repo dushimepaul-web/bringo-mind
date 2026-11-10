@@ -1,442 +1,247 @@
-// S-21 - Préférences | Module M09 Profil et paramètres | Phase S8
+// S-21 - Préférences | Module M09 Profil | Phase S8
+// Langue, région (fuseau, formats, devise), affichage et accessibilité. Aperçu en direct.
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icon';
-import { FontFamily, Radius, Serene, Shadow, Space, Typography } from '@/constants/design';
+import { BottomSheet, Chip, PrimaryButton, TopBar, kitStyles } from '@/components/ui/kit';
+import { FieldLabel, RadioRow, SettingsRow, SettingsSection, ToggleSwitch, settingsStyles } from '@/components/ui/settings';
+import { FontFamily, Serene, Tint } from '@/constants/design';
 
-const LANGUAGES = [
-  { key: 'fr', label: 'Français', native: 'Français' },
-  { key: 'en', label: 'English', native: 'English' },
-  { key: 'es', label: 'Español', native: 'Español' },
-];
-
-const THEMES = ['Clair', 'Sombre', 'Système'];
-const DATE_FORMATS = ['JJ/MM/AAAA', 'MM/JJ/AAAA', 'AAAA-MM-JJ'];
-const WEEK_STARTS = ['Lundi', 'Dimanche'];
-const TEXT_SIZES = ['Normal', 'Grand', 'Très grand'];
-const DEFAULT_VIEWS = ['Mois', 'Semaine', 'Jour'];
+import {
+  CALENDAR_VIEWS,
+  CURRENCIES,
+  DATE_FORMATS,
+  LANGUAGES,
+  TEXT_SIZES,
+  THEMES,
+  TIME_FORMATS,
+  TIMEZONES,
+  WEEK_STARTS,
+} from '../data';
+import { profileActions, useProfileState, type Preferences } from '../store';
 
 export default function PreferencesScreen() {
-  const [language, setLanguage] = useState('fr');
-  const [theme, setTheme] = useState('Clair');
-  const [dateFormat, setDateFormat] = useState(DATE_FORMATS[0]);
-  const [weekStart, setWeekStart] = useState(WEEK_STARTS[0]);
-  const [textSize, setTextSize] = useState(TEXT_SIZES[0]);
-  const [defaultView, setDefaultView] = useState(DEFAULT_VIEWS[0]);
-  const [reduceMotion, setReduceMotion] = useState(false);
-  const [haptics, setHaptics] = useState(true);
+  const saved = useProfileState().preferences;
+  const [draft, setDraft] = useState<Preferences>(saved);
+  const [zoneSheet, setZoneSheet] = useState(false);
+
+  const set = <K extends keyof Preferences>(key: K, value: Preferences[K]) =>
+    setDraft((current) => ({ ...current, [key]: value }));
+  const dirty = (Object.keys(draft) as (keyof Preferences)[]).some((key) => draft[key] !== saved[key]);
+
+  const zone = TIMEZONES.find((entry) => entry.key === draft.timezone);
+  const sample = [
+    `Mardi ${DATE_FORMATS.find((entry) => entry.key === draft.dateFormat)?.sample}`,
+    TIME_FORMATS.find((entry) => entry.key === draft.timeFormat)?.sample,
+    CURRENCIES.find((entry) => entry.key === draft.currency)?.sample,
+  ].join(' • ');
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
-        <Pressable
-          style={styles.headerButton}
-          accessibilityRole="button"
-          accessibilityLabel="Retour"
-          onPress={() => router.back()}>
-          <Icon name="arrow_back" size={22} color={Serene.onSurface} />
-        </Pressable>
-        <Text style={styles.headerTitle}>Préférences</Text>
-        <View style={styles.headerButton} />
-      </View>
-
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}>
-        <SectionTitle icon="language" title="Langue et région" />
-        <View style={styles.card}>
-          {LANGUAGES.map((option, index) => {
-            const active = language === option.key;
-
-            return (
-              <View key={option.key}>
-                {index > 0 ? <View style={styles.divider} /> : null}
-                <Pressable
-                  style={styles.radioRow}
-                  onPress={() => setLanguage(option.key)}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: active }}>
-                  <View style={styles.flagBox}>
-                    <Text style={styles.flagText}>{option.key.toUpperCase()}</Text>
-                  </View>
-                  <View style={styles.radioBody}>
-                    <Text style={styles.radioLabel}>{option.label}</Text>
-                    <Text style={styles.radioHint}>
-                      {option.key === 'fr'
-                        ? 'Langue de l’interface et des notifications'
-                        : option.key === 'en'
-                          ? 'Interface language and notifications'
-                          : 'Idioma de la interfaz y notificaciones'}
-                    </Text>
-                  </View>
-                  <View style={[styles.radio, active && styles.radioActive]}>
-                    {active ? <Icon name="check" size={12} color={Serene.onPrimary} /> : null}
-                  </View>
-                </Pressable>
-              </View>
-            );
-          })}
-        </View>
-
-        <View style={styles.field}>
-          <Text style={styles.fieldLabel}>Fuseau horaire</Text>
-          <View style={styles.selectCard}>
-            <View style={styles.selectIcon}>
-              <Icon name="public" size={18} color={Serene.secondary} />
-            </View>
-            <View style={styles.selectBody}>
-              <Text style={styles.selectValue}>Europe/Paris</Text>
-              <Text style={styles.selectHint}>UTC+2 • Heure d’été</Text>
-            </View>
-            <Icon name="chevron_right" size={20} color={Serene.outlineVariant} />
+    <SafeAreaView style={kitStyles.safe} edges={['top', 'bottom']}>
+      <TopBar title="Préférences" fallback="/profile" />
+      <ScrollView contentContainerStyle={[kitStyles.content, styles.content]} showsVerticalScrollIndicator={false}>
+        {/* Aperçu en direct : la personne voit l'effet avant d'enregistrer */}
+        <View style={styles.preview}>
+          <Icon name="visibility" size={20} color={Tint.primary} />
+          <View style={styles.flex}>
+            <Text style={styles.previewLabel}>Aperçu</Text>
+            <Text style={styles.previewText}>{sample}</Text>
           </View>
         </View>
 
-        <ChipField label="Format de date" options={DATE_FORMATS} value={dateFormat} onChange={setDateFormat} />
-        <ChipField label="Premier jour de la semaine" options={WEEK_STARTS} value={weekStart} onChange={setWeekStart} />
+        <SettingsSection title="Langue" icon="language">
+          {LANGUAGES.map((entry, index) => (
+            <RadioRow
+              key={entry.key}
+              first={index === 0}
+              badge={entry.badge}
+              title={entry.title}
+              subtitle={entry.subtitle}
+              selected={draft.language === entry.key}
+              onPress={() => set('language', entry.key)}
+            />
+          ))}
+        </SettingsSection>
 
-        <SectionTitle icon="palette" title="Affichage" />
-        <ChipField label="Thème" options={THEMES} value={theme} onChange={setTheme} />
-        <ChipField label="Taille du texte" options={TEXT_SIZES} value={textSize} onChange={setTextSize} />
-        <ChipField label="Vue par défaut du calendrier" options={DEFAULT_VIEWS} value={defaultView} onChange={setDefaultView} />
+        <SettingsSection title="Région" icon="public" footer="Les dates et heures s’affichent dans votre fuseau horaire.">
+          <SettingsRow
+            first
+            icon="schedule"
+            title="Fuseau horaire"
+            subtitle={zone ? `${zone.title} • ${zone.subtitle}` : draft.timezone}
+            onPress={() => setZoneSheet(true)}
+          />
+          <ChipGroup label="Format de date">
+            {DATE_FORMATS.map((entry) => (
+              <Chip key={entry.key} label={entry.label} selected={draft.dateFormat === entry.key} onPress={() => set('dateFormat', entry.key)} />
+            ))}
+          </ChipGroup>
+          <ChipGroup label="Format de l’heure">
+            {TIME_FORMATS.map((entry) => (
+              <Chip key={entry.key} label={entry.label} selected={draft.timeFormat === entry.key} onPress={() => set('timeFormat', entry.key)} />
+            ))}
+          </ChipGroup>
+          <ChipGroup label="Devise">
+            {CURRENCIES.map((entry) => (
+              <Chip key={entry.key} label={entry.label} selected={draft.currency === entry.key} onPress={() => set('currency', entry.key)} />
+            ))}
+          </ChipGroup>
+          <ChipGroup label="Premier jour de la semaine">
+            {WEEK_STARTS.map((entry) => (
+              <Chip key={entry.key} label={entry.label} selected={draft.weekStart === entry.key} onPress={() => set('weekStart', entry.key)} />
+            ))}
+          </ChipGroup>
+        </SettingsSection>
 
-        <SectionTitle icon="accessibility_new" title="Accessibilité" />
-        <View style={styles.card}>
-          <ToggleRow
+        <SettingsSection title="Affichage" icon="palette">
+          <ChipGroup label="Thème" first>
+            {THEMES.map((entry) => (
+              <Chip key={entry.key} label={entry.label} icon={entry.icon} selected={draft.theme === entry.key} onPress={() => set('theme', entry.key)} />
+            ))}
+          </ChipGroup>
+          <ChipGroup label="Taille du texte">
+            {TEXT_SIZES.map((entry) => (
+              <Chip key={entry.key} label={entry.label} selected={draft.textSize === entry.key} onPress={() => set('textSize', entry.key)} />
+            ))}
+          </ChipGroup>
+          <ChipGroup label="Vue du calendrier à l’ouverture">
+            {CALENDAR_VIEWS.map((entry) => (
+              <Chip key={entry.key} label={entry.label} selected={draft.calendarView === entry.key} onPress={() => set('calendarView', entry.key)} />
+            ))}
+          </ChipGroup>
+        </SettingsSection>
+
+        <SettingsSection title="Accessibilité" icon="accessibility_new">
+          <SettingsRow
+            first
             icon="motion_photos_off"
-            label="Réduire les animations"
-            hint="Limiter les transitions et effets"
-            value={reduceMotion}
-            onChange={setReduceMotion}
+            title="Réduire les animations"
+            subtitle="Limiter les transitions et le carrousel"
+            right={<ToggleSwitch value={draft.reduceMotion} label="Réduire les animations" onValueChange={(value) => set('reduceMotion', value)} />}
           />
-          <View style={styles.divider} />
-          <ToggleRow
+          <SettingsRow
             icon="vibration"
-            label="Retour haptique"
-            hint="Vibrations légères lors des actions"
-            value={haptics}
-            onChange={setHaptics}
+            title="Retour haptique"
+            subtitle="Vibrations légères lors des actions"
+            right={<ToggleSwitch value={draft.haptics} label="Retour haptique" onValueChange={(value) => set('haptics', value)} />}
           />
-        </View>
+        </SettingsSection>
 
-        <View style={styles.infoCard}>
-          <Icon name="sync" size={16} color={Serene.onSurfaceVariant} />
-          <Text style={styles.infoText}>
-            Ces préférences sont synchronisées sur tous vos appareils connectés à votre compte.
-          </Text>
+        <View style={styles.sync}>
+          <Icon name="sync" size={18} color={Serene.onSurfaceVariant} />
+          <Text style={styles.syncText}>Vos préférences sont synchronisées sur tous vos appareils.</Text>
         </View>
-
-        <Pressable
-          style={styles.saveButton}
-          accessibilityRole="button"
-          onPress={() => router.back()}>
-          <Icon name="check" size={18} color={Serene.onPrimary} />
-          <Text style={styles.saveButtonText}>Enregistrer les préférences</Text>
-        </Pressable>
       </ScrollView>
+
+      <View style={styles.footer}>
+        <PrimaryButton
+          label={dirty ? 'Enregistrer les préférences' : 'Aucune modification'}
+          icon="check"
+          disabled={!dirty}
+          onPress={() => {
+            profileActions.savePreferences(draft);
+            profileActions.setFlash({ text: 'Préférences enregistrées' });
+            if (router.canGoBack()) router.back();
+            else router.replace('/profile');
+          }}
+        />
+      </View>
+
+      <BottomSheet visible={zoneSheet} title="Fuseau horaire" subtitle="Choisissez où vous vivez" onClose={() => setZoneSheet(false)}>
+        <View style={styles.zoneList}>
+          {TIMEZONES.map((entry, index) => (
+            <RadioRow
+              key={entry.key}
+              first={index === 0}
+              title={entry.title}
+              subtitle={entry.subtitle}
+              selected={draft.timezone === entry.key}
+              onPress={() => {
+                set('timezone', entry.key);
+                setZoneSheet(false);
+              }}
+            />
+          ))}
+        </View>
+      </BottomSheet>
     </SafeAreaView>
   );
 }
 
-function SectionTitle({ icon, title }: { icon: string; title: string }) {
+/** Groupe de puces défilant horizontalement, avec son libellé. */
+function ChipGroup({ label, children, first }: { label: string; children: React.ReactNode; first?: boolean }) {
   return (
-    <View style={styles.sectionHeader}>
-      <Icon name={icon} size={17} color={Serene.onSurfaceVariant} />
-      <Text style={styles.sectionTitle}>{title}</Text>
-    </View>
-  );
-}
-
-function ChipField({
-  label,
-  options,
-  value,
-  onChange,
-}: {
-  label: string;
-  options: string[];
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <View style={styles.field}>
-      <Text style={styles.fieldLabel}>{label}</Text>
-      <View style={styles.chipsWrap}>
-        {options.map((option) => {
-          const active = value === option;
-
-          return (
-            <Pressable
-              key={option}
-              style={[styles.chip, active && styles.chipActive]}
-              onPress={() => onChange(option)}
-              accessibilityRole="button"
-              accessibilityState={{ selected: active }}>
-              <Text style={[styles.chipText, active && styles.chipTextActive]}>{option}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
-    </View>
-  );
-}
-
-function ToggleRow({
-  icon,
-  label,
-  hint,
-  value,
-  onChange,
-}: {
-  icon: string;
-  label: string;
-  hint: string;
-  value: boolean;
-  onChange: (value: boolean) => void;
-}) {
-  return (
-    <View style={styles.toggleRow}>
-      <View style={styles.toggleIcon}>
-        <Icon name={icon} size={18} color={Serene.onSurfaceVariant} />
-      </View>
-      <View style={styles.toggleBody}>
-        <Text style={styles.radioLabel}>{label}</Text>
-        <Text style={styles.radioHint}>{hint}</Text>
-      </View>
-      <Switch
-        value={value}
-        onValueChange={onChange}
-        trackColor={{ false: Serene.surfaceContainerHigh, true: Serene.secondary }}
-        thumbColor={Serene.surfaceContainerLowest}
-      />
+    <View style={[settingsStyles.inset, !first && settingsStyles.insetBorder]}>
+      <FieldLabel>{label}</FieldLabel>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={settingsStyles.chips}>
+        {children}
+      </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: Serene.surface,
-  },
-  header: {
-    height: 56,
-    paddingHorizontal: Space.gutter,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Serene.surface,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Serene.surfaceContainerHigh,
-  },
-  headerButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    flex: 1,
-    textAlign: 'center',
-    ...Typography.titleMd,
-    color: Serene.onSurface,
-  },
-  scroll: {
+  flex: {
     flex: 1,
   },
   content: {
-    paddingHorizontal: Space.gutter,
-    paddingTop: Space.md,
-    paddingBottom: Space.lg,
-    gap: Space.md,
+    paddingTop: 4,
+    paddingBottom: 24,
   },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: Space.sm,
-  },
-  sectionTitle: {
-    ...Typography.headlineSm,
-    color: Serene.onSurface,
-  },
-  card: {
-    paddingHorizontal: Space.sm,
-    borderRadius: Radius.xl,
-    backgroundColor: Serene.surfaceContainerLowest,
-    ...Shadow.card,
-  },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: Serene.surfaceContainerHigh,
-  },
-  radioRow: {
+  preview: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 4,
+    padding: 14,
+    borderRadius: 16,
+    backgroundColor: '#f0fdfa',
+    borderWidth: 1,
+    borderColor: '#99f6e4',
   },
-  flagBox: {
-    width: 34,
-    height: 34,
-    borderRadius: Radius.md,
-    backgroundColor: Serene.surfaceContainerLow,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  flagText: {
-    fontFamily: FontFamily.bodyBold,
-    fontSize: 11,
-    lineHeight: 15,
-    color: Serene.onSurfaceVariant,
-  },
-  radioBody: {
-    flex: 1,
-    minWidth: 0,
-  },
-  radioLabel: {
-    fontFamily: FontFamily.bodyMedium,
+  previewLabel: {
+    fontFamily: FontFamily.bodySemiBold,
     fontSize: 13,
     lineHeight: 18,
-    color: Serene.onSurface,
+    color: Tint.primary,
   },
-  radioHint: {
-    fontFamily: FontFamily.body,
-    fontSize: 11,
-    lineHeight: 15,
-    color: Serene.onSurfaceVariant,
-  },
-  radio: {
-    width: 20,
-    height: 20,
-    borderRadius: Radius.full,
-    borderWidth: 1.5,
-    borderColor: Serene.outlineVariant,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  radioActive: {
-    borderWidth: 0,
-    backgroundColor: Serene.secondary,
-  },
-  field: {
-    gap: 6,
-  },
-  fieldLabel: {
+  previewText: {
     fontFamily: FontFamily.bodySemiBold,
-    fontSize: 11,
-    lineHeight: 14,
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
-    color: Serene.onSurfaceVariant,
+    fontSize: 16,
+    lineHeight: 22,
+    color: Tint.navy,
   },
-  selectCard: {
+  sync: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    padding: 12,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.surfaceContainerLowest,
-    ...Shadow.card,
-  },
-  selectIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: Radius.md,
-    backgroundColor: Serene.surfaceContainerLow,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  selectBody: {
-    flex: 1,
-  },
-  selectValue: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 14,
-    lineHeight: 19,
-    color: Serene.onSurface,
-  },
-  selectHint: {
-    fontFamily: FontFamily.body,
-    fontSize: 11,
-    lineHeight: 15,
-    color: Serene.onSurfaceVariant,
-  },
-  chipsWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 8,
+    marginTop: 18,
+    paddingHorizontal: 4,
   },
-  chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.surfaceContainerLowest,
-    ...Shadow.card,
-  },
-  chipActive: {
-    backgroundColor: Serene.primary,
-  },
-  chipText: {
-    fontFamily: FontFamily.bodyMedium,
+  syncText: {
+    flex: 1,
+    fontFamily: FontFamily.body,
     fontSize: 13,
     lineHeight: 18,
     color: Serene.onSurfaceVariant,
   },
-  chipTextActive: {
-    color: Serene.onPrimary,
+  zoneList: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: Tint.border,
+    overflow: 'hidden',
   },
-  toggleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 4,
-  },
-  toggleIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: Radius.md,
-    backgroundColor: Serene.surfaceContainerLow,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  toggleBody: {
-    flex: 1,
-    minWidth: 0,
-  },
-  infoCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    padding: 12,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.surfaceContainerLow,
-  },
-  infoText: {
-    flex: 1,
-    fontFamily: FontFamily.body,
-    fontSize: 12,
-    lineHeight: 17,
-    color: Serene.onSurfaceVariant,
-  },
-  saveButton: {
-    height: 48,
-    borderRadius: Radius.xl,
-    backgroundColor: Serene.primary,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    ...Shadow.floating,
-  },
-  saveButtonText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 14,
-    lineHeight: 20,
-    color: Serene.onPrimary,
+  footer: {
+    width: '100%',
+    maxWidth: 560,
+    alignSelf: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Tint.border,
+    backgroundColor: Tint.softer,
   },
 });

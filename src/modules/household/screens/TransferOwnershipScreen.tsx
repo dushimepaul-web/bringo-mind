@@ -1,497 +1,245 @@
-// S-18 - Transfert de propriété du foyer | Module M08 Foyer partagé | Phase S7
-import { router } from 'expo-router';
+// Mobile - Transférer la propriété du foyer | Module M08 Foyer | Phase S7
+// Action sensible : choix du membre, conséquences expliquées, confirmation forte (nom du foyer).
+import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icon';
-import { FontFamily, Radius, Serene, Shadow, Space, Typography } from '@/constants/design';
+import { PrimaryButton, TopBar, kitStyles } from '@/components/ui/kit';
+import { FontFamily, Serene, Tint } from '@/constants/design';
 
-const CANDIDATES = [
-  {
-    id: 'thomas',
-    initial: 'T',
-    name: 'Thomas Martin',
-    email: 'thomas.martin@email.fr',
-    role: 'Admin',
-    eligible: true,
-  },
-  {
-    id: 'leo',
-    initial: 'L',
-    name: 'Léo Martin',
-    email: 'leo.martin@email.fr',
-    role: 'Membre',
-    eligible: false,
-  },
-];
+import { Avatar, ChoiceCard } from '../components/household-ui';
+import { ROLE_LABELS, firstName } from '../data';
+import { householdActions, useHouseholdState } from '../store';
 
 export default function TransferOwnershipScreen() {
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [confirmed, setConfirmed] = useState(false);
-  const [done, setDone] = useState(false);
+  const { to } = useLocalSearchParams<{ to?: string }>();
+  const { name, members } = useHouseholdState();
+  const me = members.find((member) => member.you);
+  const eligible = members.filter((member) => !member.you && member.role !== 'child');
+  const [target, setTarget] = useState(() => eligible.find((member) => member.id === to)?.id ?? eligible[0]?.id);
+  // Démo : confirmation préremplie, comme tous les champs.
+  const [typed, setTyped] = useState(name);
+  const [focused, setFocused] = useState(false);
 
-  const selected = CANDIDATES.find((candidate) => candidate.id === selectedId);
-  const canTransfer = Boolean(selected) && confirmed;
+  const chosen = eligible.find((member) => member.id === target);
+  const matches = typed.trim().toLowerCase() === name.trim().toLowerCase();
 
-  if (done && selected) {
+  if (me?.role !== 'owner' || !chosen) {
     return (
-      <SafeAreaView style={styles.safe} edges={['top']}>
-        <View style={styles.header}>
-          <Pressable style={styles.headerButton} onPress={() => router.back()}>
-            <Icon name="arrow_back" size={22} color={Serene.onSurface} />
-          </Pressable>
-          <Text style={styles.headerTitle}>Transfert de propriété</Text>
-          <View style={styles.headerButton} />
-        </View>
-
-        <View style={styles.doneWrap}>
-          <View style={styles.doneIcon}>
-            <Icon name="swap_horiz" size={34} color={Serene.success} />
+      <SafeAreaView style={kitStyles.safe} edges={['top']}>
+        <TopBar title="Transférer la propriété" fallback="/household" />
+        <View style={[kitStyles.content, styles.content]}>
+          <View style={[kitStyles.card, styles.blocked]}>
+            <Icon name="info" size={28} color={Tint.primary} />
+            <Text style={kitStyles.title}>Transfert indisponible</Text>
+            <Text style={[kitStyles.muted, styles.center]}>
+              {me?.role !== 'owner'
+                ? 'Seul le propriétaire du foyer peut le transférer.'
+                : 'Invitez d’abord un autre adulte dans le foyer.'}
+            </Text>
           </View>
-          <Text style={styles.doneTitle}>Propriété transférée</Text>
-          <Text style={styles.doneText}>
-            {selected.name} est désormais propriétaire du Foyer Martin. Vous conservez votre
-            accès en tant qu’administrateur.
-          </Text>
-          <Pressable
-            style={styles.transferButton}
-            accessibilityRole="button"
-            onPress={() => router.replace('/household/members')}>
-            <Icon name="group" size={18} color={Serene.onPrimary} />
-            <Text style={styles.transferButtonText}>Retour aux membres</Text>
-          </Pressable>
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
-        <Pressable
-          style={styles.headerButton}
-          accessibilityRole="button"
-          accessibilityLabel="Retour"
-          onPress={() => router.back()}>
-          <Icon name="arrow_back" size={22} color={Serene.onSurface} />
-        </Pressable>
-        <Text style={styles.headerTitle}>Transfert de propriété</Text>
-        <View style={styles.headerButton} />
-      </View>
-
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}>
-        <View style={styles.warningCard}>
-          <Icon name="warning" size={20} color={Serene.error} />
-          <View style={styles.warningBody}>
-            <Text style={styles.warningTitle}>Action sensible</Text>
-            <Text style={styles.warningText}>
-              Le nouveau propriétaire pourra gérer les membres, les rôles et supprimer le
-              foyer. Vous deviendrez administrateur.
-            </Text>
+    <SafeAreaView style={kitStyles.safe} edges={['top', 'bottom']}>
+      <TopBar title="Transférer la propriété" close fallback="/household/members" />
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView
+          contentContainerStyle={[kitStyles.content, styles.content]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}>
+          <View style={styles.swap}>
+            <View style={styles.swapPerson}>
+              <Avatar name={me.name} color={me.color} size={56} />
+              <Text style={styles.swapName}>Vous</Text>
+              <Text style={styles.swapRole}>Propriétaire → Admin</Text>
+            </View>
+            <Icon name="arrow_forward" size={26} color={Serene.onSurfaceVariant} />
+            <View style={styles.swapPerson}>
+              <Avatar name={chosen.name} color={chosen.color} size={56} />
+              <Text style={styles.swapName}>{firstName(chosen.name)}</Text>
+              <Text style={styles.swapRole}>
+                {ROLE_LABELS[chosen.role]} → Propriétaire
+              </Text>
+            </View>
           </View>
-        </View>
 
-        <Text style={styles.sectionLabel}>Propriétaire actuel</Text>
-        <View style={styles.currentCard}>
-          <View style={styles.avatarOwner}>
-            <Text style={styles.avatarInitial}>C</Text>
+          <Text style={[kitStyles.label, styles.label]}>Nouveau propriétaire</Text>
+          <View style={styles.stack}>
+            {eligible.map((member) => (
+              <ChoiceCard
+                key={member.id}
+                title={member.name}
+                hint={`${ROLE_LABELS[member.role]} • ${member.email}`}
+                selected={target === member.id}
+                onPress={() => setTarget(member.id)}
+              />
+            ))}
           </View>
-          <View style={styles.currentBody}>
-            <Text style={styles.currentName}>Claire Martin</Text>
-            <Text style={styles.currentEmail}>claire.martin@email.fr</Text>
-          </View>
-          <View style={styles.ownerPill}>
-            <Text style={styles.ownerPillText}>Propriétaire</Text>
-          </View>
-        </View>
 
-        <Text style={styles.sectionLabel}>Choisir le nouveau propriétaire</Text>
-        <View style={styles.list}>
-          {CANDIDATES.map((candidate) => {
-            const active = selectedId === candidate.id;
-
-            return (
-              <Pressable
-                key={candidate.id}
-                style={[
-                  styles.candidateCard,
-                  active && styles.candidateCardActive,
-                  !candidate.eligible && styles.candidateCardDisabled,
-                ]}
-                disabled={!candidate.eligible}
-                onPress={() => setSelectedId(candidate.id)}
-                accessibilityRole="button"
-                accessibilityState={{ selected: active, disabled: !candidate.eligible }}>
-                <View
-                  style={[
-                    styles.avatar,
-                    candidate.eligible ? styles.avatarMember : styles.avatarChild,
-                  ]}>
-                  <Text style={styles.avatarInitial}>{candidate.initial}</Text>
-                </View>
-                <View style={styles.candidateBody}>
-                  <Text style={styles.candidateName}>{candidate.name}</Text>
-                  <Text style={styles.candidateEmail}>{candidate.email}</Text>
-                  <Text style={styles.candidateRole}>
-                    {candidate.eligible ? candidate.role : 'Compte enfant • non éligible'}
-                  </Text>
-                </View>
-                <View
-                  style={[
-                    styles.radio,
-                    active && styles.radioActive,
-                    !candidate.eligible && styles.radioDisabled,
-                  ]}>
-                  {active ? <Icon name="check" size={12} color={Serene.onPrimary} /> : null}
-                </View>
-              </Pressable>
-            );
-          })}
-        </View>
-
-        <Pressable
-          style={styles.confirmRow}
-          onPress={() => setConfirmed((value) => !value)}
-          accessibilityRole="checkbox"
-          accessibilityState={{ checked: confirmed }}>
-          <View style={[styles.checkbox, confirmed && styles.checkboxChecked]}>
-            {confirmed ? <Icon name="check" size={13} color={Serene.onPrimary} /> : null}
+          <View style={[kitStyles.card, styles.warning]}>
+            <View style={styles.warningHead}>
+              <Icon name="warning" size={22} color="#b45309" />
+              <Text style={styles.warningTitle}>Ce qui va changer</Text>
+            </View>
+            {[
+              `${firstName(chosen.name)} pourra gérer les membres, transférer ou supprimer le foyer.`,
+              'Vous restez dans le foyer comme admin.',
+              `Seul ${firstName(chosen.name)} pourra vous rendre la propriété.`,
+              'Vos éléments personnels ne sont pas concernés.',
+            ].map((line) => (
+              <View key={line} style={styles.warningLine}>
+                <View style={styles.bullet} />
+                <Text style={styles.warningText}>{line}</Text>
+              </View>
+            ))}
           </View>
-          <Text style={styles.confirmText}>
-            Je comprends que cette action transfère définitivement la propriété du foyer.
+
+          <Text style={[kitStyles.label, styles.label]}>Pour confirmer, saisissez le nom du foyer</Text>
+          <TextInput
+            style={[kitStyles.input, focused && kitStyles.inputFocused]}
+            value={typed}
+            onChangeText={setTyped}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            autoCorrect={false}
+            placeholder={name}
+            placeholderTextColor={Serene.onSurfaceVariant}
+            selectionColor={Tint.primary}
+            accessibilityLabel={`Saisissez ${name} pour confirmer`}
+          />
+          <Text style={[styles.hint, matches && styles.hintOk]}>
+            {matches ? 'Nom confirmé' : `Saisissez exactement « ${name} »`}
           </Text>
-        </Pressable>
+        </ScrollView>
 
-        <View style={styles.infoCard}>
-          <Icon name="info" size={16} color={Serene.onSurfaceVariant} />
-          <Text style={styles.infoText}>
-            Une notification sera envoyée à tous les membres. Le transfert est journalisé dans
-            l’activité du foyer.
-          </Text>
+        <View style={styles.footer}>
+          <PrimaryButton
+            label={`Transférer à ${firstName(chosen.name)}`}
+            icon="swap_horiz"
+            disabled={!matches}
+            onPress={() => {
+              householdActions.transferOwnership(chosen.id);
+              householdActions.setFlash({ text: `${firstName(chosen.name)} est maintenant propriétaire du foyer` });
+              if (router.canGoBack()) router.back();
+              else router.replace('/household/members');
+            }}
+          />
         </View>
-
-        <Pressable
-          style={[styles.transferButton, !canTransfer && styles.transferButtonDisabled]}
-          disabled={!canTransfer}
-          onPress={() => setDone(true)}
-          accessibilityRole="button">
-          <Icon name="swap_horiz" size={18} color={Serene.onPrimary} />
-          <Text style={styles.transferButtonText}>
-            {selected ? `Transférer à ${selected.name.split(' ')[0]}` : 'Transférer la propriété'}
-          </Text>
-        </Pressable>
-
-        <Pressable style={styles.cancelButton} onPress={() => router.back()}>
-          <Text style={styles.cancelButtonText}>Annuler</Text>
-        </Pressable>
-      </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: {
+  flex: {
     flex: 1,
-    backgroundColor: Serene.surface,
   },
-  header: {
-    height: 56,
-    paddingHorizontal: Space.gutter,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Serene.surface,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Serene.surfaceContainerHigh,
-  },
-  headerButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    flex: 1,
+  center: {
     textAlign: 'center',
-    ...Typography.titleMd,
-    color: Serene.onSurface,
-  },
-  scroll: {
-    flex: 1,
   },
   content: {
-    paddingHorizontal: Space.gutter,
-    paddingTop: Space.md,
-    paddingBottom: Space.lg,
+    paddingTop: 4,
+    paddingBottom: 24,
   },
-  warningCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    padding: 14,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.errorContainer,
+  blocked: {
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 24,
   },
-  warningBody: {
-    flex: 1,
-  },
-  warningTitle: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onErrorContainer,
-  },
-  warningText: {
-    fontFamily: FontFamily.body,
-    fontSize: 12,
-    lineHeight: 17,
-    color: Serene.onErrorContainer,
-    marginTop: 2,
-  },
-  sectionLabel: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 11,
-    lineHeight: 14,
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
-    color: Serene.onSurfaceVariant,
-    marginTop: Space.lg,
-    marginBottom: Space.sm,
-  },
-  currentCard: {
+  swap: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    padding: 14,
-    borderRadius: Radius.xl,
-    backgroundColor: Serene.surfaceContainerLowest,
-    ...Shadow.card,
-  },
-  avatarOwner: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.primary,
-    alignItems: 'center',
     justifyContent: 'center',
+    gap: 14,
+    paddingVertical: 12,
   },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.full,
+  swapPerson: {
+    width: 128,
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 4,
   },
-  avatarMember: {
-    backgroundColor: Serene.secondary,
+  swapName: {
+    fontFamily: FontFamily.headingBold,
+    fontSize: 17,
+    lineHeight: 23,
+    color: Tint.navy,
   },
-  avatarChild: {
-    backgroundColor: Serene.outlineVariant,
-  },
-  avatarInitial: {
-    fontFamily: FontFamily.bodyBold,
-    fontSize: 15,
-    lineHeight: 20,
-    color: Serene.onPrimary,
-  },
-  currentBody: {
-    flex: 1,
-    minWidth: 0,
-  },
-  currentName: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 14,
-    lineHeight: 19,
-    color: Serene.onSurface,
-  },
-  currentEmail: {
-    fontFamily: FontFamily.body,
-    fontSize: 12,
-    lineHeight: 16,
-    color: Serene.onSurfaceVariant,
-  },
-  ownerPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.primary,
-  },
-  ownerPillText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 9,
-    lineHeight: 13,
-    color: Serene.onPrimary,
-  },
-  list: {
-    gap: 10,
-  },
-  candidateCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    padding: 14,
-    borderRadius: Radius.xl,
-    borderWidth: 1,
-    borderColor: 'transparent',
-    backgroundColor: Serene.surfaceContainerLowest,
-    ...Shadow.card,
-  },
-  candidateCardActive: {
-    borderColor: Serene.secondary,
-    backgroundColor: Serene.secondaryContainer,
-  },
-  candidateCardDisabled: {
-    backgroundColor: Serene.surfaceContainerLow,
-    opacity: 0.7,
-  },
-  candidateBody: {
-    flex: 1,
-    minWidth: 0,
-  },
-  candidateName: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 14,
-    lineHeight: 19,
-    color: Serene.onSurface,
-  },
-  candidateEmail: {
-    fontFamily: FontFamily.body,
-    fontSize: 12,
-    lineHeight: 16,
-    color: Serene.onSurfaceVariant,
-  },
-  candidateRole: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 10,
-    lineHeight: 14,
-    color: Serene.onSurfaceVariant,
-    marginTop: 1,
-  },
-  radio: {
-    width: 22,
-    height: 22,
-    borderRadius: Radius.full,
-    borderWidth: 1.5,
-    borderColor: Serene.outlineVariant,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  radioActive: {
-    borderWidth: 0,
-    backgroundColor: Serene.secondary,
-  },
-  radioDisabled: {
-    backgroundColor: Serene.surfaceContainerHigh,
-    borderColor: Serene.surfaceContainerHigh,
-  },
-  confirmRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    marginTop: Space.lg,
-    padding: 12,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.surfaceContainerLowest,
-  },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 6,
-    borderWidth: 1.5,
-    borderColor: Serene.outlineVariant,
-    backgroundColor: Serene.surfaceContainerLowest,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 1,
-  },
-  checkboxChecked: {
-    borderWidth: 0,
-    backgroundColor: Serene.secondary,
-  },
-  confirmText: {
-    flex: 1,
+  swapRole: {
     fontFamily: FontFamily.body,
     fontSize: 13,
     lineHeight: 18,
-    color: Serene.onSurface,
-  },
-  infoCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    marginTop: 12,
-    padding: 12,
-    borderRadius: Radius.lg,
-    backgroundColor: Serene.surfaceContainerLow,
-  },
-  infoText: {
-    flex: 1,
-    fontFamily: FontFamily.body,
-    fontSize: 12,
-    lineHeight: 17,
-    color: Serene.onSurfaceVariant,
-  },
-  transferButton: {
-    height: 48,
-    marginTop: Space.lg,
-    borderRadius: Radius.xl,
-    backgroundColor: Serene.error,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    ...Shadow.floating,
-  },
-  transferButtonDisabled: {
-    backgroundColor: Serene.surfaceDim,
-  },
-  transferButtonText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 14,
-    lineHeight: 20,
-    color: Serene.onPrimary,
-  },
-  cancelButton: {
-    height: 40,
-    marginTop: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cancelButtonText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurfaceVariant,
-  },
-  doneWrap: {
-    flex: 1,
-    alignItems: 'center',
-    paddingHorizontal: Space.gutter,
-    paddingTop: Space.xl,
-    gap: 8,
-  },
-  doneIcon: {
-    width: 76,
-    height: 76,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.successContainer,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 6,
-  },
-  doneTitle: {
-    ...Typography.headlineSm,
-    color: Serene.onSurface,
-  },
-  doneText: {
-    fontFamily: FontFamily.body,
-    fontSize: 13,
-    lineHeight: 19,
     color: Serene.onSurfaceVariant,
     textAlign: 'center',
-    maxWidth: 320,
+  },
+  label: {
+    marginTop: 20,
+    marginBottom: 8,
+  },
+  stack: {
+    gap: 10,
+  },
+  warning: {
+    marginTop: 18,
+    gap: 8,
+    backgroundColor: '#fffbeb',
+    borderColor: '#fde68a',
+  },
+  warningHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  warningTitle: {
+    fontFamily: FontFamily.headingBold,
+    fontSize: 16,
+    lineHeight: 22,
+    color: '#92400e',
+  },
+  warningLine: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  bullet: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginTop: 8,
+    backgroundColor: '#b45309',
+  },
+  warningText: {
+    flex: 1,
+    fontFamily: FontFamily.body,
+    fontSize: 14,
+    lineHeight: 20,
+    color: Tint.navy,
+  },
+  hint: {
+    marginTop: 6,
+    fontFamily: FontFamily.body,
+    fontSize: 13,
+    lineHeight: 18,
+    color: Serene.onSurfaceVariant,
+  },
+  hintOk: {
+    fontFamily: FontFamily.bodySemiBold,
+    color: Tint.primary,
+  },
+  footer: {
+    width: '100%',
+    maxWidth: 560,
+    alignSelf: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Tint.border,
+    backgroundColor: Tint.softer,
   },
 });
