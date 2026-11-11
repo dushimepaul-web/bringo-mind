@@ -2,7 +2,7 @@
 // Regroupées par jour ; toucher ouvre l'élément concerné ; balayer pour marquer lu ou supprimer (avec « Annuler »).
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icon';
@@ -10,7 +10,10 @@ import { Chip, IconButton, SwipeRow, TopBar, UndoToast, kitStyles } from '@/comp
 import { FontFamily, Radius, Serene, Tint } from '@/constants/design';
 import { dayOffset, formatDay, formatTime } from '@/lib/demo-dates';
 
-import { notificationActions, useNotifications, type AppNotification, type NotificationKind } from '../store';
+import { QueryView } from '@/components/ui/states';
+import { useQuery } from '@/hooks/use-query';
+
+import { notificationActions, syncNotifications, useNotifications, type AppNotification, type NotificationKind } from '../store';
 
 type Filter = 'all' | 'unread' | NotificationKind;
 
@@ -39,6 +42,7 @@ function groupOf(date: Date): string {
 
 export default function NotificationCenterScreen() {
   const { items } = useNotifications();
+  const sync = useQuery('notifications', syncNotifications);
   const [filter, setFilter] = useState<Filter>('all');
   const [toast, setToast] = useState<{ text: string; undo?: () => void } | null>(null);
 
@@ -63,7 +67,10 @@ export default function NotificationCenterScreen() {
         title="Notifications"
         right={<IconButton icon="settings" label="Réglages des notifications" onPress={() => router.push('/notifications/settings')} />}
       />
-      <ScrollView contentContainerStyle={[kitStyles.content, styles.content]} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[kitStyles.content, styles.content]}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={sync.refreshing} onRefresh={sync.reload} tintColor={Tint.primary} colors={[Tint.primary]} />}>
         <View style={styles.summary}>
           <Text style={kitStyles.muted}>
             {unread ? `${unread} non lue${unread > 1 ? 's' : ''}` : 'Tout est lu'}
@@ -98,6 +105,7 @@ export default function NotificationCenterScreen() {
           <Text style={styles.quietText}>Heures de silence de 22h00 à 07h00 • rappels critiques autorisés</Text>
         </View>
 
+        <QueryView query={sync} empty={{ icon: 'notifications_none', title: 'Aucune notification', text: 'Vos échéances, rappels et nouveautés du foyer apparaîtront ici.' }}>
         {groups.length === 0 ? (
           <View style={[kitStyles.card, styles.empty]}>
             <Icon name="notifications_off" size={28} color={Tint.primary} />
@@ -156,6 +164,7 @@ export default function NotificationCenterScreen() {
             </View>
           ))
         )}
+        </QueryView>
 
         <Text style={styles.hint}>Balayez vers la droite pour marquer lu, vers la gauche pour supprimer.</Text>
       </ScrollView>

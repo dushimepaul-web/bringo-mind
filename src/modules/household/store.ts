@@ -4,7 +4,10 @@ import { useSyncExternalStore } from 'react';
 import { Tint } from '@/constants/design';
 import { DEMO_TODAY, addDays } from '@/lib/demo-dates';
 
+import { IS_DEMO } from '@/lib/config';
+
 import { DEMO_ACTIVITY, DEMO_HOUSEHOLD, DEMO_INVITATIONS, DEMO_MEMBERS } from './data';
+import { householdApi } from './services/household.service';
 import type { Activity, HouseholdRole, Invitation, Member } from './types';
 
 type Snapshot = {
@@ -153,3 +156,22 @@ export const householdActions = {
     emit({ flash });
   },
 };
+
+/** Charge le foyer depuis l'API (mode « api ») ; ne fait rien en démo. */
+export async function syncHousehold(): Promise<void> {
+  if (IS_DEMO) return;
+  const result = await householdApi.load();
+  if (!result) {
+    emit({ hasHousehold: false });
+    return;
+  }
+  emit({
+    hasHousehold: true,
+    name: result.household.name,
+    createdAt: new Date(result.household.created_at),
+    demoContent: false,
+    members: result.members,
+    invitations: result.invitations,
+    activity: [],
+  });
+}

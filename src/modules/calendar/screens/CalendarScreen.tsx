@@ -1,7 +1,7 @@
 // S-13 - Calendrier (planning, jour, semaine, mois, année) | Module M07 Rendez-vous et calendrier | Phase S6
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppHeader } from '@/components/app-header';
@@ -19,7 +19,10 @@ import {
   type SpaceFilter,
 } from '../components/calendar-ui';
 import { MONTHS, TASK_DEADLINES, TONES, WEEKDAY_LETTERS, WEEKDAY_SHORT, monthGrid, weekOf } from '../data';
-import { eventActions, useCalendarState } from '../store';
+import { QueryView } from '@/components/ui/states';
+import { useQuery } from '@/hooks/use-query';
+
+import { eventActions, syncEvents, useCalendarState } from '../store';
 import type { CalendarEvent } from '../types';
 
 type View3 = Exclude<CalendarView, 'planning'>;
@@ -43,6 +46,7 @@ function dotColor(item: DayItem): string {
 
 export default function CalendarScreen() {
   const { events, flash } = useCalendarState();
+  const sync = useQuery('events', syncEvents);
   const params = useLocalSearchParams<{ view?: string }>();
   const [view, setView] = useState<View3>(() => (isView(params.view) ? params.view : 'month'));
   const [lastParam, setLastParam] = useState(params.view);
@@ -136,7 +140,8 @@ export default function CalendarScreen() {
       <ScrollView
         style={styles.flex}
         contentContainerStyle={[kitStyles.content, styles.content]}
-        showsVerticalScrollIndicator={false}>
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={sync.refreshing} onRefresh={sync.reload} tintColor={Tint.primary} colors={[Tint.primary]} />}>
         <View style={styles.titleRow}>
           <View style={styles.flex}>
             <Text style={styles.eyebrow}>Mon agenda</Text>
@@ -218,6 +223,7 @@ export default function CalendarScreen() {
           ))}
         </ScrollView>
 
+        <QueryView query={sync}>
         <View
           onTouchStart={(event) => {
             touchX.current = event.nativeEvent.pageX;
@@ -358,6 +364,7 @@ export default function CalendarScreen() {
             )}
           </View>
         ) : null}
+        </QueryView>
       </ScrollView>
 
       <View style={styles.fabWrap} pointerEvents="box-none">

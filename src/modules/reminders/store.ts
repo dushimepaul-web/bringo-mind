@@ -1,7 +1,10 @@
 // Mémoire de démonstration partagée par les écrans du module Rappels.
 import { useSyncExternalStore } from 'react';
 
+import { IS_DEMO } from '@/lib/config';
+
 import { DEMO_REMINDERS } from './data';
+import { remindersApi, toReminder } from './services/reminders.service';
 import type { Reminder, ReminderDraft } from './types';
 
 type Snapshot = {
@@ -79,3 +82,10 @@ export const reminderActions = {
     emit({ flash });
   },
 };
+
+/** Charge les rappels depuis l'API (mode « api ») ; ne fait rien en démo. */
+export async function syncReminders(): Promise<void> {
+  if (IS_DEMO) return;
+  const items = await remindersApi.list();
+  emit({ reminders: items.map(toReminder) });
+}

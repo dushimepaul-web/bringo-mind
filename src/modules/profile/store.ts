@@ -1,6 +1,7 @@
 // Mémoire de démonstration du Profil et des Paramètres.
 import { useSyncExternalStore } from 'react';
 
+import { appLock } from '@/lib/app-lock';
 import { DEMO_TODAY, addDays } from '@/lib/demo-dates';
 
 import { DELETION_GRACE_DAYS, SESSIONS, type ConsentKey } from './data';
@@ -105,6 +106,7 @@ export const profileActions = {
   },
   setBiometric(biometric: boolean) {
     emit({ biometric });
+    appLock.configure({ enabled: biometric });
   },
   saveUser(user: PersonalInfo) {
     emit({ user });
@@ -120,6 +122,7 @@ export const profileActions = {
   },
   setLockDelay(lockDelay: LockDelay) {
     emit({ lockDelay });
+    appLock.configure({ delay: lockDelay });
   },
   setTwoFactor(twoFactor: boolean) {
     emit({ twoFactor });

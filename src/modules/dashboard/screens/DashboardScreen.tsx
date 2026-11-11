@@ -1,6 +1,6 @@
 // S-07 - Tableau de bord | Module M03 Tableau de bord | Phase S3
 import { router, type Href } from 'expo-router';
-import { useCallback, useState, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import {
   Platform,
   Pressable,
@@ -15,19 +15,23 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppHeader } from '@/components/app-header';
+import { QueryView } from '@/components/ui/states';
+import { useQuery } from '@/hooks/use-query';
 import { Icon } from '@/components/icon';
 import { FontFamily, Radius, Serene, Space, Tint } from '@/constants/design';
+import { IS_DEMO } from '@/lib/config';
+import { DEMO_TODAY } from '@/lib/demo-dates';
 
 import { KoraSuggestions } from '../components/kora-suggestions';
 
-export default function DashboardScreen() {
-  const [refreshing, setRefreshing] = useState(false);
+/** Démo : rien à charger (les données sont en mémoire). */
+const loadDashboard = async () => undefined;
 
-  // Démo : simule le rechargement de la synthèse.
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 900);
-  }, []);
+export default function DashboardScreen() {
+  // La synthèse vient des autres modules ; en mode « api » elle sera chargée par DASH-001 (/dashboard/today).
+  const sync = useQuery('dashboard', loadDashboard);
+  const refreshing = sync.refreshing;
+  const onRefresh = sync.reload;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -48,6 +52,7 @@ export default function DashboardScreen() {
         <View style={styles.glow} pointerEvents="none" />
 
         <Greeting />
+        <QueryView query={sync} loadingRows={5}>
         <KoraSuggestions />
         <QuickActions />
 
@@ -81,6 +86,7 @@ export default function DashboardScreen() {
         <RecentDocumentCard />
 
         <HouseholdInviteCard />
+        </QueryView>
       </ScrollView>
     </SafeAreaView>
   );
@@ -113,13 +119,22 @@ function Card({
   );
 }
 
+/** « Bonjour » le matin, « Bon après-midi », puis « Bonsoir » à partir de 18h. */
+function greetingFor(date: Date): string {
+  const hour = date.getHours();
+  if (hour >= 18 || hour < 5) return 'Bonsoir';
+  if (hour >= 12) return 'Bon après-midi';
+  return 'Bonjour';
+}
+
 function Greeting() {
+  const hello = greetingFor(IS_DEMO ? DEMO_TODAY : new Date());
   return (
     <View style={styles.greeting}>
       <View style={styles.greetingRow}>
         <View style={styles.greetingNameRow}>
           <Text style={styles.greetingName} numberOfLines={1}>
-            Bonjour <Text style={styles.accent}>Claire</Text>
+            {hello} <Text style={styles.accent}>Claire</Text>
           </Text>
           <Icon name="verified" size={18} filled color={Tint.primary} />
         </View>

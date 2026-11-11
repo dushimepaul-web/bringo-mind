@@ -1,7 +1,10 @@
 // Mémoire de démonstration partagée par les écrans du module Documents.
 import { useSyncExternalStore } from 'react';
 
+import { IS_DEMO } from '@/lib/config';
+
 import { DEMO_DOCUMENTS, scannedDocument } from './data';
+import { documentsApi, toDocument } from './services/documents.service';
 import type { DocCategory, DocItem, DocScope } from './types';
 
 type Snapshot = {
@@ -84,3 +87,10 @@ export const documentActions = {
     emit({ flash });
   },
 };
+
+/** Charge les documents depuis l'API (mode « api ») ; ne fait rien en démo. */
+export async function syncDocuments(): Promise<void> {
+  if (IS_DEMO) return;
+  const items = await documentsApi.list();
+  emit({ documents: items.map(toDocument) });
+}

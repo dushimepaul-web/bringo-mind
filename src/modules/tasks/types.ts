@@ -39,6 +39,8 @@ export type Task = {
   completedAt?: Date;
   subtasks: Subtask[];
   document?: { name: string; meta: string };
+  /** Version de la ligne côté serveur (verrouillage optimiste, mode « api »). */
+  version?: number;
 };
 
 export type TaskDraft = Pick<

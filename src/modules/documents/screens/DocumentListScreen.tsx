@@ -2,7 +2,7 @@
 // La liste d'abord ; Kora aide (document à vérifier, échéances repérées) sans prendre toute la place.
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppHeader } from '@/components/app-header';
@@ -22,7 +22,10 @@ import { dayOffset, formatDay } from '@/lib/demo-dates';
 
 import { DocIcon, DocRow } from '../components/document-ui';
 import { CATEGORIES } from '../data';
-import { documentActions, useDocumentsState } from '../store';
+import { QueryView } from '@/components/ui/states';
+import { useQuery } from '@/hooks/use-query';
+
+import { documentActions, syncDocuments, useDocumentsState } from '../store';
 import type { DocCategory, DocScope } from '../types';
 
 const SCOPES: { key: DocScope | 'all'; label: string; icon: string }[] = [
@@ -33,6 +36,7 @@ const SCOPES: { key: DocScope | 'all'; label: string; icon: string }[] = [
 
 export default function DocumentListScreen() {
   const { documents, flash } = useDocumentsState();
+  const sync = useQuery('documents', syncDocuments);
   const [query, setQuery] = useState('');
   const [focused, setFocused] = useState(false);
   const [category, setCategory] = useState<DocCategory | 'all'>('all');
@@ -73,7 +77,8 @@ export default function DocumentListScreen() {
       <ScrollView
         contentContainerStyle={[kitStyles.content, styles.content]}
         keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}>
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={sync.refreshing} onRefresh={sync.reload} tintColor={Tint.primary} colors={[Tint.primary]} />}>
         <View style={styles.titleRow}>
           <View style={styles.flex}>
             <Text style={styles.eyebrow}>Coffre sécurisé</Text>
@@ -193,6 +198,7 @@ export default function DocumentListScreen() {
           </View>
         </View>
 
+        <QueryView query={sync} empty={{ icon: 'folder_open', title: 'Votre coffre est vide', text: 'Scannez ou importez un premier document : Kora repérera les dates et montants.', actionLabel: 'Scanner ou importer', onAction: () => setAddSheet(true) }}>
         {filtered.length === 0 ? (
           <View style={[kitStyles.card, styles.empty]}>
             <Icon name="search_off" size={28} color={Tint.primary} />
@@ -214,6 +220,7 @@ export default function DocumentListScreen() {
             ))}
           </View>
         )}
+        </QueryView>
       </ScrollView>
 
       <View style={styles.fabWrap} pointerEvents="box-none">

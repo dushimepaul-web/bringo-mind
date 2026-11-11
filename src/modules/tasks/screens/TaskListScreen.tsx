@@ -39,7 +39,10 @@ import {
   groupOf,
   lateDays,
 } from '../data';
-import { taskActions, useFlash, useTasks } from '../store';
+import { QueryView } from '@/components/ui/states';
+import { useQuery } from '@/hooks/use-query';
+
+import { syncTasks, taskActions, useFlash, useTasks } from '../store';
 import type { Task, TaskCategory, TaskGroup, TaskPriority } from '../types';
 
 type FilterKey = 'all' | 'late' | 'today' | 'upcoming' | 'shared' | 'done' | 'archived';
@@ -72,7 +75,8 @@ export default function TaskListScreen() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
   const [showHint, setShowHint] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  // Chargement (mode « api ») et rechargement en tirant la liste vers le bas.
+  const sync = useQuery('tasks', syncTasks);
 
   // Message laissé par un autre écran (tâche créée, supprimée…).
   useFocusEffect(
@@ -144,10 +148,8 @@ export default function TaskListScreen() {
   const advancedCount = priorities.length + categories.length;
   const activeCount = counts.late + counts.today + counts.upcoming;
 
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 900);
-  }, []);
+  const refreshing = sync.refreshing;
+  const onRefresh = sync.reload;
 
   const complete = (task: Task) => {
     taskActions.complete(task.id);
@@ -277,6 +279,7 @@ export default function TaskListScreen() {
           </View>
         ) : null}
 
+        <QueryView query={sync} empty={{ icon: 'task_alt', title: 'Aucune tâche pour l’instant', text: 'Ajoutez votre première démarche : Bringo Mind vous rappellera l’échéance.', actionLabel: 'Nouvelle tâche', onAction: () => router.push('/tasks/add') }}>
         {sections.length === 0 ? (
           <View style={[taskStyles.card, styles.empty]}>
             <View style={styles.emptyIcon}>
@@ -333,6 +336,7 @@ export default function TaskListScreen() {
             </View>
           ))
         )}
+        </QueryView>
       </ScrollView>
 
       <View style={styles.fabWrap} pointerEvents="box-none">

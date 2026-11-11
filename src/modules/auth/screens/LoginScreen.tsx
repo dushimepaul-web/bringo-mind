@@ -17,7 +17,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { BrandLogo } from '@/components/brand-logo';
 import { Icon } from '@/components/icon';
+import { appLock } from '@/lib/app-lock';
 import { FontFamily, Radius, Serene, Space, Tint } from '@/constants/design';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -28,6 +30,12 @@ const BIOMETRIC =
     ? { label: 'Déverrouiller avec l’empreinte', icon: 'fingerprint' }
     : { label: 'Déverrouiller avec Face ID', icon: 'familiar_face_and_zone' };
 
+
+/** Après une connexion réussie : pas de verrouillage Face ID, la personne vient de s'identifier. */
+function openApp() {
+  appLock.unlock();
+  router.replace('/dashboard');
+}
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('claire.martin@email.fr');
@@ -48,7 +56,7 @@ export default function LoginScreen() {
     if (!canSubmit) return;
     setLoading(true);
     // Démo : simule l'appel réseau avant d'ouvrir le tableau de bord.
-    setTimeout(() => router.replace('/dashboard'), 700);
+    setTimeout(() => openApp(), 700);
   };
 
   const iconColor = (field: 'email' | 'password') =>
@@ -71,13 +79,10 @@ export default function LoginScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled">
           <View style={styles.brandRow}>
-            <View style={styles.logo}>
-              <Text style={styles.logoLetter}>K</Text>
-              <View style={styles.logoSwoosh} />
-            </View>
+            <BrandLogo size={64} />
             <View>
               <Text style={styles.wordmark}>
-                Bringo <Text style={styles.wordmarkAccent}>Mind</Text>
+                bringo <Text style={styles.wordmarkAccent}>mind</Text>
               </Text>
               <Text style={styles.tagline}>Organisez • Gérez • Avancez</Text>
             </View>
@@ -249,7 +254,7 @@ export default function LoginScreen() {
               style={({ pressed }) => [styles.socialButton, pressed && styles.socialButtonPressed]}
               accessibilityRole="button"
               accessibilityLabel="Continuer avec Google"
-              onPress={() => router.replace('/dashboard')}>
+              onPress={() => openApp()}>
               <Image
                 source={require('../../../../assets/images/brand/google.png')}
                 style={styles.brandIcon}
@@ -261,7 +266,7 @@ export default function LoginScreen() {
               style={({ pressed }) => [styles.socialButton, pressed && styles.socialButtonPressed]}
               accessibilityRole="button"
               accessibilityLabel="Continuer avec Apple"
-              onPress={() => router.replace('/dashboard')}>
+              onPress={() => openApp()}>
               <Image
                 source={require('../../../../assets/images/brand/apple.png')}
                 style={styles.appleIcon}
@@ -275,7 +280,7 @@ export default function LoginScreen() {
             style={({ pressed }) => [styles.biometricButton, pressed && styles.socialButtonPressed]}
             accessibilityRole="button"
             accessibilityLabel={BIOMETRIC.label}
-            onPress={() => router.replace('/dashboard')}>
+            onPress={() => openApp()}>
             <Icon name="verified_user" size={22} color={Tint.primary} />
             <Text style={styles.biometricText}>{BIOMETRIC.label}</Text>
             <Icon name={BIOMETRIC.icon} size={24} color={Tint.primary} />
@@ -402,36 +407,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 14,
   },
-  logo: {
-    width: 64,
-    height: 64,
-    borderRadius: 18,
-    backgroundColor: Tint.navy,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-    shadowColor: Tint.navy,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  logoLetter: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 38,
-    lineHeight: 44,
-    color: Serene.onPrimary,
-  },
-  logoSwoosh: {
-    position: 'absolute',
-    bottom: 12,
-    right: 8,
-    width: 30,
-    height: 7,
-    borderRadius: Radius.full,
-    backgroundColor: Tint.primary,
-    transform: [{ rotate: '-18deg' }],
-  },
   wordmark: {
     fontFamily: FontFamily.headingBold,
     fontSize: 28,
@@ -440,6 +415,7 @@ const styles = StyleSheet.create({
     color: Tint.navy,
   },
   wordmarkAccent: {
+    fontFamily: FontFamily.bodySemiBold,
     color: Tint.primary,
   },
   tagline: {

@@ -1,10 +1,14 @@
-// Mémoire de démonstration partagée par les écrans du module Tâches.
-// Elle remplace l'API tant que le backend n'est pas branché : les actions
-// (terminer, reporter, archiver, supprimer, créer, modifier) sont visibles
-// immédiatement dans la liste, le détail et le formulaire.
+// Mémoire partagée par les écrans du module Tâches.
+// Mode « demo » : données de démonstration, rien ne part sur le réseau.
+// Mode « api » : chaque action s'affiche tout de suite (mise à jour optimiste), puis la requête part ;
+// en cas d'échec, l'écran revient à l'état précédent et un message explique pourquoi.
 import { useSyncExternalStore } from 'react';
 
+import { userMessage } from '@/lib/api';
+import { IS_DEMO } from '@/lib/config';
+
 import { addDays, DEMO_TASKS, DEMO_TODAY } from './data';
+import { tasksApi, toTask, type TaskDto } from './services/tasks.service';
 import type { Task, TaskDraft } from './types';
 
 type Snapshot = {
@@ -36,6 +40,34 @@ function update(id: string, patch: Partial<Task>) {
   emit({ tasks: state.tasks.map((task) => (task.id === id ? { ...task, ...patch } : task)) });
 }
 
+function find(id: string): Task | undefined {
+  return state.tasks.find((task) => task.id === id);
+}
+
+/** Remplace une tâche par la version renvoyée par le serveur (nouvel identifiant possible). */
+function replace(localId: string, dto: TaskDto) {
+  const next = toTask(dto);
+  emit({ tasks: state.tasks.map((task) => (task.id === localId ? { ...next, subtasks: task.subtasks } : task)) });
+}
+
+/** Mode « api » : envoie la requête ; en cas d'échec, annule la modification locale. */
+function remote<T>(call: () => Promise<T>, onSuccess: (result: T) => void, rollback: () => void) {
+  if (IS_DEMO) return;
+  call()
+    .then(onSuccess)
+    .catch((error: unknown) => {
+      rollback();
+      emit({ flash: { text: userMessage(error) } });
+    });
+}
+
+/** Charge les tâches depuis l'API (mode « api ») ; ne fait rien en démo. */
+export async function syncTasks(): Promise<void> {
+  if (IS_DEMO) return;
+  const items = await tasksApi.list();
+  emit({ tasks: items.map(toTask) });
+}
+
 export function useTasks(): Task[] {
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot).tasks;
 }
@@ -52,24 +84,50 @@ export function useFlash() {
 
 export const taskActions = {
   complete(id: string) {
+    const before = find(id);
+    if (!before) return;
     // La démo vit au mardi 14 mai : on date l'achèvement en conséquence.
     update(id, { status: 'done', completedAt: DEMO_TODAY });
+    remote(() => tasksApi.complete(id, before.version ?? 1), (dto) => replace(id, dto), () => update(id, before));
   },
   reopen(id: string) {
+    const before = find(id);
+    if (!before) return;
     update(id, { status: 'open', completedAt: undefined });
+    remote(() => tasksApi.reopen(id, before.version ?? 1), (dto) => replace(id, dto), () => update(id, before));
   },
   archive(id: string) {
+    const before = find(id);
+    if (!before) return;
     update(id, { status: 'archived' });
+    remote(() => tasksApi.setStatus(id, before.version ?? 1, 'cancelled'), (dto) => replace(id, dto), () => update(id, before));
   },
   restore(id: string) {
+    const before = find(id);
+    if (!before) return;
     update(id, { status: 'open' });
+    remote(() => tasksApi.setStatus(id, before.version ?? 1, 'planned'), (dto) => replace(id, dto), () => update(id, before));
   },
   postpone(id: string, days: number) {
-    const task = state.tasks.find((entry) => entry.id === id);
-    if (task) update(id, { dueAt: addDays(task.dueAt, days) });
+    const before = find(id);
+    if (!before) return;
+    const dueAt = addDays(before.dueAt, days);
+    update(id, { dueAt });
+    remote(
+      () => tasksApi.update(id, before.version ?? 1, { dueAt, hasTime: before.hasTime }),
+      (dto) => replace(id, dto),
+      () => update(id, before),
+    );
   },
   setDue(id: string, dueAt: Date) {
+    const before = find(id);
+    if (!before) return;
     update(id, { dueAt });
+    remote(
+      () => tasksApi.update(id, before.version ?? 1, { dueAt, hasTime: before.hasTime }),
+      (dto) => replace(id, dto),
+      () => update(id, before),
+    );
   },
   toggleSubtask(id: string, subtaskId: string) {
     const task = state.tasks.find((entry) => entry.id === id);
@@ -83,11 +141,17 @@ export const taskActions = {
     const index = state.tasks.findIndex((entry) => entry.id === id);
     const task = state.tasks[index];
     emit({ tasks: state.tasks.filter((entry) => entry.id !== id) });
-    return () => {
+    const putBack = () => {
       if (!task || state.tasks.some((entry) => entry.id === id)) return;
       const copy = [...state.tasks];
       copy.splice(Math.max(index, 0), 0, task);
       emit({ tasks: copy });
+    };
+    remote(() => tasksApi.remove(id), () => undefined, putBack);
+    return () => {
+      putBack();
+      // « Annuler » : la suppression est logique côté serveur, on la restaure (TASK-013).
+      remote(() => tasksApi.restore(id), (dto) => replace(id, dto), () => emit({ tasks: state.tasks.filter((entry) => entry.id !== id) }));
     };
   },
   create(draft: TaskDraft): string {
@@ -102,10 +166,14 @@ export const taskActions = {
       subtasks: [],
     };
     emit({ tasks: [task, ...state.tasks] });
+    remote(() => tasksApi.create(draft), (dto) => replace(id, dto), () => emit({ tasks: state.tasks.filter((entry) => entry.id !== id) }));
     return id;
   },
   save(id: string, draft: TaskDraft) {
+    const before = find(id);
+    if (!before) return;
     update(id, draft);
+    remote(() => tasksApi.update(id, before.version ?? 1, draft), (dto) => replace(id, dto), () => update(id, before));
   },
   setFlash(flash: Snapshot['flash']) {
     emit({ flash });

@@ -9,25 +9,31 @@ import {
   BottomSheet,
   PrimaryButton,
   SecondaryButton,
+  SheetOption,
   Tag,
   TopBar,
   UndoToast,
   kitStyles,
 } from '@/components/ui/kit';
 import { SettingsRow, SettingsSection, ToggleSwitch } from '@/components/ui/settings';
+import { IS_DEMO } from '@/lib/config';
+import { appLock } from '@/lib/app-lock';
+import { DEMO_STATES, setDemoState, useDemoState } from '@/lib/demo-state';
+import { replayIntro } from '@/lib/launch';
 import { FontFamily, Radius, Serene, Tint } from '@/constants/design';
 import { formatLongDay } from '@/lib/demo-dates';
 
 import { CALENDAR_VIEWS, CURRENCIES, LANGUAGES, STATS, THEMES, TIMEZONES, USER } from '../data';
 import { LOCK_DELAYS, initialsOf, profileActions, useProfileState } from '../store';
 
-type Sheet = 'logout' | 'twoFactorOff' | 'sessions' | null;
+type Sheet = 'logout' | 'twoFactorOff' | 'sessions' | 'demo' | 'launch' | null;
 
 export default function ProfileSettingsScreen() {
   const { preferences, user, biometric, lockDelay, twoFactor, sessions, deletionAt, flash } = useProfileState();
   const fullName = `${user.firstName} ${user.lastName}`.trim();
   const [sheet, setSheet] = useState<Sheet>(null);
   const [toast, setToast] = useState<{ text: string; undo?: () => void } | null>(null);
+  const demoState = useDemoState();
 
   useFocusEffect(
     useCallback(() => {
@@ -229,6 +235,24 @@ export default function ProfileSettingsScreen() {
           <SettingsRow icon="help" title="Aide et support" subtitle="Questions fréquentes, contact" onPress={() => router.push('/support')} />
         </SettingsSection>
 
+        {IS_DEMO ? (
+          <SettingsSection title="Démo" icon="science" footer="Pour relire le design des états réseau. Ce réglage disparaît quand l’app est branchée sur l’API.">
+            <SettingsRow
+              first
+              icon="tune"
+              title="Simuler un état"
+              subtitle={DEMO_STATES.find((entry) => entry.key === demoState)?.label}
+              onPress={() => setSheet('demo')}
+            />
+            <SettingsRow
+              icon="rocket_launch"
+              title="Revoir l’ouverture"
+              subtitle="Animation, première ouverture, connexion, Face ID"
+              onPress={() => setSheet('launch')}
+            />
+          </SettingsSection>
+        ) : null}
+
         <SecondaryButton label="Se déconnecter" icon="logout" style={styles.logout} onPress={() => setSheet('logout')} />
         <Text style={styles.version}>Bringo Mind 1.0.0 • version de démonstration</Text>
       </ScrollView>
@@ -302,6 +326,79 @@ export default function ProfileSettingsScreen() {
           </View>
         ))}
         {otherSessions.length === 0 ? <Text style={kitStyles.muted}>Aucun autre appareil connecté.</Text> : null}
+      </BottomSheet>
+
+      {/* Démo : simuler chargement, erreur, hors ligne ou compte vide sur les écrans principaux */}
+      <BottomSheet visible={sheet === 'demo'} title="Simuler un état" subtitle="S’applique aux listes : tâches, rappels, calendrier, documents, notifications, foyer, accueil." onClose={() => setSheet(null)}>
+        <View style={styles.demoList}>
+          {DEMO_STATES.map((entry, index) => (
+            <Pressable
+              key={entry.key}
+              style={({ pressed }) => [styles.demoRow, index > 0 && styles.demoBorder, pressed && styles.pressed]}
+              accessibilityRole="radio"
+              accessibilityState={{ selected: demoState === entry.key }}
+              onPress={() => {
+                setDemoState(entry.key);
+                setSheet(null);
+                setToast({ text: `État simulé : ${entry.label.toLowerCase()}` });
+              }}>
+              <View style={styles.flex}>
+                <Text style={styles.sessionTitle}>{entry.label}</Text>
+                <Text style={styles.sessionMeta}>{entry.hint}</Text>
+              </View>
+              <Icon
+                name={demoState === entry.key ? 'radio_button_checked' : 'radio_button_unchecked'}
+                size={22}
+                color={demoState === entry.key ? Tint.black : Serene.onSurfaceVariant}
+              />
+            </Pressable>
+          ))}
+        </View>
+      </BottomSheet>
+
+      {/* Démo : rejouer chaque cas d'ouverture de l'app */}
+      <BottomSheet visible={sheet === 'launch'} title="Revoir l’ouverture" subtitle="Rejoue ce que voit la personne en ouvrant l’app." onClose={() => setSheet(null)}>
+        <SheetOption
+          icon="animation"
+          label="Animation d’ouverture"
+          hint="Le « b » se dessine, puis le point s’allume"
+          onPress={() => {
+            setSheet(null);
+            // Laisse la feuille se fermer avant de rejouer (elle passerait sinon devant l'animation).
+            setTimeout(replayIntro, 350);
+          }}
+        />
+        <SheetOption
+          icon="waving_hand"
+          label="Première ouverture"
+          hint="Animation, puis présentation en 3 écrans"
+          onPress={() => {
+            setSheet(null);
+            // Laisse la feuille se fermer avant de rejouer (elle passerait sinon devant l'animation).
+            setTimeout(replayIntro, 350);
+            router.replace('/onboarding');
+          }}
+        />
+        <SheetOption
+          icon="login"
+          label="Personne non connectée"
+          hint="Animation, puis écran Bienvenue"
+          onPress={() => {
+            setSheet(null);
+            // Laisse la feuille se fermer avant de rejouer (elle passerait sinon devant l'animation).
+            setTimeout(replayIntro, 350);
+            router.replace('/welcome');
+          }}
+        />
+        <SheetOption
+          icon="face"
+          label="Verrouillage Face ID"
+          hint={biometric ? 'Comme au retour dans l’app après le délai' : 'Activez d’abord le déverrouillage biométrique'}
+          onPress={() => {
+            setSheet(null);
+            if (!appLock.lockNow()) setToast({ text: 'Activez d’abord le déverrouillage biométrique' });
+          }}
+        />
       </BottomSheet>
 
       {toast ? (
@@ -474,6 +571,23 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     color: Serene.onSurfaceVariant,
+  },
+  demoList: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: Tint.border,
+    overflow: 'hidden',
+  },
+  demoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  demoBorder: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Tint.border,
   },
   sessionAction: {
     fontFamily: FontFamily.bodySemiBold,

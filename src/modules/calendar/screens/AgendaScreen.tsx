@@ -20,7 +20,10 @@ import { DEMO_TODAY, dayOffset, formatTime, startOfDay } from '@/lib/demo-dates'
 
 import { ViewSwitcher, itemsForDay, type DayItem, type SpaceFilter } from '../components/calendar-ui';
 import { MONTHS, TASK_DEADLINES, TONES, WEEKDAY_SHORT, durationOf, formatDuration } from '../data';
-import { useCalendarState } from '../store';
+import { QueryView } from '@/components/ui/states';
+import { useQuery } from '@/hooks/use-query';
+
+import { syncEvents, useCalendarState } from '../store';
 
 const FILTERS: { key: SpaceFilter; label: string; icon: string }[] = [
   { key: 'all', label: 'Tout', icon: 'calendar_view_month' },
@@ -34,6 +37,7 @@ type Row =
 
 export default function AgendaScreen() {
   const { events } = useCalendarState();
+  const sync = useQuery('events', syncEvents);
   const [filter, setFilter] = useState<SpaceFilter>('all');
   const [showTasks, setShowTasks] = useState(true);
   const [query, setQuery] = useState('');
@@ -167,6 +171,7 @@ export default function AgendaScreen() {
             {upcomingCount} événement{upcomingCount > 1 ? 's' : ''} à venir • remontez pour voir le passé
           </Text>
         </View>
+        <QueryView query={sync} empty={{ icon: 'event_available', title: 'Rien de prévu', text: 'Ajoutez un événement ou connectez votre calendrier Google.', actionLabel: 'Nouvel événement', onAction: () => router.push('/calendar/add') }}>
         {rows.length === 0 ? (
           <View style={[kitStyles.card, styles.empty]}>
             <Icon name="search_off" size={28} color={Tint.primary} />
@@ -209,6 +214,7 @@ export default function AgendaScreen() {
             ),
           )
         )}
+        </QueryView>
       </ScrollView>
     </SafeAreaView>
   );

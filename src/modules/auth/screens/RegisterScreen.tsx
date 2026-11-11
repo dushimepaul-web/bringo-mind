@@ -4,6 +4,7 @@ import { useState, type ReactNode } from 'react';
 import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Icon } from '@/components/icon';
+import { appLock } from '@/lib/app-lock';
 import { FontFamily, Radius, Serene, Space, Tint } from '@/constants/design';
 
 import {
@@ -21,6 +22,12 @@ import {
 type Field = 'firstName' | 'lastName' | 'email' | 'password' | 'confirm';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** Après une connexion réussie : pas de verrouillage Face ID, la personne vient de s'identifier. */
+function openApp() {
+  appLock.unlock();
+  router.replace('/dashboard');
+}
 
 export default function RegisterScreen() {
   // Démo : formulaire prérempli pour parcourir l'inscription en un appui.
@@ -80,12 +87,12 @@ export default function RegisterScreen() {
         <SocialButton
           label="Google"
           source={require('../../../../assets/images/brand/google.png')}
-          onPress={() => router.replace('/dashboard')}
+          onPress={() => openApp()}
         />
         <SocialButton
           label="Apple"
           source={require('../../../../assets/images/brand/apple.png')}
-          onPress={() => router.replace('/dashboard')}
+          onPress={() => openApp()}
         />
       </View>
 

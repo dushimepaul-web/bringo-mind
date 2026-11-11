@@ -2,7 +2,11 @@
 import type { Href } from 'expo-router';
 import { useSyncExternalStore } from 'react';
 
+import { userMessage } from '@/lib/api';
+import { IS_DEMO } from '@/lib/config';
 import { DEMO_TODAY, addDays, atTime } from '@/lib/demo-dates';
+
+import { notificationsApi, toNotification } from './services/notifications.service';
 
 export type NotificationKind = 'task' | 'event' | 'document' | 'household';
 
@@ -102,9 +106,18 @@ const DEMO: AppNotification[] = [
   },
 ];
 
-type Snapshot = { items: AppNotification[] };
+type Snapshot = { items: AppNotification[]; error: string | null };
 
-let state: Snapshot = { items: DEMO };
+let state: Snapshot = { items: DEMO, error: null };
+
+/** Mode « api » : envoie la requête ; en cas d'échec, annule la modification locale. */
+function remote(call: () => Promise<unknown>, rollback: () => void) {
+  if (IS_DEMO) return;
+  call().catch((reason: unknown) => {
+    rollback();
+    emit({ error: userMessage(reason) });
+  });
+}
 const listeners = new Set<() => void>();
 
 function emit(next: Partial<Snapshot>) {
@@ -127,17 +140,28 @@ export function useNotifications(): Snapshot {
 
 export const notificationActions = {
   setRead(id: string, read: boolean) {
+    const previous = state.items;
     emit({ items: state.items.map((item) => (item.id === id ? { ...item, read } : item)) });
+    remote(() => notificationsApi.setRead(id, read), () => emit({ items: previous }));
   },
   /** Marque tout comme lu et renvoie de quoi annuler. */
   readAll(): () => void {
     const previous = state.items;
     emit({ items: state.items.map((item) => ({ ...item, read: true })) });
+    remote(() => notificationsApi.readAll(), () => emit({ items: previous }));
     return () => emit({ items: previous });
   },
   remove(id: string): () => void {
     const previous = state.items;
     emit({ items: state.items.filter((item) => item.id !== id) });
+    remote(() => notificationsApi.remove(id), () => emit({ items: previous }));
     return () => emit({ items: previous });
   },
 };
+
+/** Charge les notifications depuis l'API (mode « api ») ; ne fait rien en démo. */
+export async function syncNotifications(): Promise<void> {
+  if (IS_DEMO) return;
+  const items = await notificationsApi.list();
+  emit({ items: items.map(toNotification) });
+}

@@ -10,13 +10,14 @@ import { ApiError, NetworkError, parseProblem } from './errors';
  * Seuls les services des modules (src/modules/<domaine>/services) l'appellent ;
  * un écran ou un hook ne fait jamais fetch directement.
  *
- * Conventions appliquées (dossier directeur § 6.4) :
+ * Conventions appliquées (guide d'API v1.0, partie II) :
  * - préfixe /api/v1, JSON UTF-8 ;
  * - Authorization: Bearer <access_token> ;
  * - X-Request-Id sur chaque requête ;
  * - Idempotency-Key sur chaque POST ;
- * - rafraîchissement automatique du jeton sur 401, une seule fois ;
- * - erreurs RFC 7807 converties en ApiError.
+ * - rafraîchissement automatique du jeton sur 401 (POST /auth/refresh), une seule fois ;
+ * - enveloppe de succès { success, message, data, meta } : `apiRequest` renvoie `data` ;
+ * - enveloppe d'erreur { success:false, message, error:{ code, details }, request_id } → ApiError.
  */
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -147,8 +148,8 @@ function refreshTokens(): Promise<RefreshResult> {
       if (!response.ok) {
         return 'rejected';
       }
-      const data = (await response.json()) as TokenResponse;
-      await sessionStore.setTokens(toAuthTokens(data));
+      const envelope = (await response.json()) as unknown;
+      await sessionStore.setTokens(toAuthTokens(unwrap<TokenResponse>(envelope).data));
       return 'ok';
     } catch {
       return 'network';
@@ -160,7 +161,36 @@ function refreshTokens(): Promise<RefreshResult> {
   return refreshInFlight;
 }
 
+/** Réponse complète : `data` plus les métadonnées (pagination) et le message du serveur. */
+export type ApiEnvelope<T> = { data: T; meta: unknown; message?: string };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+/** Retire l'enveloppe { success, message, data, meta } si elle est présente. */
+function unwrap<T>(body: unknown): ApiEnvelope<T> {
+  if (isRecord(body) && body.success === true && 'data' in body) {
+    return {
+      data: body.data as T,
+      meta: body.meta ?? null,
+      message: typeof body.message === 'string' ? body.message : undefined,
+    };
+  }
+  return { data: body as T, meta: null };
+}
+
+/** Requête renvoyant l'enveloppe complète (utile pour les listes paginées). */
+export async function apiRequestEnvelope<T>(path: string, options: RequestOptions = {}): Promise<ApiEnvelope<T>> {
+  return unwrap<T>(await send(path, options));
+}
+
+/** Requête renvoyant directement `data`. */
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  return unwrap<T>(await send(path, options)).data;
+}
+
+async function send(path: string, options: RequestOptions): Promise<unknown> {
   const {
     method = 'GET',
     body,
@@ -178,7 +208,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     await sessionStore.hydrate();
   }
 
-  const send = () => {
+  const attempt = () => {
     const headers: Record<string, string> = {
       Accept: 'application/json',
       'X-Request-Id': requestId,
@@ -201,13 +231,13 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     );
   };
 
-  let response = await send();
+  let response = await attempt();
 
   if (response.status === 401 && auth && sessionStore.getTokens()) {
     const result = await refreshTokens();
     if (result === 'ok') {
       // Même Request-Id et même Idempotency-Key : c'est le même envoi.
-      response = await send();
+      response = await attempt();
     } else if (result === 'network') {
       throw new NetworkError();
     }
@@ -220,7 +250,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     throw await toApiError(response, requestId);
   }
 
-  return (await readBody(response)) as T;
+  return readBody(response);
 }
 
 /** Raccourcis lisibles pour les services. */

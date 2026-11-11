@@ -89,7 +89,7 @@ export function AuthBrand({ compact, large }: { compact?: boolean; large?: boole
       <BrandLogo size={large ? 96 : 64} />
       <View style={large && styles.brandTextCentered}>
         <Text style={[styles.wordmark, large && styles.wordmarkLarge]}>
-          Bringo <Text style={styles.accent}>Mind</Text>
+          bringo <Text style={[styles.accent, styles.wordmarkMind]}>mind</Text>
         </Text>
         <Text style={[styles.tagline, large && styles.taglineCentered]}>
           Organisez • Gérez • Avancez
@@ -452,6 +452,9 @@ const styles = StyleSheet.create({
   },
   accent: {
     color: Tint.primary,
+  },
+  wordmarkMind: {
+    fontFamily: FontFamily.bodySemiBold,
   },
   tagline: {
     fontFamily: FontFamily.bodyMedium,

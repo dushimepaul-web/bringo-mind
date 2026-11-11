@@ -2,7 +2,7 @@
 // Le foyer est optionnel : sans foyer, l'écran explique simplement à quoi il sert.
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icon';
@@ -29,7 +29,10 @@ import {
   useFlashToast,
 } from '../components/household-ui';
 import { ROLE_LABELS, SHARED_DOCS, SHARED_EVENTS, SHARED_TASKS, WEEKDAY_SHORT, firstName } from '../data';
-import { householdActions, useHouseholdState } from '../store';
+import { QueryView } from '@/components/ui/states';
+import { useQuery } from '@/hooks/use-query';
+
+import { householdActions, syncHousehold, useHouseholdState } from '../store';
 import type { SharedTask } from '../types';
 
 
@@ -90,6 +93,7 @@ function NoHousehold() {
 
 function HouseholdHome() {
   const { name, members, invitations, koraDismissed, createdAt: created, demoContent } = useHouseholdState();
+  const sync = useQuery('household', syncHousehold);
   // Un seul filtre par personne, pour les tâches ET les événements.
   const [person, setPerson] = useState<string>('all');
   const [menu, setMenu] = useState(false);
@@ -113,7 +117,11 @@ function HouseholdHome() {
         title="Foyer"
         right={<IconButton icon="more_horiz" label="Options du foyer" onPress={() => setMenu(true)} />}
       />
-      <ScrollView contentContainerStyle={[kitStyles.content, styles.content]} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[kitStyles.content, styles.content]}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={sync.refreshing} onRefresh={sync.reload} tintColor={Tint.primary} colors={[Tint.primary]} />}>
+        <QueryView query={sync} loadingRows={5}>
         {/* Carte du foyer : qui en fait partie et les trois raccourcis */}
         <View style={[kitStyles.card, styles.hero]}>
           <View style={styles.heroTop}>
@@ -302,6 +310,7 @@ function HouseholdHome() {
             partager apparaît ici.
           </Text>
         </View>
+        </QueryView>
       </ScrollView>
 
       <BottomSheet visible={menu} title={name} subtitle="Options du foyer" onClose={() => setMenu(false)}>

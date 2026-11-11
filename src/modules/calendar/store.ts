@@ -1,7 +1,10 @@
 // Mémoire de démonstration partagée par les écrans du module Calendrier.
 import { useSyncExternalStore } from 'react';
 
+import { IS_DEMO } from '@/lib/config';
+
 import { DEMO_EVENTS } from './data';
+import { calendarApi, toEvent } from './services/calendar.service';
 import type { CalendarEvent, EventDraft } from './types';
 
 type Snapshot = {
@@ -69,3 +72,10 @@ export const eventActions = {
     emit({ flash });
   },
 };
+
+/** Charge les événements depuis l'API (mode « api ») ; ne fait rien en démo. */
+export async function syncEvents(): Promise<void> {
+  if (IS_DEMO) return;
+  const items = await calendarApi.list();
+  emit({ events: items.map(toEvent) });
+}

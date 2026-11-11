@@ -20,7 +20,10 @@ import { FontFamily, Radius, Serene, Space, Tint } from '@/constants/design';
 import { dayOffset, formatDay, formatLongDay, formatTime } from '@/lib/demo-dates';
 
 import { CHANNEL_META, QUIET_HOURS, linkIcon, linkLabel, repeatSummary } from '../data';
-import { reminderActions, useReminderState } from '../store';
+import { QueryView } from '@/components/ui/states';
+import { useQuery } from '@/hooks/use-query';
+
+import { reminderActions, syncReminders, useReminderState } from '../store';
 import type { Reminder } from '../types';
 
 type FilterKey = 'upcoming' | 'past' | 'paused' | 'all';
@@ -74,7 +77,7 @@ export default function ReminderListScreen() {
   const { reminders, notificationsAllowed, flash } = useReminderState();
   const [filter, setFilter] = useState<FilterKey>('upcoming');
   const [toast, setToast] = useState<Toast | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
+  const sync = useQuery('reminders', syncReminders);
 
   useFocusEffect(
     useCallback(() => {
@@ -114,10 +117,8 @@ export default function ReminderListScreen() {
     [reminders, filter],
   );
 
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 900);
-  }, []);
+  const refreshing = sync.refreshing;
+  const onRefresh = sync.reload;
 
   const togglePause = (item: Reminder) => {
     const paused = !item.paused;
@@ -242,6 +243,7 @@ export default function ReminderListScreen() {
           </View>
         ) : null}
 
+        <QueryView query={sync} empty={{ icon: 'notifications', title: 'Aucun rappel', text: 'Créez un rappel pour ne rien oublier : une démarche, un événement, un appel.', actionLabel: 'Nouveau rappel', onAction: () => router.push('/reminders/add') }}>
         {sections.length === 0 ? (
           <View style={[kitStyles.card, styles.empty]}>
             <View style={styles.emptyIcon}>
@@ -276,6 +278,7 @@ export default function ReminderListScreen() {
             </View>
           ))
         )}
+        </QueryView>
       </ScrollView>
 
       <View style={styles.fabWrap} pointerEvents="box-none">

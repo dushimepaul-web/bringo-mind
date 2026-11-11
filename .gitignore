@@ -41,3 +41,6 @@ example
 # generated native folders
 /ios
 /android
+
+# Fichier d’environnement local (adresse de l’API, réglages de la machine)
+.env

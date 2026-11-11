@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Icon } from '@/components/icon';
+import { markOnboarded } from '@/lib/launch';
 import { FontFamily, Radius, Serene, Space, Tint } from '@/constants/design';
 
 import { AuthBrand, AuthScreen, PrimaryButton } from '../components/auth-ui';
@@ -35,6 +36,12 @@ const STEPS = [
   },
 ];
 
+/** Fin de la présentation : on ne la remontrera plus sur cet appareil. */
+function finishOnboarding() {
+  void markOnboarded();
+  router.replace('/welcome');
+}
+
 export default function OnboardingScreen() {
   const [index, setIndex] = useState(0);
   const step = STEPS[index];
@@ -42,7 +49,7 @@ export default function OnboardingScreen() {
 
   const next = () => {
     if (last) {
-      router.replace('/welcome');
+      finishOnboarding();
       return;
     }
     setIndex((value) => value + 1);
@@ -77,7 +84,7 @@ export default function OnboardingScreen() {
         <Pressable
           style={({ pressed }) => [styles.skip, pressed && styles.pressed]}
           accessibilityRole="button"
-          onPress={() => router.replace('/welcome')}>
+          onPress={() => finishOnboarding()}>
           <Text style={styles.skipText}>Passer</Text>
         </Pressable>
       </View>
