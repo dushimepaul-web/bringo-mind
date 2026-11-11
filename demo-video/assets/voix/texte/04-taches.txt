@@ -1,0 +1,11 @@
+L'onglet Tâches rassemble toutes vos démarches.
+
+Elles sont classées : en retard, aujourd'hui, à venir. On filtre en un toucher.
+
+Un geste vers la droite termine une tâche ; vers la gauche, on la reporte.
+
+Pour en créer une, on touche le bouton noir.
+
+Le formulaire est simple : un titre, une échéance, une priorité, et le partage avec le foyer si on le souhaite.
+
+En ouvrant une tâche, on voit ses étapes et son document lié.

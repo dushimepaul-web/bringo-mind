@@ -1,0 +1,11 @@
+L'onglet Documents est votre coffre sécurisé.
+
+On cherche, on filtre par catégorie, ou entre Personnel et Foyer.
+
+Kora signale les documents qu'elle vient de lire.
+
+Elle repère les dates et les montants ; vous confirmez, ou vous corrigez.
+
+Depuis un document, on crée un rappel ou un événement en un toucher.
+
+Et on choisit qui peut le voir : vous seul, ou tout le foyer.

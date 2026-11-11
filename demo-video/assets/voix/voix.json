@@ -1,0 +1,303 @@
+{
+  "01-introduction": [
+    {
+      "file": "assets/voix/01-introduction-1.wav",
+      "text": "Voici Bringo Mind, votre assistant pour la vie administrative et le foyer.",
+      "duration": 5.184
+    },
+    {
+      "file": "assets/voix/01-introduction-2.wav",
+      "text": "Tâches, rappels, rendez-vous, documents : tout est réuni au même endroit, et Kora vous aide sans jamais décider à votre place.",
+      "duration": 7.211
+    },
+    {
+      "file": "assets/voix/01-introduction-3.wav",
+      "text": "Je vais vous montrer l'application, écran par écran.",
+      "duration": 2.795
+    }
+  ],
+  "02-ouverture": [
+    {
+      "file": "assets/voix/02-ouverture-1.wav",
+      "text": "À l'ouverture, le logo se dessine, puis l'application se charge.",
+      "duration": 3.797
+    },
+    {
+      "file": "assets/voix/02-ouverture-2.wav",
+      "text": "La première fois, une courte présentation explique l'essentiel.",
+      "duration": 3.627
+    },
+    {
+      "file": "assets/voix/02-ouverture-3.wav",
+      "text": "Sur l'écran de bienvenue, on crée un compte, ou on se connecte.",
+      "duration": 3.349
+    },
+    {
+      "file": "assets/voix/02-ouverture-4.wav",
+      "text": "On saisit son adresse et son mot de passe.",
+      "duration": 2.347
+    },
+    {
+      "file": "assets/voix/02-ouverture-5.wav",
+      "text": "Ensuite, à chaque ouverture, Face ID protège vos documents : un regard suffit pour entrer.",
+      "duration": 5.184
+    }
+  ],
+  "03-accueil": [
+    {
+      "file": "assets/voix/03-accueil-1.wav",
+      "text": "Voici l'accueil. Bringo Mind vous salue selon l'heure et résume votre journée.",
+      "duration": 4.928
+    },
+    {
+      "file": "assets/voix/03-accueil-2.wav",
+      "text": "En haut, Kora propose des actions : ici, vérifier la facture Engie.",
+      "duration": 4.053
+    },
+    {
+      "file": "assets/voix/03-accueil-3.wav",
+      "text": "Juste dessous, les raccourcis : scanner un document, ajouter une tâche, un rappel ou un événement.",
+      "duration": 5.696
+    },
+    {
+      "file": "assets/voix/03-accueil-4.wav",
+      "text": "Puis vos priorités du jour, et vos prochains événements.",
+      "duration": 2.965
+    }
+  ],
+  "04-taches": [
+    {
+      "file": "assets/voix/04-taches-1.wav",
+      "text": "L'onglet Tâches rassemble toutes vos démarches.",
+      "duration": 2.475
+    },
+    {
+      "file": "assets/voix/04-taches-2.wav",
+      "text": "Elles sont classées : en retard, aujourd'hui, à venir. On filtre en un toucher.",
+      "duration": 4.267
+    },
+    {
+      "file": "assets/voix/04-taches-3.wav",
+      "text": "Un geste vers la droite termine une tâche ; vers la gauche, on la reporte.",
+      "duration": 4.395
+    },
+    {
+      "file": "assets/voix/04-taches-4.wav",
+      "text": "Pour en créer une, on touche le bouton noir.",
+      "duration": 2.517
+    },
+    {
+      "file": "assets/voix/04-taches-5.wav",
+      "text": "Le formulaire est simple : un titre, une échéance, une priorité, et le partage avec le foyer si on le souhaite.",
+      "duration": 6.805
+    },
+    {
+      "file": "assets/voix/04-taches-6.wav",
+      "text": "En ouvrant une tâche, on voit ses étapes et son document lié.",
+      "duration": 3.456
+    }
+  ],
+  "05-rappels": [
+    {
+      "file": "assets/voix/05-rappels-1.wav",
+      "text": "Les rappels vous préviennent au bon moment.",
+      "duration": 2.155
+    },
+    {
+      "file": "assets/voix/05-rappels-2.wav",
+      "text": "Chaque rappel indique quand il sonnera, et sur quel canal : notification ou e-mail.",
+      "duration": 5.355
+    },
+    {
+      "file": "assets/voix/05-rappels-3.wav",
+      "text": "On peut en créer un depuis une tâche, un événement ou un document : il est alors déjà rempli.",
+      "duration": 5.419
+    },
+    {
+      "file": "assets/voix/05-rappels-4.wav",
+      "text": "On choisit la date, l'heure à la roulette, et la répétition.",
+      "duration": 3.115
+    }
+  ],
+  "06-calendrier": [
+    {
+      "file": "assets/voix/06-calendrier-1.wav",
+      "text": "Le calendrier affiche vos événements et vos échéances.",
+      "duration": 3.093
+    },
+    {
+      "file": "assets/voix/06-calendrier-2.wav",
+      "text": "On passe du jour à la semaine, au mois, ou à l'année entière.",
+      "duration": 3.179
+    },
+    {
+      "file": "assets/voix/06-calendrier-3.wav",
+      "text": "L'icône en haut ouvre le Planning : tout ce qui est prévu, jour après jour, comme l'agenda du téléphone.",
+      "duration": 6.336
+    },
+    {
+      "file": "assets/voix/06-calendrier-4.wav",
+      "text": "Pour ajouter un événement, on choisit le début et la fin, comme sur le téléphone.",
+      "duration": 4.48
+    },
+    {
+      "file": "assets/voix/06-calendrier-5.wav",
+      "text": "Si l'horaire chevauche un autre événement, Bringo Mind le signale, et propose des créneaux libres.",
+      "duration": 5.973
+    }
+  ],
+  "07-documents": [
+    {
+      "file": "assets/voix/07-documents-1.wav",
+      "text": "L'onglet Documents est votre coffre sécurisé.",
+      "duration": 2.581
+    },
+    {
+      "file": "assets/voix/07-documents-2.wav",
+      "text": "On cherche, on filtre par catégorie, ou entre Personnel et Foyer.",
+      "duration": 3.84
+    },
+    {
+      "file": "assets/voix/07-documents-3.wav",
+      "text": "Kora signale les documents qu'elle vient de lire.",
+      "duration": 2.624
+    },
+    {
+      "file": "assets/voix/07-documents-4.wav",
+      "text": "Elle repère les dates et les montants ; vous confirmez, ou vous corrigez.",
+      "duration": 3.563
+    },
+    {
+      "file": "assets/voix/07-documents-5.wav",
+      "text": "Depuis un document, on crée un rappel ou un événement en un toucher.",
+      "duration": 3.733
+    },
+    {
+      "file": "assets/voix/07-documents-6.wav",
+      "text": "Et on choisit qui peut le voir : vous seul, ou tout le foyer.",
+      "duration": 3.328
+    }
+  ],
+  "08-kora": [
+    {
+      "file": "assets/voix/08-kora-1.wav",
+      "text": "Le bouton central ouvre Kora, votre assistante.",
+      "duration": 2.901
+    },
+    {
+      "file": "assets/voix/08-kora-2.wav",
+      "text": "Posez une question, par exemple : que dois-je payer ?",
+      "duration": 2.816
+    },
+    {
+      "file": "assets/voix/08-kora-3.wav",
+      "text": "Kora répond, et propose des actions. Rien n'est créé sans votre accord.",
+      "duration": 3.968
+    },
+    {
+      "file": "assets/voix/08-kora-4.wav",
+      "text": "On peut aussi lui parler.",
+      "duration": 1.493
+    },
+    {
+      "file": "assets/voix/08-kora-5.wav",
+      "text": "Kora transcrit, montre ce qu'elle a compris, et vous confirmez.",
+      "duration": 3.285
+    }
+  ],
+  "09-foyer": [
+    {
+      "file": "assets/voix/09-foyer-1.wav",
+      "text": "Le foyer permet de partager certaines choses avec vos proches. Il reste optionnel.",
+      "duration": 4.864
+    },
+    {
+      "file": "assets/voix/09-foyer-2.wav",
+      "text": "On voit les membres, puis les tâches et les événements partagés.",
+      "duration": 3.2
+    },
+    {
+      "file": "assets/voix/09-foyer-3.wav",
+      "text": "Un filtre montre ce qui concerne chaque personne, par exemple Léo.",
+      "duration": 3.925
+    },
+    {
+      "file": "assets/voix/09-foyer-4.wav",
+      "text": "Depuis Membres, on gère les rôles, et on invite quelqu'un.",
+      "duration": 3.051
+    },
+    {
+      "file": "assets/voix/09-foyer-5.wav",
+      "text": "L'activité montre ce que chacun a fait. Vos éléments personnels restent toujours privés.",
+      "duration": 5.163
+    }
+  ],
+  "10-notifications": [
+    {
+      "file": "assets/voix/10-notifications-1.wav",
+      "text": "La cloche, en haut, ouvre vos notifications.",
+      "duration": 2.432
+    },
+    {
+      "file": "assets/voix/10-notifications-2.wav",
+      "text": "Elles sont regroupées par jour. Un toucher ouvre l'élément concerné.",
+      "duration": 3.819
+    },
+    {
+      "file": "assets/voix/10-notifications-3.wav",
+      "text": "Un geste vers la droite la marque comme lue ; vers la gauche, on la supprime.",
+      "duration": 4.181
+    }
+  ],
+  "11-connexions": [
+    {
+      "file": "assets/voix/11-connexions-1.wav",
+      "text": "Bringo Mind peut se connecter à votre messagerie et à votre calendrier. C'est facultatif.",
+      "duration": 5.824
+    },
+    {
+      "file": "assets/voix/11-connexions-2.wav",
+      "text": "Seuls les e-mails de vos organismes sont lus : votre boîte reste privée.",
+      "duration": 4.587
+    },
+    {
+      "file": "assets/voix/11-connexions-3.wav",
+      "text": "Si un événement a changé à la fois ici et dans Google Agenda, rien n'est écrasé : vous choisissez la version à garder.",
+      "duration": 7.701
+    }
+  ],
+  "12-profil": [
+    {
+      "file": "assets/voix/12-profil-1.wav",
+      "text": "Votre profil réunit tous les réglages.",
+      "duration": 2.283
+    },
+    {
+      "file": "assets/voix/12-profil-2.wav",
+      "text": "Informations personnelles, Face ID, langue, format de l'heure, devise.",
+      "duration": 4.139
+    },
+    {
+      "file": "assets/voix/12-profil-3.wav",
+      "text": "Les notifications et leurs heures de silence. La confidentialité : vos consentements, l'export de vos données.",
+      "duration": 6.379
+    },
+    {
+      "file": "assets/voix/12-profil-4.wav",
+      "text": "Et enfin, l'abonnement et l'aide.",
+      "duration": 1.621
+    }
+  ],
+  "13-conclusion": [
+    {
+      "file": "assets/voix/13-conclusion-1.wav",
+      "text": "Voilà Bringo Mind : votre vie administrative, simplifiée.",
+      "duration": 4.16
+    },
+    {
+      "file": "assets/voix/13-conclusion-2.wav",
+      "text": "Kora propose, vous décidez.",
+      "duration": 1.643
+    }
+  ]
+}

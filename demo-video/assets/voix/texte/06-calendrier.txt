@@ -1,0 +1,9 @@
+Le calendrier affiche vos événements et vos échéances.
+
+On passe du jour à la semaine, au mois, ou à l'année entière.
+
+L'icône en haut ouvre le Planning : tout ce qui est prévu, jour après jour, comme l'agenda du téléphone.
+
+Pour ajouter un événement, on choisit le début et la fin, comme sur le téléphone.
+
+Si l'horaire chevauche un autre événement, Bringo Mind le signale, et propose des créneaux libres.

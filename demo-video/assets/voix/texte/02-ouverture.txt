@@ -1,0 +1,9 @@
+À l'ouverture, le logo se dessine, puis l'application se charge.
+
+La première fois, une courte présentation explique l'essentiel.
+
+Sur l'écran de bienvenue, on crée un compte, ou on se connecte.
+
+On saisit son adresse et son mot de passe.
+
+Ensuite, à chaque ouverture, Face ID protège vos documents : un regard suffit pour entrer.

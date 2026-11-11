@@ -1,0 +1,7 @@
+Votre profil réunit tous les réglages.
+
+Informations personnelles, Face ID, langue, format de l'heure, devise.
+
+Les notifications et leurs heures de silence. La confidentialité : vos consentements, l'export de vos données.
+
+Et enfin, l'abonnement et l'aide.

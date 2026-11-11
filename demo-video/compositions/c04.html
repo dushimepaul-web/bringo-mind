@@ -1,0 +1,120 @@
+<template>
+  <style>
+    
+    @font-face { font-family: 'Plus Jakarta Sans'; src: url('assets/fonts/PlusJakartaSans_700Bold.ttf'); font-weight: 700; }
+    @font-face { font-family: 'Inter App'; src: url('assets/fonts/Inter_400Regular.ttf'); font-weight: 400; }
+    @font-face { font-family: 'Inter App'; src: url('assets/fonts/Inter_600SemiBold.ttf'); font-weight: 600; }
+
+    #root { position: absolute; inset: 0; overflow: hidden;
+      background: radial-gradient(circle at 78% 20%, rgba(134,242,228,0.38) 0, rgba(134,242,228,0) 42%),
+                  radial-gradient(circle at 12% 92%, rgba(229,238,255,0.9) 0, rgba(229,238,255,0) 45%), #f8f9ff; }
+    #c04-text { position: absolute; left: 150px; top: 0; bottom: 0; width: 860px; display: flex; flex-direction: column; justify-content: center; }
+    .c04-eyebrow { font-family: 'Inter App'; font-weight: 600; font-size: 30px; letter-spacing: 0.08em; text-transform: uppercase; color: #006a61; margin-bottom: 18px; }
+    .c04-title { font-family: 'Plus Jakarta Sans'; font-weight: 700; font-size: 88px; line-height: 1.05; letter-spacing: -0.03em; color: #131c2d; }
+    .c04-summary { font-family: 'Inter App'; font-weight: 400; font-size: 36px; line-height: 1.4; color: #45464d; margin-top: 26px; max-width: 760px; }
+    .c04-dots { display: flex; gap: 12px; margin-top: 56px; }
+    .c04-dots span { width: 34px; height: 8px; border-radius: 8px; background: #d3e4fe; }
+    .c04-dots span.done { background: #86f2e4; }
+    .c04-dots span.on { background: #006a61; width: 64px; }
+    #c04-phone { position: absolute; inset: 0; }
+    .c04-phone-body { position: absolute; left: 1150px; top: 86px; width: 437px; height: 908px;
+      border-radius: 64px; background: #131c2d; box-shadow: 0 40px 90px rgba(19,28,45,0.28), 0 0 0 2px #2a3550 inset; }
+    .c04-screen { position: absolute; left: 1166px; top: 102px; width: 405px; height: 876px; border-radius: 50px; object-fit: cover; }
+    .c04-splash { background: #f8f9ff; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px; overflow: hidden; }
+    .c04-tile { position: relative; width: 150px; height: 150px; border-radius: 34px; background: #131c2d; overflow: hidden; }
+    .c04-ring { position: absolute; left: 43.4px; top: 54.6px; width: 68px; height: 68px; border-radius: 50%; border: 18.9px solid #fff; }
+    .c04-bar { position: absolute; left: 38.8px; top: 27.4px; width: 18.6px; height: 94.9px; border-radius: 9.3px; background: #fff; transform-origin: top center; }
+    .c04-ldot { position: absolute; left: 96.8px; top: 26.8px; width: 23.7px; height: 23.7px; border-radius: 50%; background: #2fd5c1; }
+    .c04-word { font-family: 'Plus Jakarta Sans'; font-weight: 700; font-size: 38px; color: #131c2d; letter-spacing: -0.02em; }
+    .c04-word span { font-family: 'Inter App'; font-weight: 600; color: #006a61; }
+    .c04-gesture { position: absolute; width: 0; height: 0; z-index: 50; }
+    .c04-tapring { position: absolute; left: -46px; top: -46px; width: 92px; height: 92px; border-radius: 50%; border: 5px solid #2fd5c1; }
+    .c04-press { position: absolute; left: -30px; top: -30px; width: 60px; height: 60px; border-radius: 50%; background: #2fd5c1; }
+    .c04-arrow { position: absolute; left: -4px; top: -4px; filter: drop-shadow(0 6px 10px rgba(19,28,45,0.35)); }
+    .c04-label { position: absolute; left: 70px; top: 40px; white-space: nowrap; font-family: 'Inter App'; font-weight: 600; font-size: 30px; color: #fff;
+      background: #131c2d; padding: 10px 18px; border-radius: 14px; box-shadow: 0 10px 24px rgba(19,28,45,0.25); }
+    .c04-trail { position: absolute; left: 0; top: -4px; width: 240px; height: 8px; border-radius: 8px; background: linear-gradient(90deg, rgba(47,213,193,0), #2fd5c1); transform-origin: left center; }
+    .c04-end { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .c04-logo { width: 220px; height: 220px; border-radius: 50px; }
+    .c04-endword { margin-top: 40px; font-family: 'Plus Jakarta Sans'; font-weight: 700; font-size: 96px; letter-spacing: -0.03em; color: #131c2d; }
+    .c04-endword span { font-family: 'Inter App'; font-weight: 600; color: #006a61; }
+    .c04-claim { margin-top: 18px; font-family: 'Inter App'; font-size: 40px; color: #45464d; }
+    .c04-promise { margin-top: 30px; font-family: 'Plus Jakarta Sans'; font-weight: 700; font-size: 44px; color: #006a61; }
+    .c04-fade { position: absolute; inset: 0; background: #f8f9ff; z-index: 90; }
+  </style>
+  <div id="root" data-composition-id="c04" data-width="1920" data-height="1080" data-layout-allow-overlap>
+    <div id="c04-text" class="clip" data-start="0" data-duration="30.465" data-track-index="1">
+      <div id="c04-eyebrow" class="c04-eyebrow">Chapitre 3</div>
+      <h1 id="c04-title" class="c04-title">Les tâches</h1>
+      <p id="c04-summary" class="c04-summary">Toutes vos démarches, classées par urgence.</p>
+      <div id="c04-dots" class="c04-dots"><span class="c04-dot done"></span><span class="c04-dot done"></span><span class="c04-dot on"></span><span class="c04-dot"></span><span class="c04-dot"></span><span class="c04-dot"></span><span class="c04-dot"></span><span class="c04-dot"></span><span class="c04-dot"></span><span class="c04-dot"></span><span class="c04-dot"></span></div>
+    </div>
+    <div id="c04-phone" class="clip c04-phone" data-start="0" data-duration="30.465" data-track-index="2">
+      <div id="c04-phone-body" class="c04-phone-body"></div>
+    </div>
+    <img id="c04-s0" class="clip c04-screen" src="assets/ecrans/04-taches.png" alt="" data-start="0" data-duration="9.192" data-track-index="3" style="z-index:10" />
+    <img id="c04-s1" class="clip c04-screen" src="assets/ecrans/04-taches-retard.png" alt="" data-start="8.792" data-duration="9.512" data-track-index="3" style="z-index:11" />
+    <img id="c04-s2" class="clip c04-screen" src="assets/ecrans/04-nouvelle-tache.png" alt="" data-start="17.904" data-duration="8.305" data-track-index="3" style="z-index:12" />
+    <img id="c04-s3" class="clip c04-screen" src="assets/ecrans/04-detail-tache.png" alt="" data-start="25.809" data-duration="4.656" data-track-index="3" style="z-index:13" />
+    <div id="c04-g1" class="clip c04-gesture" data-start="7.642" data-duration="1.6" data-track-index="4" style="left:1317.187px; top:346.93px">
+      <div id="c04-g1-ring" class="c04-tapring"></div>
+      <div id="c04-g1-press" class="c04-press"></div>
+      <div id="c04-g1-arrow" class="c04-arrow"><svg viewBox="0 0 64 64" width="64" height="64"><path d="M6 6 L52 22 L33 30 L48 52 L40 58 L25 36 L14 52 Z" fill="#131c2d" stroke="#ffffff" stroke-width="3.5" stroke-linejoin="round"/></svg></div>
+      <div id="c04-g1-label" class="c04-label">Toucher « En retard »</div>
+    </div>
+    <div id="c04-g2" class="clip c04-gesture" data-start="12.237" data-duration="2.4" data-track-index="4" style="left:1238.9px; top:540.0px">
+      <div id="c04-g2-trail" class="c04-trail"></div>
+      <div id="c04-g2-arrow" class="c04-arrow"><svg viewBox="0 0 64 64" width="64" height="64"><path d="M6 6 L52 22 L33 30 L48 52 L40 58 L25 36 L14 52 Z" fill="#131c2d" stroke="#ffffff" stroke-width="3.5" stroke-linejoin="round"/></svg></div>
+      <div id="c04-g2-label" class="c04-label">Glisser vers la droite</div>
+    </div>
+    <div id="c04-g3" class="clip c04-gesture" data-start="16.754" data-duration="1.6" data-track-index="4" style="left:1385.105px; top:873.143px">
+      <div id="c04-g3-ring" class="c04-tapring"></div>
+      <div id="c04-g3-press" class="c04-press"></div>
+      <div id="c04-g3-arrow" class="c04-arrow"><svg viewBox="0 0 64 64" width="64" height="64"><path d="M6 6 L52 22 L33 30 L48 52 L40 58 L25 36 L14 52 Z" fill="#131c2d" stroke="#ffffff" stroke-width="3.5" stroke-linejoin="round"/></svg></div>
+      <div id="c04-g3-label" class="c04-label">Toucher « Nouvelle tâche »</div>
+    </div>
+    <div id="c04-g4" class="clip c04-gesture" data-start="24.659" data-duration="1.6" data-track-index="4" style="left:1385.105px; top:932.36px">
+      <div id="c04-g4-ring" class="c04-tapring"></div>
+      <div id="c04-g4-press" class="c04-press"></div>
+      <div id="c04-g4-arrow" class="c04-arrow"><svg viewBox="0 0 64 64" width="64" height="64"><path d="M6 6 L52 22 L33 30 L48 52 L40 58 L25 36 L14 52 Z" fill="#131c2d" stroke="#ffffff" stroke-width="3.5" stroke-linejoin="round"/></svg></div>
+      <div id="c04-g4-label" class="c04-label">Toucher « Créer la tâche »</div>
+    </div>
+    <div id="c04-fade" class="clip c04-fade" data-start="0" data-duration="30.465" data-track-index="9"></div>
+  </div>
+  <script>
+    const tl = gsap.timeline({ paused: true });
+    tl.fromTo("#c04-eyebrow", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.45, ease: "power3.out" }, 0.1);
+    tl.fromTo("#c04-title", { opacity: 0, y: 26 }, { opacity: 1, y: 0, duration: 0.55, ease: "power3.out" }, 0.2);
+    tl.fromTo("#c04-summary", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.5, ease: "power3.out" }, 0.4);
+    tl.fromTo("#c04-phone-body", { opacity: 0, y: 40, scale: 0.97 }, { opacity: 1, y: 0, scale: 1, duration: 0.6, ease: "power3.out" }, 0.15);
+    tl.fromTo("#c04-phone-body", { y: 0, rotation: 0 }, { y: -14, rotation: -0.6, duration: 14.432, ease: "sine.inOut", yoyo: true, repeat: 1, immediateRender: false }, 0.8);
+    tl.fromTo("#c04-s1", { opacity: 0 }, { opacity: 1, duration: 0.4, ease: "power2.out" }, 8.792);
+    tl.fromTo("#c04-s2", { opacity: 0 }, { opacity: 1, duration: 0.4, ease: "power2.out" }, 17.904);
+    tl.fromTo("#c04-s3", { opacity: 0 }, { opacity: 1, duration: 0.4, ease: "power2.out" }, 25.809);
+    tl.fromTo("#c04-g1-arrow", { x: 150, y: 120, opacity: 0 }, { x: 0, y: 0, opacity: 1, duration: 0.55, ease: "power3.out" }, 7.292);
+    tl.fromTo("#c04-g1-label", { opacity: 0, x: 20 }, { opacity: 1, x: 0, duration: 0.35, ease: "power2.out" }, 7.492);
+    tl.fromTo("#c04-g1-arrow", { scale: 1 }, { scale: 0.86, duration: 0.12, yoyo: true, repeat: 1, ease: "power1.inOut", immediateRender: false }, 8.342);
+    tl.fromTo("#c04-g1-press", { scale: 0.4, opacity: 0.55 }, { scale: 1, opacity: 0, duration: 0.5, ease: "power2.out" }, 8.342);
+    tl.fromTo("#c04-g1-ring", { scale: 0.3, opacity: 1 }, { scale: 1.8, opacity: 0, duration: 0.75, ease: "power2.out" }, 8.342);
+    tl.fromTo("#c04-g1", { opacity: 1 }, { opacity: 0, duration: 0.3 }, 9.542);
+    tl.fromTo("#c04-g2-arrow", { x: 0, opacity: 0 }, { x: 0, opacity: 1, duration: 0.3 }, 12.237);
+    tl.fromTo("#c04-g2-label", { opacity: 0 }, { opacity: 1, duration: 0.3 }, 12.437);
+    tl.fromTo("#c04-g2-arrow", { x: 0 }, { x: 230, duration: 0.9, ease: "power2.inOut", immediateRender: false }, 12.737);
+    tl.fromTo("#c04-g2-trail", { scaleX: 0 }, { scaleX: 1, duration: 0.9, ease: "power2.inOut" }, 12.737);
+    tl.fromTo("#c04-g2", { opacity: 1 }, { opacity: 0, duration: 0.3 }, 14.037);
+    tl.fromTo("#c04-g3-arrow", { x: 150, y: 120, opacity: 0 }, { x: 0, y: 0, opacity: 1, duration: 0.55, ease: "power3.out" }, 16.404);
+    tl.fromTo("#c04-g3-label", { opacity: 0, x: 20 }, { opacity: 1, x: 0, duration: 0.35, ease: "power2.out" }, 16.604);
+    tl.fromTo("#c04-g3-arrow", { scale: 1 }, { scale: 0.86, duration: 0.12, yoyo: true, repeat: 1, ease: "power1.inOut", immediateRender: false }, 17.454);
+    tl.fromTo("#c04-g3-press", { scale: 0.4, opacity: 0.55 }, { scale: 1, opacity: 0, duration: 0.5, ease: "power2.out" }, 17.454);
+    tl.fromTo("#c04-g3-ring", { scale: 0.3, opacity: 1 }, { scale: 1.8, opacity: 0, duration: 0.75, ease: "power2.out" }, 17.454);
+    tl.fromTo("#c04-g3", { opacity: 1 }, { opacity: 0, duration: 0.3 }, 18.654);
+    tl.fromTo("#c04-g4-arrow", { x: 150, y: 120, opacity: 0 }, { x: 0, y: 0, opacity: 1, duration: 0.55, ease: "power3.out" }, 24.309);
+    tl.fromTo("#c04-g4-label", { opacity: 0, x: 20 }, { opacity: 1, x: 0, duration: 0.35, ease: "power2.out" }, 24.509);
+    tl.fromTo("#c04-g4-arrow", { scale: 1 }, { scale: 0.86, duration: 0.12, yoyo: true, repeat: 1, ease: "power1.inOut", immediateRender: false }, 25.359);
+    tl.fromTo("#c04-g4-press", { scale: 0.4, opacity: 0.55 }, { scale: 1, opacity: 0, duration: 0.5, ease: "power2.out" }, 25.359);
+    tl.fromTo("#c04-g4-ring", { scale: 0.3, opacity: 1 }, { scale: 1.8, opacity: 0, duration: 0.75, ease: "power2.out" }, 25.359);
+    tl.fromTo("#c04-g4", { opacity: 1 }, { opacity: 0, duration: 0.3 }, 26.559);
+    tl.fromTo("#c04-fade", { opacity: 0 }, { opacity: 1, duration: 0.35, ease: "power1.in" }, 30.115);
+    window.__timelines["c04"] = tl;
+  </script>
+</template>

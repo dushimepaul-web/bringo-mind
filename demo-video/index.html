@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/gsap.min.js"></script>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; background: #f8f9ff; }
+      #root { position: relative; width: 100%; height: 100%; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="275.76" data-width="1920" data-height="1080">
+      <div id="c01" data-composition-id="c01" data-composition-src="compositions/c01.html" data-start="0.0" data-duration="17.89" data-track-index="1" data-track-kind="graphics" data-width="1920" data-height="1080"></div>
+      <div id="c02" data-composition-id="c02" data-composition-src="compositions/c02.html" data-start="17.89" data-duration="23.754" data-track-index="1" data-track-kind="graphics" data-width="1920" data-height="1080"></div>
+      <div id="c03" data-composition-id="c03" data-composition-src="compositions/c03.html" data-start="41.644" data-duration="21.442" data-track-index="1" data-track-kind="graphics" data-width="1920" data-height="1080"></div>
+      <div id="c04" data-composition-id="c04" data-composition-src="compositions/c04.html" data-start="63.086" data-duration="30.465" data-track-index="1" data-track-kind="graphics" data-width="1920" data-height="1080"></div>
+      <div id="c05" data-composition-id="c05" data-composition-src="compositions/c05.html" data-start="93.551" data-duration="19.844" data-track-index="1" data-track-kind="graphics" data-width="1920" data-height="1080"></div>
+      <div id="c06" data-composition-id="c06" data-composition-src="compositions/c06.html" data-start="113.395" data-duration="27.961" data-track-index="1" data-track-kind="graphics" data-width="1920" data-height="1080"></div>
+      <div id="c07" data-composition-id="c07" data-composition-src="compositions/c07.html" data-start="141.356" data-duration="25.669" data-track-index="1" data-track-kind="graphics" data-width="1920" data-height="1080"></div>
+      <div id="c08" data-composition-id="c08" data-composition-src="compositions/c08.html" data-start="167.025" data-duration="19.363" data-track-index="1" data-track-kind="graphics" data-width="1920" data-height="1080"></div>
+      <div id="c09" data-composition-id="c09" data-composition-src="compositions/c09.html" data-start="186.388" data-duration="25.103" data-track-index="1" data-track-kind="graphics" data-width="1920" data-height="1080"></div>
+      <div id="c10" data-composition-id="c10" data-composition-src="compositions/c10.html" data-start="211.491" data-duration="14.132" data-track-index="1" data-track-kind="graphics" data-width="1920" data-height="1080"></div>
+      <div id="c11" data-composition-id="c11" data-composition-src="compositions/c11.html" data-start="225.623" data-duration="21.362" data-track-index="1" data-track-kind="graphics" data-width="1920" data-height="1080"></div>
+      <div id="c12" data-composition-id="c12" data-composition-src="compositions/c12.html" data-start="246.985" data-duration="18.222" data-track-index="1" data-track-kind="graphics" data-width="1920" data-height="1080"></div>
+      <div id="c13" data-composition-id="c13" data-composition-src="compositions/c13.html" data-start="265.207" data-duration="10.553" data-track-index="1" data-track-kind="graphics" data-width="1920" data-height="1080"></div>
+      <audio id="v01-1" src="assets/voix/01-introduction-1.wav" data-start="0.9" data-duration="5.184" data-track-index="5"></audio>
+      <audio id="v01-2" src="assets/voix/01-introduction-2.wav" data-start="6.634" data-duration="7.211" data-track-index="5"></audio>
+      <audio id="v01-3" src="assets/voix/01-introduction-3.wav" data-start="14.395" data-duration="2.795" data-track-index="5"></audio>
+      <audio id="v02-1" src="assets/voix/02-ouverture-1.wav" data-start="18.79" data-duration="3.797" data-track-index="5"></audio>
+      <audio id="v02-2" src="assets/voix/02-ouverture-2.wav" data-start="23.137" data-duration="3.627" data-track-index="5"></audio>
+      <audio id="v02-3" src="assets/voix/02-ouverture-3.wav" data-start="27.864" data-duration="3.349" data-track-index="5"></audio>
+      <audio id="v02-4" src="assets/voix/02-ouverture-4.wav" data-start="32.313" data-duration="2.347" data-track-index="5"></audio>
+      <audio id="v02-5" src="assets/voix/02-ouverture-5.wav" data-start="35.76" data-duration="5.184" data-track-index="5"></audio>
+      <audio id="v03-1" src="assets/voix/03-accueil-1.wav" data-start="42.544" data-duration="4.928" data-track-index="5"></audio>
+      <audio id="v03-2" src="assets/voix/03-accueil-2.wav" data-start="48.022" data-duration="4.053" data-track-index="5"></audio>
+      <audio id="v03-3" src="assets/voix/03-accueil-3.wav" data-start="53.175" data-duration="5.696" data-track-index="5"></audio>
+      <audio id="v03-4" src="assets/voix/03-accueil-4.wav" data-start="59.421" data-duration="2.965" data-track-index="5"></audio>
+      <audio id="v04-1" src="assets/voix/04-taches-1.wav" data-start="63.986" data-duration="2.475" data-track-index="5"></audio>
+      <audio id="v04-2" src="assets/voix/04-taches-2.wav" data-start="67.011" data-duration="4.267" data-track-index="5"></audio>
+      <audio id="v04-3" src="assets/voix/04-taches-3.wav" data-start="72.378" data-duration="4.395" data-track-index="5"></audio>
+      <audio id="v04-4" src="assets/voix/04-taches-4.wav" data-start="77.873" data-duration="2.517" data-track-index="5"></audio>
+      <audio id="v04-5" src="assets/voix/04-taches-5.wav" data-start="81.49" data-duration="6.805" data-track-index="5"></audio>
+      <audio id="v04-6" src="assets/voix/04-taches-6.wav" data-start="89.395" data-duration="3.456" data-track-index="5"></audio>
+      <audio id="v05-1" src="assets/voix/05-rappels-1.wav" data-start="94.451" data-duration="2.155" data-track-index="5"></audio>
+      <audio id="v05-2" src="assets/voix/05-rappels-2.wav" data-start="97.156" data-duration="5.355" data-track-index="5"></audio>
+      <audio id="v05-3" src="assets/voix/05-rappels-3.wav" data-start="103.061" data-duration="5.419" data-track-index="5"></audio>
+      <audio id="v05-4" src="assets/voix/05-rappels-4.wav" data-start="109.58" data-duration="3.115" data-track-index="5"></audio>
+      <audio id="v06-1" src="assets/voix/06-calendrier-1.wav" data-start="114.295" data-duration="3.093" data-track-index="5"></audio>
+      <audio id="v06-2" src="assets/voix/06-calendrier-2.wav" data-start="117.938" data-duration="3.179" data-track-index="5"></audio>
+      <audio id="v06-3" src="assets/voix/06-calendrier-3.wav" data-start="122.217" data-duration="6.336" data-track-index="5"></audio>
+      <audio id="v06-4" src="assets/voix/06-calendrier-4.wav" data-start="129.653" data-duration="4.48" data-track-index="5"></audio>
+      <audio id="v06-5" src="assets/voix/06-calendrier-5.wav" data-start="134.683" data-duration="5.973" data-track-index="5"></audio>
+      <audio id="v07-1" src="assets/voix/07-documents-1.wav" data-start="142.256" data-duration="2.581" data-track-index="5"></audio>
+      <audio id="v07-2" src="assets/voix/07-documents-2.wav" data-start="145.387" data-duration="3.84" data-track-index="5"></audio>
+      <audio id="v07-3" src="assets/voix/07-documents-3.wav" data-start="149.777" data-duration="2.624" data-track-index="5"></audio>
+      <audio id="v07-4" src="assets/voix/07-documents-4.wav" data-start="153.501" data-duration="3.563" data-track-index="5"></audio>
+      <audio id="v07-5" src="assets/voix/07-documents-5.wav" data-start="158.164" data-duration="3.733" data-track-index="5"></audio>
+      <audio id="v07-6" src="assets/voix/07-documents-6.wav" data-start="162.997" data-duration="3.328" data-track-index="5"></audio>
+      <audio id="v08-1" src="assets/voix/08-kora-1.wav" data-start="167.925" data-duration="2.901" data-track-index="5"></audio>
+      <audio id="v08-2" src="assets/voix/08-kora-2.wav" data-start="171.376" data-duration="2.816" data-track-index="5"></audio>
+      <audio id="v08-3" src="assets/voix/08-kora-3.wav" data-start="175.292" data-duration="3.968" data-track-index="5"></audio>
+      <audio id="v08-4" src="assets/voix/08-kora-4.wav" data-start="179.81" data-duration="1.493" data-track-index="5"></audio>
+      <audio id="v08-5" src="assets/voix/08-kora-5.wav" data-start="182.403" data-duration="3.285" data-track-index="5"></audio>
+      <audio id="v09-1" src="assets/voix/09-foyer-1.wav" data-start="187.288" data-duration="4.864" data-track-index="5"></audio>
+      <audio id="v09-2" src="assets/voix/09-foyer-2.wav" data-start="192.702" data-duration="3.2" data-track-index="5"></audio>
+      <audio id="v09-3" src="assets/voix/09-foyer-3.wav" data-start="197.002" data-duration="3.925" data-track-index="5"></audio>
+      <audio id="v09-4" src="assets/voix/09-foyer-4.wav" data-start="201.477" data-duration="3.051" data-track-index="5"></audio>
+      <audio id="v09-5" src="assets/voix/09-foyer-5.wav" data-start="205.628" data-duration="5.163" data-track-index="5"></audio>
+      <audio id="v10-1" src="assets/voix/10-notifications-1.wav" data-start="212.391" data-duration="2.432" data-track-index="5"></audio>
+      <audio id="v10-2" src="assets/voix/10-notifications-2.wav" data-start="215.373" data-duration="3.819" data-track-index="5"></audio>
+      <audio id="v10-3" src="assets/voix/10-notifications-3.wav" data-start="219.742" data-duration="4.181" data-track-index="5"></audio>
+      <audio id="v11-1" src="assets/voix/11-connexions-1.wav" data-start="226.523" data-duration="5.824" data-track-index="5"></audio>
+      <audio id="v11-2" src="assets/voix/11-connexions-2.wav" data-start="232.897" data-duration="4.587" data-track-index="5"></audio>
+      <audio id="v11-3" src="assets/voix/11-connexions-3.wav" data-start="238.584" data-duration="7.701" data-track-index="5"></audio>
+      <audio id="v12-1" src="assets/voix/12-profil-1.wav" data-start="247.885" data-duration="2.283" data-track-index="5"></audio>
+      <audio id="v12-2" src="assets/voix/12-profil-2.wav" data-start="250.718" data-duration="4.139" data-track-index="5"></audio>
+      <audio id="v12-3" src="assets/voix/12-profil-3.wav" data-start="255.957" data-duration="6.379" data-track-index="5"></audio>
+      <audio id="v12-4" src="assets/voix/12-profil-4.wav" data-start="262.886" data-duration="1.621" data-track-index="5"></audio>
+      <audio id="v13-1" src="assets/voix/13-conclusion-1.wav" data-start="266.107" data-duration="4.16" data-track-index="5"></audio>
+      <audio id="v13-2" src="assets/voix/13-conclusion-2.wav" data-start="270.817" data-duration="1.643" data-track-index="5"></audio>
+    </div>
+    <script>
+      const tl = gsap.timeline({ paused: true });
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>

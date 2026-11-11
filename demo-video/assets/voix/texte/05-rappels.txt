@@ -1,0 +1,7 @@
+Les rappels vous préviennent au bon moment.
+
+Chaque rappel indique quand il sonnera, et sur quel canal : notification ou e-mail.
+
+On peut en créer un depuis une tâche, un événement ou un document : il est alors déjà rempli.
+
+On choisit la date, l'heure à la roulette, et la répétition.

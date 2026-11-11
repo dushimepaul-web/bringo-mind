@@ -1,0 +1,63 @@
+<template>
+  <style>
+    
+    @font-face { font-family: 'Plus Jakarta Sans'; src: url('assets/fonts/PlusJakartaSans_700Bold.ttf'); font-weight: 700; }
+    @font-face { font-family: 'Inter App'; src: url('assets/fonts/Inter_400Regular.ttf'); font-weight: 400; }
+    @font-face { font-family: 'Inter App'; src: url('assets/fonts/Inter_600SemiBold.ttf'); font-weight: 600; }
+
+    #root { position: absolute; inset: 0; overflow: hidden;
+      background: radial-gradient(circle at 78% 20%, rgba(134,242,228,0.38) 0, rgba(134,242,228,0) 42%),
+                  radial-gradient(circle at 12% 92%, rgba(229,238,255,0.9) 0, rgba(229,238,255,0) 45%), #f8f9ff; }
+    #c13-text { position: absolute; left: 150px; top: 0; bottom: 0; width: 860px; display: flex; flex-direction: column; justify-content: center; }
+    .c13-eyebrow { font-family: 'Inter App'; font-weight: 600; font-size: 30px; letter-spacing: 0.08em; text-transform: uppercase; color: #006a61; margin-bottom: 18px; }
+    .c13-title { font-family: 'Plus Jakarta Sans'; font-weight: 700; font-size: 88px; line-height: 1.05; letter-spacing: -0.03em; color: #131c2d; }
+    .c13-summary { font-family: 'Inter App'; font-weight: 400; font-size: 36px; line-height: 1.4; color: #45464d; margin-top: 26px; max-width: 760px; }
+    .c13-dots { display: flex; gap: 12px; margin-top: 56px; }
+    .c13-dots span { width: 34px; height: 8px; border-radius: 8px; background: #d3e4fe; }
+    .c13-dots span.done { background: #86f2e4; }
+    .c13-dots span.on { background: #006a61; width: 64px; }
+    #c13-phone { position: absolute; inset: 0; }
+    .c13-phone-body { position: absolute; left: 1150px; top: 86px; width: 437px; height: 908px;
+      border-radius: 64px; background: #131c2d; box-shadow: 0 40px 90px rgba(19,28,45,0.28), 0 0 0 2px #2a3550 inset; }
+    .c13-screen { position: absolute; left: 1166px; top: 102px; width: 405px; height: 876px; border-radius: 50px; object-fit: cover; }
+    .c13-splash { background: #f8f9ff; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px; overflow: hidden; }
+    .c13-tile { position: relative; width: 150px; height: 150px; border-radius: 34px; background: #131c2d; overflow: hidden; }
+    .c13-ring { position: absolute; left: 43.4px; top: 54.6px; width: 68px; height: 68px; border-radius: 50%; border: 18.9px solid #fff; }
+    .c13-bar { position: absolute; left: 38.8px; top: 27.4px; width: 18.6px; height: 94.9px; border-radius: 9.3px; background: #fff; transform-origin: top center; }
+    .c13-ldot { position: absolute; left: 96.8px; top: 26.8px; width: 23.7px; height: 23.7px; border-radius: 50%; background: #2fd5c1; }
+    .c13-word { font-family: 'Plus Jakarta Sans'; font-weight: 700; font-size: 38px; color: #131c2d; letter-spacing: -0.02em; }
+    .c13-word span { font-family: 'Inter App'; font-weight: 600; color: #006a61; }
+    .c13-gesture { position: absolute; width: 0; height: 0; z-index: 50; }
+    .c13-tapring { position: absolute; left: -46px; top: -46px; width: 92px; height: 92px; border-radius: 50%; border: 5px solid #2fd5c1; }
+    .c13-press { position: absolute; left: -30px; top: -30px; width: 60px; height: 60px; border-radius: 50%; background: #2fd5c1; }
+    .c13-arrow { position: absolute; left: -4px; top: -4px; filter: drop-shadow(0 6px 10px rgba(19,28,45,0.35)); }
+    .c13-label { position: absolute; left: 70px; top: 40px; white-space: nowrap; font-family: 'Inter App'; font-weight: 600; font-size: 30px; color: #fff;
+      background: #131c2d; padding: 10px 18px; border-radius: 14px; box-shadow: 0 10px 24px rgba(19,28,45,0.25); }
+    .c13-trail { position: absolute; left: 0; top: -4px; width: 240px; height: 8px; border-radius: 8px; background: linear-gradient(90deg, rgba(47,213,193,0), #2fd5c1); transform-origin: left center; }
+    .c13-end { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .c13-logo { width: 220px; height: 220px; border-radius: 50px; }
+    .c13-endword { margin-top: 40px; font-family: 'Plus Jakarta Sans'; font-weight: 700; font-size: 96px; letter-spacing: -0.03em; color: #131c2d; }
+    .c13-endword span { font-family: 'Inter App'; font-weight: 600; color: #006a61; }
+    .c13-claim { margin-top: 18px; font-family: 'Inter App'; font-size: 40px; color: #45464d; }
+    .c13-promise { margin-top: 30px; font-family: 'Plus Jakarta Sans'; font-weight: 700; font-size: 44px; color: #006a61; }
+    .c13-fade { position: absolute; inset: 0; background: #f8f9ff; z-index: 90; }
+  </style>
+  <div id="root" data-composition-id="c13" data-width="1920" data-height="1080" data-layout-allow-overlap>
+    <div id="c13-end" class="clip c13-end" data-start="0" data-duration="10.553" data-track-index="1">
+      <img id="c13-logo" class="c13-logo" src="assets/brand/bringo-mind-icon.png" alt="Bringo Mind" />
+      <div id="c13-endword" class="c13-endword">bringo <span>mind</span></div>
+      <p id="c13-claim" class="c13-claim">Votre vie administrative, simplifiée.</p>
+      <p id="c13-promise" class="c13-promise">Kora propose, vous décidez.</p>
+    </div>
+    <div id="c13-fade" class="clip c13-fade" data-start="0" data-duration="10.553" data-track-index="9"></div>
+  </div>
+  <script>
+    const tl = gsap.timeline({ paused: true });
+    tl.fromTo("#c13-logo", { opacity: 0, scale: 0.8 }, { opacity: 1, scale: 1, duration: 0.6, ease: "back.out(1.5)" }, 0.2);
+    tl.fromTo("#c13-endword", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.5, ease: "power3.out" }, 0.6);
+    tl.fromTo("#c13-claim", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.45, ease: "power2.out" }, 0.9);
+    tl.fromTo("#c13-promise", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.45, ease: "power2.out" }, 5.61);
+    tl.fromTo("#c13-fade", { opacity: 0 }, { opacity: 1, duration: 0.35, ease: "power1.in" }, 10.203);
+    window.__timelines["c13"] = tl;
+  </script>
+</template>

@@ -1,0 +1,96 @@
+<template>
+  <style>
+    
+    @font-face { font-family: 'Plus Jakarta Sans'; src: url('assets/fonts/PlusJakartaSans_700Bold.ttf'); font-weight: 700; }
+    @font-face { font-family: 'Inter App'; src: url('assets/fonts/Inter_400Regular.ttf'); font-weight: 400; }
+    @font-face { font-family: 'Inter App'; src: url('assets/fonts/Inter_600SemiBold.ttf'); font-weight: 600; }
+
+    #root { position: absolute; inset: 0; overflow: hidden;
+      background: radial-gradient(circle at 78% 20%, rgba(134,242,228,0.38) 0, rgba(134,242,228,0) 42%),
+                  radial-gradient(circle at 12% 92%, rgba(229,238,255,0.9) 0, rgba(229,238,255,0) 45%), #f8f9ff; }
+    #c06-text { position: absolute; left: 150px; top: 0; bottom: 0; width: 860px; display: flex; flex-direction: column; justify-content: center; }
+    .c06-eyebrow { font-family: 'Inter App'; font-weight: 600; font-size: 30px; letter-spacing: 0.08em; text-transform: uppercase; color: #006a61; margin-bottom: 18px; }
+    .c06-title { font-family: 'Plus Jakarta Sans'; font-weight: 700; font-size: 88px; line-height: 1.05; letter-spacing: -0.03em; color: #131c2d; }
+    .c06-summary { font-family: 'Inter App'; font-weight: 400; font-size: 36px; line-height: 1.4; color: #45464d; margin-top: 26px; max-width: 760px; }
+    .c06-dots { display: flex; gap: 12px; margin-top: 56px; }
+    .c06-dots span { width: 34px; height: 8px; border-radius: 8px; background: #d3e4fe; }
+    .c06-dots span.done { background: #86f2e4; }
+    .c06-dots span.on { background: #006a61; width: 64px; }
+    #c06-phone { position: absolute; inset: 0; }
+    .c06-phone-body { position: absolute; left: 1150px; top: 86px; width: 437px; height: 908px;
+      border-radius: 64px; background: #131c2d; box-shadow: 0 40px 90px rgba(19,28,45,0.28), 0 0 0 2px #2a3550 inset; }
+    .c06-screen { position: absolute; left: 1166px; top: 102px; width: 405px; height: 876px; border-radius: 50px; object-fit: cover; }
+    .c06-splash { background: #f8f9ff; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px; overflow: hidden; }
+    .c06-tile { position: relative; width: 150px; height: 150px; border-radius: 34px; background: #131c2d; overflow: hidden; }
+    .c06-ring { position: absolute; left: 43.4px; top: 54.6px; width: 68px; height: 68px; border-radius: 50%; border: 18.9px solid #fff; }
+    .c06-bar { position: absolute; left: 38.8px; top: 27.4px; width: 18.6px; height: 94.9px; border-radius: 9.3px; background: #fff; transform-origin: top center; }
+    .c06-ldot { position: absolute; left: 96.8px; top: 26.8px; width: 23.7px; height: 23.7px; border-radius: 50%; background: #2fd5c1; }
+    .c06-word { font-family: 'Plus Jakarta Sans'; font-weight: 700; font-size: 38px; color: #131c2d; letter-spacing: -0.02em; }
+    .c06-word span { font-family: 'Inter App'; font-weight: 600; color: #006a61; }
+    .c06-gesture { position: absolute; width: 0; height: 0; z-index: 50; }
+    .c06-tapring { position: absolute; left: -46px; top: -46px; width: 92px; height: 92px; border-radius: 50%; border: 5px solid #2fd5c1; }
+    .c06-press { position: absolute; left: -30px; top: -30px; width: 60px; height: 60px; border-radius: 50%; background: #2fd5c1; }
+    .c06-arrow { position: absolute; left: -4px; top: -4px; filter: drop-shadow(0 6px 10px rgba(19,28,45,0.35)); }
+    .c06-label { position: absolute; left: 70px; top: 40px; white-space: nowrap; font-family: 'Inter App'; font-weight: 600; font-size: 30px; color: #fff;
+      background: #131c2d; padding: 10px 18px; border-radius: 14px; box-shadow: 0 10px 24px rgba(19,28,45,0.25); }
+    .c06-trail { position: absolute; left: 0; top: -4px; width: 240px; height: 8px; border-radius: 8px; background: linear-gradient(90deg, rgba(47,213,193,0), #2fd5c1); transform-origin: left center; }
+    .c06-end { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .c06-logo { width: 220px; height: 220px; border-radius: 50px; }
+    .c06-endword { margin-top: 40px; font-family: 'Plus Jakarta Sans'; font-weight: 700; font-size: 96px; letter-spacing: -0.03em; color: #131c2d; }
+    .c06-endword span { font-family: 'Inter App'; font-weight: 600; color: #006a61; }
+    .c06-claim { margin-top: 18px; font-family: 'Inter App'; font-size: 40px; color: #45464d; }
+    .c06-promise { margin-top: 30px; font-family: 'Plus Jakarta Sans'; font-weight: 700; font-size: 44px; color: #006a61; }
+    .c06-fade { position: absolute; inset: 0; background: #f8f9ff; z-index: 90; }
+  </style>
+  <div id="root" data-composition-id="c06" data-width="1920" data-height="1080" data-layout-allow-overlap>
+    <div id="c06-text" class="clip" data-start="0" data-duration="27.961" data-track-index="1">
+      <div id="c06-eyebrow" class="c06-eyebrow">Chapitre 5</div>
+      <h1 id="c06-title" class="c06-title">Le calendrier</h1>
+      <p id="c06-summary" class="c06-summary">Jour, semaine, mois, année — et le Planning.</p>
+      <div id="c06-dots" class="c06-dots"><span class="c06-dot done"></span><span class="c06-dot done"></span><span class="c06-dot done"></span><span class="c06-dot done"></span><span class="c06-dot on"></span><span class="c06-dot"></span><span class="c06-dot"></span><span class="c06-dot"></span><span class="c06-dot"></span><span class="c06-dot"></span><span class="c06-dot"></span></div>
+    </div>
+    <div id="c06-phone" class="clip c06-phone" data-start="0" data-duration="27.961" data-track-index="2">
+      <div id="c06-phone-body" class="c06-phone-body"></div>
+    </div>
+    <img id="c06-s0" class="clip c06-screen" src="assets/ecrans/06-mois.png" alt="" data-start="0" data-duration="8.722" data-track-index="3" style="z-index:10" />
+    <img id="c06-s1" class="clip c06-screen" src="assets/ecrans/06-annee.png" alt="" data-start="8.322" data-duration="7.836" data-track-index="3" style="z-index:11" />
+    <img id="c06-s2" class="clip c06-screen" src="assets/ecrans/06-nouvel-evenement.png" alt="" data-start="15.758" data-duration="12.203" data-track-index="3" style="z-index:12" />
+    <div id="c06-g1" class="clip c06-gesture" data-start="7.172" data-duration="1.6" data-track-index="4" style="left:1504.013px; top:343.864px">
+      <div id="c06-g1-ring" class="c06-tapring"></div>
+      <div id="c06-g1-press" class="c06-press"></div>
+      <div id="c06-g1-arrow" class="c06-arrow"><svg viewBox="0 0 64 64" width="64" height="64"><path d="M6 6 L52 22 L33 30 L48 52 L40 58 L25 36 L14 52 Z" fill="#131c2d" stroke="#ffffff" stroke-width="3.5" stroke-linejoin="round"/></svg></div>
+      <div id="c06-g1-label" class="c06-label">Toucher « Année »</div>
+    </div>
+    <div id="c06-g2" class="clip c06-gesture" data-start="14.608" data-duration="1.6" data-track-index="4" style="left:1531.553px; top:218.245px">
+      <div id="c06-g2-ring" class="c06-tapring"></div>
+      <div id="c06-g2-press" class="c06-press"></div>
+      <div id="c06-g2-arrow" class="c06-arrow"><svg viewBox="0 0 64 64" width="64" height="64"><path d="M6 6 L52 22 L33 30 L48 52 L40 58 L25 36 L14 52 Z" fill="#131c2d" stroke="#ffffff" stroke-width="3.5" stroke-linejoin="round"/></svg></div>
+      <div id="c06-g2-label" class="c06-label">Toucher « Voir le planning »</div>
+    </div>
+    <div id="c06-fade" class="clip c06-fade" data-start="0" data-duration="27.961" data-track-index="9"></div>
+  </div>
+  <script>
+    const tl = gsap.timeline({ paused: true });
+    tl.fromTo("#c06-eyebrow", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.45, ease: "power3.out" }, 0.1);
+    tl.fromTo("#c06-title", { opacity: 0, y: 26 }, { opacity: 1, y: 0, duration: 0.55, ease: "power3.out" }, 0.2);
+    tl.fromTo("#c06-summary", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.5, ease: "power3.out" }, 0.4);
+    tl.fromTo("#c06-phone-body", { opacity: 0, y: 40, scale: 0.97 }, { opacity: 1, y: 0, scale: 1, duration: 0.6, ease: "power3.out" }, 0.15);
+    tl.fromTo("#c06-phone-body", { y: 0, rotation: 0 }, { y: -14, rotation: -0.6, duration: 13.18, ease: "sine.inOut", yoyo: true, repeat: 1, immediateRender: false }, 0.8);
+    tl.fromTo("#c06-s1", { opacity: 0 }, { opacity: 1, duration: 0.4, ease: "power2.out" }, 8.322);
+    tl.fromTo("#c06-s2", { opacity: 0 }, { opacity: 1, duration: 0.4, ease: "power2.out" }, 15.758);
+    tl.fromTo("#c06-g1-arrow", { x: 150, y: 120, opacity: 0 }, { x: 0, y: 0, opacity: 1, duration: 0.55, ease: "power3.out" }, 6.822);
+    tl.fromTo("#c06-g1-label", { opacity: 0, x: 20 }, { opacity: 1, x: 0, duration: 0.35, ease: "power2.out" }, 7.022);
+    tl.fromTo("#c06-g1-arrow", { scale: 1 }, { scale: 0.86, duration: 0.12, yoyo: true, repeat: 1, ease: "power1.inOut", immediateRender: false }, 7.872);
+    tl.fromTo("#c06-g1-press", { scale: 0.4, opacity: 0.55 }, { scale: 1, opacity: 0, duration: 0.5, ease: "power2.out" }, 7.872);
+    tl.fromTo("#c06-g1-ring", { scale: 0.3, opacity: 1 }, { scale: 1.8, opacity: 0, duration: 0.75, ease: "power2.out" }, 7.872);
+    tl.fromTo("#c06-g1", { opacity: 1 }, { opacity: 0, duration: 0.3 }, 9.072);
+    tl.fromTo("#c06-g2-arrow", { x: 150, y: 120, opacity: 0 }, { x: 0, y: 0, opacity: 1, duration: 0.55, ease: "power3.out" }, 14.258);
+    tl.fromTo("#c06-g2-label", { opacity: 0, x: 20 }, { opacity: 1, x: 0, duration: 0.35, ease: "power2.out" }, 14.458);
+    tl.fromTo("#c06-g2-arrow", { scale: 1 }, { scale: 0.86, duration: 0.12, yoyo: true, repeat: 1, ease: "power1.inOut", immediateRender: false }, 15.308);
+    tl.fromTo("#c06-g2-press", { scale: 0.4, opacity: 0.55 }, { scale: 1, opacity: 0, duration: 0.5, ease: "power2.out" }, 15.308);
+    tl.fromTo("#c06-g2-ring", { scale: 0.3, opacity: 1 }, { scale: 1.8, opacity: 0, duration: 0.75, ease: "power2.out" }, 15.308);
+    tl.fromTo("#c06-g2", { opacity: 1 }, { opacity: 0, duration: 0.3 }, 16.508);
+    tl.fromTo("#c06-fade", { opacity: 0 }, { opacity: 1, duration: 0.35, ease: "power1.in" }, 27.611);
+    window.__timelines["c06"] = tl;
+  </script>
+</template>

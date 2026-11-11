@@ -1,0 +1,108 @@
+<template>
+  <style>
+    
+    @font-face { font-family: 'Plus Jakarta Sans'; src: url('assets/fonts/PlusJakartaSans_700Bold.ttf'); font-weight: 700; }
+    @font-face { font-family: 'Inter App'; src: url('assets/fonts/Inter_400Regular.ttf'); font-weight: 400; }
+    @font-face { font-family: 'Inter App'; src: url('assets/fonts/Inter_600SemiBold.ttf'); font-weight: 600; }
+
+    #root { position: absolute; inset: 0; overflow: hidden;
+      background: radial-gradient(circle at 78% 20%, rgba(134,242,228,0.38) 0, rgba(134,242,228,0) 42%),
+                  radial-gradient(circle at 12% 92%, rgba(229,238,255,0.9) 0, rgba(229,238,255,0) 45%), #f8f9ff; }
+    #c07-text { position: absolute; left: 150px; top: 0; bottom: 0; width: 860px; display: flex; flex-direction: column; justify-content: center; }
+    .c07-eyebrow { font-family: 'Inter App'; font-weight: 600; font-size: 30px; letter-spacing: 0.08em; text-transform: uppercase; color: #006a61; margin-bottom: 18px; }
+    .c07-title { font-family: 'Plus Jakarta Sans'; font-weight: 700; font-size: 88px; line-height: 1.05; letter-spacing: -0.03em; color: #131c2d; }
+    .c07-summary { font-family: 'Inter App'; font-weight: 400; font-size: 36px; line-height: 1.4; color: #45464d; margin-top: 26px; max-width: 760px; }
+    .c07-dots { display: flex; gap: 12px; margin-top: 56px; }
+    .c07-dots span { width: 34px; height: 8px; border-radius: 8px; background: #d3e4fe; }
+    .c07-dots span.done { background: #86f2e4; }
+    .c07-dots span.on { background: #006a61; width: 64px; }
+    #c07-phone { position: absolute; inset: 0; }
+    .c07-phone-body { position: absolute; left: 1150px; top: 86px; width: 437px; height: 908px;
+      border-radius: 64px; background: #131c2d; box-shadow: 0 40px 90px rgba(19,28,45,0.28), 0 0 0 2px #2a3550 inset; }
+    .c07-screen { position: absolute; left: 1166px; top: 102px; width: 405px; height: 876px; border-radius: 50px; object-fit: cover; }
+    .c07-splash { background: #f8f9ff; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px; overflow: hidden; }
+    .c07-tile { position: relative; width: 150px; height: 150px; border-radius: 34px; background: #131c2d; overflow: hidden; }
+    .c07-ring { position: absolute; left: 43.4px; top: 54.6px; width: 68px; height: 68px; border-radius: 50%; border: 18.9px solid #fff; }
+    .c07-bar { position: absolute; left: 38.8px; top: 27.4px; width: 18.6px; height: 94.9px; border-radius: 9.3px; background: #fff; transform-origin: top center; }
+    .c07-ldot { position: absolute; left: 96.8px; top: 26.8px; width: 23.7px; height: 23.7px; border-radius: 50%; background: #2fd5c1; }
+    .c07-word { font-family: 'Plus Jakarta Sans'; font-weight: 700; font-size: 38px; color: #131c2d; letter-spacing: -0.02em; }
+    .c07-word span { font-family: 'Inter App'; font-weight: 600; color: #006a61; }
+    .c07-gesture { position: absolute; width: 0; height: 0; z-index: 50; }
+    .c07-tapring { position: absolute; left: -46px; top: -46px; width: 92px; height: 92px; border-radius: 50%; border: 5px solid #2fd5c1; }
+    .c07-press { position: absolute; left: -30px; top: -30px; width: 60px; height: 60px; border-radius: 50%; background: #2fd5c1; }
+    .c07-arrow { position: absolute; left: -4px; top: -4px; filter: drop-shadow(0 6px 10px rgba(19,28,45,0.35)); }
+    .c07-label { position: absolute; left: 70px; top: 40px; white-space: nowrap; font-family: 'Inter App'; font-weight: 600; font-size: 30px; color: #fff;
+      background: #131c2d; padding: 10px 18px; border-radius: 14px; box-shadow: 0 10px 24px rgba(19,28,45,0.25); }
+    .c07-trail { position: absolute; left: 0; top: -4px; width: 240px; height: 8px; border-radius: 8px; background: linear-gradient(90deg, rgba(47,213,193,0), #2fd5c1); transform-origin: left center; }
+    .c07-end { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .c07-logo { width: 220px; height: 220px; border-radius: 50px; }
+    .c07-endword { margin-top: 40px; font-family: 'Plus Jakarta Sans'; font-weight: 700; font-size: 96px; letter-spacing: -0.03em; color: #131c2d; }
+    .c07-endword span { font-family: 'Inter App'; font-weight: 600; color: #006a61; }
+    .c07-claim { margin-top: 18px; font-family: 'Inter App'; font-size: 40px; color: #45464d; }
+    .c07-promise { margin-top: 30px; font-family: 'Plus Jakarta Sans'; font-weight: 700; font-size: 44px; color: #006a61; }
+    .c07-fade { position: absolute; inset: 0; background: #f8f9ff; z-index: 90; }
+  </style>
+  <div id="root" data-composition-id="c07" data-width="1920" data-height="1080" data-layout-allow-overlap>
+    <div id="c07-text" class="clip" data-start="0" data-duration="25.669" data-track-index="1">
+      <div id="c07-eyebrow" class="c07-eyebrow">Chapitre 6</div>
+      <h1 id="c07-title" class="c07-title">Les documents</h1>
+      <p id="c07-summary" class="c07-summary">Un coffre sécurisé que Kora vous aide à lire.</p>
+      <div id="c07-dots" class="c07-dots"><span class="c07-dot done"></span><span class="c07-dot done"></span><span class="c07-dot done"></span><span class="c07-dot done"></span><span class="c07-dot done"></span><span class="c07-dot on"></span><span class="c07-dot"></span><span class="c07-dot"></span><span class="c07-dot"></span><span class="c07-dot"></span><span class="c07-dot"></span></div>
+    </div>
+    <div id="c07-phone" class="clip c07-phone" data-start="0" data-duration="25.669" data-track-index="2">
+      <div id="c07-phone-body" class="c07-phone-body"></div>
+    </div>
+    <img id="c07-s0" class="clip c07-screen" src="assets/ecrans/07-documents.png" alt="" data-start="0" data-duration="12.045" data-track-index="3" style="z-index:10" />
+    <img id="c07-s1" class="clip c07-screen" src="assets/ecrans/07-document-kora.png" alt="" data-start="11.645" data-duration="5.063" data-track-index="3" style="z-index:11" />
+    <img id="c07-s2" class="clip c07-screen" src="assets/ecrans/07-document-actions.png" alt="" data-start="16.308" data-duration="9.361" data-track-index="3" style="z-index:12" />
+    <div id="c07-g2" class="clip c07-gesture" data-start="10.495" data-duration="1.6" data-track-index="4" style="left:1500.044px; top:522.392px">
+      <div id="c07-g2-ring" class="c07-tapring"></div>
+      <div id="c07-g2-press" class="c07-press"></div>
+      <div id="c07-g2-arrow" class="c07-arrow"><svg viewBox="0 0 64 64" width="64" height="64"><path d="M6 6 L52 22 L33 30 L48 52 L40 58 L25 36 L14 52 Z" fill="#131c2d" stroke="#ffffff" stroke-width="3.5" stroke-linejoin="round"/></svg></div>
+      <div id="c07-g2-label" class="c07-label">Toucher « Vérifier »</div>
+    </div>
+    <div id="c07-g3" class="clip c07-gesture" data-start="15.158" data-duration="1.6" data-track-index="4" style="left:1319.455px; top:702.936px">
+      <div id="c07-g3-ring" class="c07-tapring"></div>
+      <div id="c07-g3-press" class="c07-press"></div>
+      <div id="c07-g3-arrow" class="c07-arrow"><svg viewBox="0 0 64 64" width="64" height="64"><path d="M6 6 L52 22 L33 30 L48 52 L40 58 L25 36 L14 52 Z" fill="#131c2d" stroke="#ffffff" stroke-width="3.5" stroke-linejoin="round"/></svg></div>
+      <div id="c07-g3-label" class="c07-label">Toucher « C’est correct »</div>
+    </div>
+    <div id="c07-g4" class="clip c07-gesture" data-start="19.991" data-duration="1.6" data-track-index="4" style="left:1376.803px; top:590.37px">
+      <div id="c07-g4-ring" class="c07-tapring"></div>
+      <div id="c07-g4-press" class="c07-press"></div>
+      <div id="c07-g4-arrow" class="c07-arrow"><svg viewBox="0 0 64 64" width="64" height="64"><path d="M6 6 L52 22 L33 30 L48 52 L40 58 L25 36 L14 52 Z" fill="#131c2d" stroke="#ffffff" stroke-width="3.5" stroke-linejoin="round"/></svg></div>
+      <div id="c07-g4-label" class="c07-label">Toucher « Créer un rappel »</div>
+    </div>
+    <div id="c07-fade" class="clip c07-fade" data-start="0" data-duration="25.669" data-track-index="9"></div>
+  </div>
+  <script>
+    const tl = gsap.timeline({ paused: true });
+    tl.fromTo("#c07-eyebrow", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.45, ease: "power3.out" }, 0.1);
+    tl.fromTo("#c07-title", { opacity: 0, y: 26 }, { opacity: 1, y: 0, duration: 0.55, ease: "power3.out" }, 0.2);
+    tl.fromTo("#c07-summary", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.5, ease: "power3.out" }, 0.4);
+    tl.fromTo("#c07-phone-body", { opacity: 0, y: 40, scale: 0.97 }, { opacity: 1, y: 0, scale: 1, duration: 0.6, ease: "power3.out" }, 0.15);
+    tl.fromTo("#c07-phone-body", { y: 0, rotation: 0 }, { y: -14, rotation: -0.6, duration: 12.034, ease: "sine.inOut", yoyo: true, repeat: 1, immediateRender: false }, 0.8);
+    tl.fromTo("#c07-s1", { opacity: 0 }, { opacity: 1, duration: 0.4, ease: "power2.out" }, 11.645);
+    tl.fromTo("#c07-s2", { opacity: 0 }, { opacity: 1, duration: 0.4, ease: "power2.out" }, 16.308);
+    tl.fromTo("#c07-g2-arrow", { x: 150, y: 120, opacity: 0 }, { x: 0, y: 0, opacity: 1, duration: 0.55, ease: "power3.out" }, 10.145);
+    tl.fromTo("#c07-g2-label", { opacity: 0, x: 20 }, { opacity: 1, x: 0, duration: 0.35, ease: "power2.out" }, 10.345);
+    tl.fromTo("#c07-g2-arrow", { scale: 1 }, { scale: 0.86, duration: 0.12, yoyo: true, repeat: 1, ease: "power1.inOut", immediateRender: false }, 11.195);
+    tl.fromTo("#c07-g2-press", { scale: 0.4, opacity: 0.55 }, { scale: 1, opacity: 0, duration: 0.5, ease: "power2.out" }, 11.195);
+    tl.fromTo("#c07-g2-ring", { scale: 0.3, opacity: 1 }, { scale: 1.8, opacity: 0, duration: 0.75, ease: "power2.out" }, 11.195);
+    tl.fromTo("#c07-g2", { opacity: 1 }, { opacity: 0, duration: 0.3 }, 12.395);
+    tl.fromTo("#c07-g3-arrow", { x: 150, y: 120, opacity: 0 }, { x: 0, y: 0, opacity: 1, duration: 0.55, ease: "power3.out" }, 14.808);
+    tl.fromTo("#c07-g3-label", { opacity: 0, x: 20 }, { opacity: 1, x: 0, duration: 0.35, ease: "power2.out" }, 15.008);
+    tl.fromTo("#c07-g3-arrow", { scale: 1 }, { scale: 0.86, duration: 0.12, yoyo: true, repeat: 1, ease: "power1.inOut", immediateRender: false }, 15.858);
+    tl.fromTo("#c07-g3-press", { scale: 0.4, opacity: 0.55 }, { scale: 1, opacity: 0, duration: 0.5, ease: "power2.out" }, 15.858);
+    tl.fromTo("#c07-g3-ring", { scale: 0.3, opacity: 1 }, { scale: 1.8, opacity: 0, duration: 0.75, ease: "power2.out" }, 15.858);
+    tl.fromTo("#c07-g3", { opacity: 1 }, { opacity: 0, duration: 0.3 }, 17.058);
+    tl.fromTo("#c07-g4-arrow", { x: 150, y: 120, opacity: 0 }, { x: 0, y: 0, opacity: 1, duration: 0.55, ease: "power3.out" }, 19.641);
+    tl.fromTo("#c07-g4-label", { opacity: 0, x: 20 }, { opacity: 1, x: 0, duration: 0.35, ease: "power2.out" }, 19.841);
+    tl.fromTo("#c07-g4-arrow", { scale: 1 }, { scale: 0.86, duration: 0.12, yoyo: true, repeat: 1, ease: "power1.inOut", immediateRender: false }, 20.691);
+    tl.fromTo("#c07-g4-press", { scale: 0.4, opacity: 0.55 }, { scale: 1, opacity: 0, duration: 0.5, ease: "power2.out" }, 20.691);
+    tl.fromTo("#c07-g4-ring", { scale: 0.3, opacity: 1 }, { scale: 1.8, opacity: 0, duration: 0.75, ease: "power2.out" }, 20.691);
+    tl.fromTo("#c07-g4", { opacity: 1 }, { opacity: 0, duration: 0.3 }, 21.891);
+    tl.fromTo("#c07-fade", { opacity: 0 }, { opacity: 1, duration: 0.35, ease: "power1.in" }, 25.319);
+    window.__timelines["c07"] = tl;
+  </script>
+</template>

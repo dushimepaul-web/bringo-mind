@@ -1,0 +1,5 @@
+La cloche, en haut, ouvre vos notifications.
+
+Elles sont regroupées par jour. Un toucher ouvre l'élément concerné.
+
+Un geste vers la droite la marque comme lue ; vers la gauche, on la supprime.

@@ -1,0 +1,96 @@
+<template>
+  <style>
+    
+    @font-face { font-family: 'Plus Jakarta Sans'; src: url('assets/fonts/PlusJakartaSans_700Bold.ttf'); font-weight: 700; }
+    @font-face { font-family: 'Inter App'; src: url('assets/fonts/Inter_400Regular.ttf'); font-weight: 400; }
+    @font-face { font-family: 'Inter App'; src: url('assets/fonts/Inter_600SemiBold.ttf'); font-weight: 600; }
+
+    #root { position: absolute; inset: 0; overflow: hidden;
+      background: radial-gradient(circle at 78% 20%, rgba(134,242,228,0.38) 0, rgba(134,242,228,0) 42%),
+                  radial-gradient(circle at 12% 92%, rgba(229,238,255,0.9) 0, rgba(229,238,255,0) 45%), #f8f9ff; }
+    #c08-text { position: absolute; left: 150px; top: 0; bottom: 0; width: 860px; display: flex; flex-direction: column; justify-content: center; }
+    .c08-eyebrow { font-family: 'Inter App'; font-weight: 600; font-size: 30px; letter-spacing: 0.08em; text-transform: uppercase; color: #006a61; margin-bottom: 18px; }
+    .c08-title { font-family: 'Plus Jakarta Sans'; font-weight: 700; font-size: 88px; line-height: 1.05; letter-spacing: -0.03em; color: #131c2d; }
+    .c08-summary { font-family: 'Inter App'; font-weight: 400; font-size: 36px; line-height: 1.4; color: #45464d; margin-top: 26px; max-width: 760px; }
+    .c08-dots { display: flex; gap: 12px; margin-top: 56px; }
+    .c08-dots span { width: 34px; height: 8px; border-radius: 8px; background: #d3e4fe; }
+    .c08-dots span.done { background: #86f2e4; }
+    .c08-dots span.on { background: #006a61; width: 64px; }
+    #c08-phone { position: absolute; inset: 0; }
+    .c08-phone-body { position: absolute; left: 1150px; top: 86px; width: 437px; height: 908px;
+      border-radius: 64px; background: #131c2d; box-shadow: 0 40px 90px rgba(19,28,45,0.28), 0 0 0 2px #2a3550 inset; }
+    .c08-screen { position: absolute; left: 1166px; top: 102px; width: 405px; height: 876px; border-radius: 50px; object-fit: cover; }
+    .c08-splash { background: #f8f9ff; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px; overflow: hidden; }
+    .c08-tile { position: relative; width: 150px; height: 150px; border-radius: 34px; background: #131c2d; overflow: hidden; }
+    .c08-ring { position: absolute; left: 43.4px; top: 54.6px; width: 68px; height: 68px; border-radius: 50%; border: 18.9px solid #fff; }
+    .c08-bar { position: absolute; left: 38.8px; top: 27.4px; width: 18.6px; height: 94.9px; border-radius: 9.3px; background: #fff; transform-origin: top center; }
+    .c08-ldot { position: absolute; left: 96.8px; top: 26.8px; width: 23.7px; height: 23.7px; border-radius: 50%; background: #2fd5c1; }
+    .c08-word { font-family: 'Plus Jakarta Sans'; font-weight: 700; font-size: 38px; color: #131c2d; letter-spacing: -0.02em; }
+    .c08-word span { font-family: 'Inter App'; font-weight: 600; color: #006a61; }
+    .c08-gesture { position: absolute; width: 0; height: 0; z-index: 50; }
+    .c08-tapring { position: absolute; left: -46px; top: -46px; width: 92px; height: 92px; border-radius: 50%; border: 5px solid #2fd5c1; }
+    .c08-press { position: absolute; left: -30px; top: -30px; width: 60px; height: 60px; border-radius: 50%; background: #2fd5c1; }
+    .c08-arrow { position: absolute; left: -4px; top: -4px; filter: drop-shadow(0 6px 10px rgba(19,28,45,0.35)); }
+    .c08-label { position: absolute; left: 70px; top: 40px; white-space: nowrap; font-family: 'Inter App'; font-weight: 600; font-size: 30px; color: #fff;
+      background: #131c2d; padding: 10px 18px; border-radius: 14px; box-shadow: 0 10px 24px rgba(19,28,45,0.25); }
+    .c08-trail { position: absolute; left: 0; top: -4px; width: 240px; height: 8px; border-radius: 8px; background: linear-gradient(90deg, rgba(47,213,193,0), #2fd5c1); transform-origin: left center; }
+    .c08-end { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .c08-logo { width: 220px; height: 220px; border-radius: 50px; }
+    .c08-endword { margin-top: 40px; font-family: 'Plus Jakarta Sans'; font-weight: 700; font-size: 96px; letter-spacing: -0.03em; color: #131c2d; }
+    .c08-endword span { font-family: 'Inter App'; font-weight: 600; color: #006a61; }
+    .c08-claim { margin-top: 18px; font-family: 'Inter App'; font-size: 40px; color: #45464d; }
+    .c08-promise { margin-top: 30px; font-family: 'Plus Jakarta Sans'; font-weight: 700; font-size: 44px; color: #006a61; }
+    .c08-fade { position: absolute; inset: 0; background: #f8f9ff; z-index: 90; }
+  </style>
+  <div id="root" data-composition-id="c08" data-width="1920" data-height="1080" data-layout-allow-overlap>
+    <div id="c08-text" class="clip" data-start="0" data-duration="19.363" data-track-index="1">
+      <div id="c08-eyebrow" class="c08-eyebrow">Chapitre 7</div>
+      <h1 id="c08-title" class="c08-title">Kora et la voix</h1>
+      <p id="c08-summary" class="c08-summary">Posez une question : Kora propose, vous décidez.</p>
+      <div id="c08-dots" class="c08-dots"><span class="c08-dot done"></span><span class="c08-dot done"></span><span class="c08-dot done"></span><span class="c08-dot done"></span><span class="c08-dot done"></span><span class="c08-dot done"></span><span class="c08-dot on"></span><span class="c08-dot"></span><span class="c08-dot"></span><span class="c08-dot"></span><span class="c08-dot"></span></div>
+    </div>
+    <div id="c08-phone" class="clip c08-phone" data-start="0" data-duration="19.363" data-track-index="2">
+      <div id="c08-phone-body" class="c08-phone-body"></div>
+    </div>
+    <img id="c08-s0" class="clip c08-screen" src="assets/ecrans/08-kora.png" alt="" data-start="0" data-duration="8.167" data-track-index="3" style="z-index:10" />
+    <img id="c08-s1" class="clip c08-screen" src="assets/ecrans/08-kora-reponse.png" alt="" data-start="7.767" data-duration="7.511" data-track-index="3" style="z-index:11" />
+    <img id="c08-s2" class="clip c08-screen" src="assets/ecrans/08-voix-compris.png" alt="" data-start="14.878" data-duration="4.485" data-track-index="3" style="z-index:12" />
+    <div id="c08-g1" class="clip c08-gesture" data-start="6.617" data-duration="1.6" data-track-index="4" style="left:1295.519px; top:827.503px">
+      <div id="c08-g1-ring" class="c08-tapring"></div>
+      <div id="c08-g1-press" class="c08-press"></div>
+      <div id="c08-g1-arrow" class="c08-arrow"><svg viewBox="0 0 64 64" width="64" height="64"><path d="M6 6 L52 22 L33 30 L48 52 L40 58 L25 36 L14 52 Z" fill="#131c2d" stroke="#ffffff" stroke-width="3.5" stroke-linejoin="round"/></svg></div>
+      <div id="c08-g1-label" class="c08-label">Toucher « Que dois-je payer ? »</div>
+    </div>
+    <div id="c08-g3" class="clip c08-gesture" data-start="13.728" data-duration="1.6" data-track-index="4" style="left:1527.381px; top:134.149px">
+      <div id="c08-g3-ring" class="c08-tapring"></div>
+      <div id="c08-g3-press" class="c08-press"></div>
+      <div id="c08-g3-arrow" class="c08-arrow"><svg viewBox="0 0 64 64" width="64" height="64"><path d="M6 6 L52 22 L33 30 L48 52 L40 58 L25 36 L14 52 Z" fill="#131c2d" stroke="#ffffff" stroke-width="3.5" stroke-linejoin="round"/></svg></div>
+      <div id="c08-g3-label" class="c08-label">Toucher « Commande vocale »</div>
+    </div>
+    <div id="c08-fade" class="clip c08-fade" data-start="0" data-duration="19.363" data-track-index="9"></div>
+  </div>
+  <script>
+    const tl = gsap.timeline({ paused: true });
+    tl.fromTo("#c08-eyebrow", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.45, ease: "power3.out" }, 0.1);
+    tl.fromTo("#c08-title", { opacity: 0, y: 26 }, { opacity: 1, y: 0, duration: 0.55, ease: "power3.out" }, 0.2);
+    tl.fromTo("#c08-summary", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.5, ease: "power3.out" }, 0.4);
+    tl.fromTo("#c08-phone-body", { opacity: 0, y: 40, scale: 0.97 }, { opacity: 1, y: 0, scale: 1, duration: 0.6, ease: "power3.out" }, 0.15);
+    tl.fromTo("#c08-phone-body", { y: 0, rotation: 0 }, { y: -14, rotation: -0.6, duration: 8.881, ease: "sine.inOut", yoyo: true, repeat: 1, immediateRender: false }, 0.8);
+    tl.fromTo("#c08-s1", { opacity: 0 }, { opacity: 1, duration: 0.4, ease: "power2.out" }, 7.767);
+    tl.fromTo("#c08-s2", { opacity: 0 }, { opacity: 1, duration: 0.4, ease: "power2.out" }, 14.878);
+    tl.fromTo("#c08-g1-arrow", { x: 150, y: 120, opacity: 0 }, { x: 0, y: 0, opacity: 1, duration: 0.55, ease: "power3.out" }, 6.267);
+    tl.fromTo("#c08-g1-label", { opacity: 0, x: 20 }, { opacity: 1, x: 0, duration: 0.35, ease: "power2.out" }, 6.467);
+    tl.fromTo("#c08-g1-arrow", { scale: 1 }, { scale: 0.86, duration: 0.12, yoyo: true, repeat: 1, ease: "power1.inOut", immediateRender: false }, 7.317);
+    tl.fromTo("#c08-g1-press", { scale: 0.4, opacity: 0.55 }, { scale: 1, opacity: 0, duration: 0.5, ease: "power2.out" }, 7.317);
+    tl.fromTo("#c08-g1-ring", { scale: 0.3, opacity: 1 }, { scale: 1.8, opacity: 0, duration: 0.75, ease: "power2.out" }, 7.317);
+    tl.fromTo("#c08-g1", { opacity: 1 }, { opacity: 0, duration: 0.3 }, 8.517);
+    tl.fromTo("#c08-g3-arrow", { x: 150, y: 120, opacity: 0 }, { x: 0, y: 0, opacity: 1, duration: 0.55, ease: "power3.out" }, 13.378);
+    tl.fromTo("#c08-g3-label", { opacity: 0, x: 20 }, { opacity: 1, x: 0, duration: 0.35, ease: "power2.out" }, 13.578);
+    tl.fromTo("#c08-g3-arrow", { scale: 1 }, { scale: 0.86, duration: 0.12, yoyo: true, repeat: 1, ease: "power1.inOut", immediateRender: false }, 14.428);
+    tl.fromTo("#c08-g3-press", { scale: 0.4, opacity: 0.55 }, { scale: 1, opacity: 0, duration: 0.5, ease: "power2.out" }, 14.428);
+    tl.fromTo("#c08-g3-ring", { scale: 0.3, opacity: 1 }, { scale: 1.8, opacity: 0, duration: 0.75, ease: "power2.out" }, 14.428);
+    tl.fromTo("#c08-g3", { opacity: 1 }, { opacity: 0, duration: 0.3 }, 15.628);
+    tl.fromTo("#c08-fade", { opacity: 0 }, { opacity: 1, duration: 0.35, ease: "power1.in" }, 19.013);
+    window.__timelines["c08"] = tl;
+  </script>
+</template>

@@ -1,0 +1,7 @@
+Voici l'accueil. Bringo Mind vous salue selon l'heure et résume votre journée.
+
+En haut, Kora propose des actions : ici, vérifier la facture Engie.
+
+Juste dessous, les raccourcis : scanner un document, ajouter une tâche, un rappel ou un événement.
+
+Puis vos priorités du jour, et vos prochains événements.

@@ -1,0 +1,9 @@
+Le bouton central ouvre Kora, votre assistante.
+
+Posez une question, par exemple : que dois-je payer ?
+
+Kora répond, et propose des actions. Rien n'est créé sans votre accord.
+
+On peut aussi lui parler.
+
+Kora transcrit, montre ce qu'elle a compris, et vous confirmez.

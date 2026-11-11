@@ -1,0 +1,9 @@
+Le foyer permet de partager certaines choses avec vos proches. Il reste optionnel.
+
+On voit les membres, puis les tâches et les événements partagés.
+
+Un filtre montre ce qui concerne chaque personne, par exemple Léo.
+
+Depuis Membres, on gère les rôles, et on invite quelqu'un.
+
+L'activité montre ce que chacun a fait. Vos éléments personnels restent toujours privés.

@@ -1,0 +1,321 @@
+{
+  "width": 390,
+  "height": 844,
+  "shots": [
+    {
+      "id": "02-presentation",
+      "chapter": "02-ouverture",
+      "file": "assets/ecrans/02-presentation.png",
+      "tap": {
+        "label": "Suivant",
+        "x": 0.4564,
+        "y": 0.9384,
+        "w": 0.1681,
+        "h": 0.0273
+      }
+    },
+    {
+      "id": "02-bienvenue",
+      "chapter": "02-ouverture",
+      "file": "assets/ecrans/02-bienvenue.png",
+      "tap": {
+        "label": "J’ai déjà un compte",
+        "x": 0.5,
+        "y": 0.8697,
+        "w": 0.383,
+        "h": 0.0249
+      }
+    },
+    {
+      "id": "02-connexion",
+      "chapter": "02-ouverture",
+      "file": "assets/ecrans/02-connexion.png",
+      "tap": {
+        "label": "Se connecter",
+        "x": 0.4564,
+        "y": 0.7322,
+        "w": 0.296,
+        "h": 0.0273
+      }
+    },
+    {
+      "id": "02-faceid",
+      "chapter": "02-ouverture",
+      "file": "assets/ecrans/02-faceid.png"
+    },
+    {
+      "id": "03-accueil",
+      "chapter": "03-accueil",
+      "file": "assets/ecrans/03-accueil.png",
+      "tap": {
+        "label": "Vérifier",
+        "x": 0.3572,
+        "y": 0.4218,
+        "w": 0.1465,
+        "h": 0.0249
+      }
+    },
+    {
+      "id": "03-accueil-suite",
+      "chapter": "03-accueil",
+      "file": "assets/ecrans/03-accueil-suite.png"
+    },
+    {
+      "id": "04-taches",
+      "chapter": "04-taches",
+      "file": "assets/ecrans/04-taches.png",
+      "tap": {
+        "label": "En retard",
+        "x": 0.3733,
+        "y": 0.2796,
+        "w": 0.1568,
+        "h": 0.0225
+      }
+    },
+    {
+      "id": "04-taches-retard",
+      "chapter": "04-taches",
+      "file": "assets/ecrans/04-taches-retard.png",
+      "tap": {
+        "label": "Nouvelle tâche",
+        "x": 0.541,
+        "y": 0.8803,
+        "w": 0.3149,
+        "h": 0.0261
+      }
+    },
+    {
+      "id": "04-nouvelle-tache",
+      "chapter": "04-taches",
+      "file": "assets/ecrans/04-nouvelle-tache.png",
+      "tap": {
+        "label": "Créer la tâche",
+        "x": 0.541,
+        "y": 0.9479,
+        "w": 0.2942,
+        "h": 0.0261
+      }
+    },
+    {
+      "id": "04-detail-tache",
+      "chapter": "04-taches",
+      "file": "assets/ecrans/04-detail-tache.png"
+    },
+    {
+      "id": "05-rappels",
+      "chapter": "05-rappels",
+      "file": "assets/ecrans/05-rappels.png",
+      "tap": {
+        "label": "Nouveau rappel",
+        "x": 0.541,
+        "y": 0.8803,
+        "w": 0.3335,
+        "h": 0.0261
+      }
+    },
+    {
+      "id": "05-nouveau-rappel",
+      "chapter": "05-rappels",
+      "file": "assets/ecrans/05-nouveau-rappel.png"
+    },
+    {
+      "id": "06-mois",
+      "chapter": "06-calendrier",
+      "file": "assets/ecrans/06-mois.png",
+      "tap": {
+        "label": "Année",
+        "x": 0.8346,
+        "y": 0.2761,
+        "w": 0.1045,
+        "h": 0.0213
+      }
+    },
+    {
+      "id": "06-annee",
+      "chapter": "06-calendrier",
+      "file": "assets/ecrans/06-annee.png",
+      "tap": {
+        "label": "Voir le planning",
+        "x": 0.9026,
+        "y": 0.1327,
+        "w": 0.1128,
+        "h": 0.0521
+      }
+    },
+    {
+      "id": "06-planning",
+      "chapter": "06-calendrier",
+      "file": "assets/ecrans/06-planning.png"
+    },
+    {
+      "id": "06-nouvel-evenement",
+      "chapter": "06-calendrier",
+      "file": "assets/ecrans/06-nouvel-evenement.png"
+    },
+    {
+      "id": "07-documents",
+      "chapter": "07-documents",
+      "file": "assets/ecrans/07-documents.png",
+      "tap": {
+        "label": "Vérifier",
+        "x": 0.8248,
+        "y": 0.4799,
+        "w": 0.1402,
+        "h": 0.0237
+      }
+    },
+    {
+      "id": "07-document-kora",
+      "chapter": "07-documents",
+      "file": "assets/ecrans/07-document-kora.png",
+      "tap": {
+        "label": "C’est correct",
+        "x": 0.3789,
+        "y": 0.686,
+        "w": 0.2709,
+        "h": 0.0261
+      }
+    },
+    {
+      "id": "07-document-actions",
+      "chapter": "07-documents",
+      "file": "assets/ecrans/07-document-actions.png",
+      "tap": {
+        "label": "Créer un rappel",
+        "x": 0.5205,
+        "y": 0.5575,
+        "w": 0.6256,
+        "h": 0.0249
+      }
+    },
+    {
+      "id": "07-rappel-document",
+      "chapter": "07-documents",
+      "file": "assets/ecrans/07-rappel-document.png"
+    },
+    {
+      "id": "08-kora",
+      "chapter": "08-kora",
+      "file": "assets/ecrans/08-kora.png",
+      "tap": {
+        "label": "Que dois-je payer ?",
+        "x": 0.3198,
+        "y": 0.8282,
+        "w": 0.337,
+        "h": 0.0225
+      }
+    },
+    {
+      "id": "08-kora-reponse",
+      "chapter": "08-kora",
+      "file": "assets/ecrans/08-kora-reponse.png",
+      "tap": {
+        "label": "Commande vocale",
+        "x": 0.8923,
+        "y": 0.0367,
+        "w": 0.1128,
+        "h": 0.0521
+      }
+    },
+    {
+      "id": "08-voix",
+      "chapter": "08-kora",
+      "file": "assets/ecrans/08-voix.png",
+      "tap": {
+        "label": "Parler à Kora",
+        "x": 0.5,
+        "y": 0.1765,
+        "w": 0.2667,
+        "h": 0.1232
+      }
+    },
+    {
+      "id": "08-voix-compris",
+      "chapter": "08-kora",
+      "file": "assets/ecrans/08-voix-compris.png"
+    },
+    {
+      "id": "09-foyer",
+      "chapter": "09-foyer",
+      "file": "assets/ecrans/09-foyer.png",
+      "tap": {
+        "label": "Léo",
+        "x": 0.6513,
+        "y": 0.2636,
+        "w": 0.0634,
+        "h": 0.0225
+      }
+    },
+    {
+      "id": "09-foyer-leo",
+      "chapter": "09-foyer",
+      "file": "assets/ecrans/09-foyer-leo.png"
+    },
+    {
+      "id": "09-membres",
+      "chapter": "09-foyer",
+      "file": "assets/ecrans/09-membres.png",
+      "tap": {
+        "label": "Inviter un membre",
+        "x": 0.9282,
+        "y": 0.0332,
+        "w": 0.1128,
+        "h": 0.0521
+      }
+    },
+    {
+      "id": "09-inviter",
+      "chapter": "09-foyer",
+      "file": "assets/ecrans/09-inviter.png"
+    },
+    {
+      "id": "09-activite",
+      "chapter": "09-foyer",
+      "file": "assets/ecrans/09-activite.png"
+    },
+    {
+      "id": "10-notifications",
+      "chapter": "10-notifications",
+      "file": "assets/ecrans/10-notifications.png"
+    },
+    {
+      "id": "11-connexions",
+      "chapter": "11-connexions",
+      "file": "assets/ecrans/11-connexions.png",
+      "tap": {
+        "label": "Conflits à résoudre",
+        "x": 0.5154,
+        "y": 0.4757,
+        "w": 0.6154,
+        "h": 0.0249
+      }
+    },
+    {
+      "id": "11-conflits",
+      "chapter": "11-connexions",
+      "file": "assets/ecrans/11-conflits.png"
+    },
+    {
+      "id": "12-profil",
+      "chapter": "12-profil",
+      "file": "assets/ecrans/12-profil.png",
+      "tap": {
+        "label": "Langue et région",
+        "x": 0.5205,
+        "y": 0.4858,
+        "w": 0.6256,
+        "h": 0.0249
+      }
+    },
+    {
+      "id": "12-preferences",
+      "chapter": "12-profil",
+      "file": "assets/ecrans/12-preferences.png"
+    },
+    {
+      "id": "12-confidentialite",
+      "chapter": "12-profil",
+      "file": "assets/ecrans/12-confidentialite.png"
+    }
+  ]
+}

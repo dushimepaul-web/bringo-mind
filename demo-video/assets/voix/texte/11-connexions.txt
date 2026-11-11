@@ -1,0 +1,5 @@
+Bringo Mind peut se connecter à votre messagerie et à votre calendrier. C'est facultatif.
+
+Seuls les e-mails de vos organismes sont lus : votre boîte reste privée.
+
+Si un événement a changé à la fois ici et dans Google Agenda, rien n'est écrasé : vous choisissez la version à garder.
