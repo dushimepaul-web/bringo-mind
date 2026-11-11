@@ -1,7 +1,7 @@
 // Données de démonstration des Intégrations, cohérentes avec Tâches, Documents et Calendrier.
 import { DEMO_TODAY, addDays, atTime, dayOffset, formatDay, formatTime } from '@/lib/demo-dates';
 
-import type { CalendarKey, ImportedEmail } from './types';
+import type { CalendarKey, ImportedEmail, SyncConflict } from './types';
 
 const today = DEMO_TODAY;
 
@@ -148,3 +148,23 @@ export const LINK_META = {
   event: { icon: 'event', label: 'Voir l’événement' },
   document: { icon: 'description', label: 'Voir le document' },
 } as const;
+
+/** Conflits de la démo : modifiés dans Bringo Mind ET dans Google Agenda depuis la dernière synchronisation. */
+export const DEMO_CONFLICTS: SyncConflict[] = [
+  {
+    id: 'c-dentiste',
+    eventId: 'dentiste-leo',
+    title: 'Dentiste de Léo',
+    field: 'Horaire',
+    local: { value: 'Vendredi 17 mai • 10h00 – 10h30', changedAt: 'Modifié dans Bringo Mind hier à 18h10' },
+    provider: { value: 'Vendredi 17 mai • 10h30 – 11h00', changedAt: 'Modifié dans Google Agenda ce matin à 8h05' },
+  },
+  {
+    id: 'c-parents',
+    eventId: 'parents',
+    title: 'Réunion parents d’élèves',
+    field: 'Lieu',
+    local: { value: 'École Jean Moulin', changedAt: 'Modifié dans Bringo Mind lundi à 20h30' },
+    provider: { value: 'Salle polyvalente • École Jean Moulin', changedAt: 'Modifié par Thomas dans Google Agenda hier' },
+  },
+];

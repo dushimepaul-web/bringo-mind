@@ -3,8 +3,8 @@ import { useSyncExternalStore } from 'react';
 
 import { DEMO_TODAY } from '@/lib/demo-dates';
 
-import { DEMO_EMAILS, SENDERS, type PermissionKey } from './data';
-import type { CalendarKey, ImportedEmail } from './types';
+import { DEMO_CONFLICTS, DEMO_EMAILS, SENDERS, type PermissionKey } from './data';
+import type { CalendarKey, ImportedEmail, SyncConflict } from './types';
 
 type Snapshot = {
   gmail: boolean;
@@ -16,6 +16,8 @@ type Snapshot = {
   calendars: Record<CalendarKey, boolean>;
   twoWay: boolean;
   emails: ImportedEmail[];
+  /** Conflits ouverts du calendrier, jamais résolus sans le choix de la personne. */
+  conflicts: SyncConflict[];
   flash: { text: string; undo?: () => void } | null;
 };
 
@@ -29,6 +31,7 @@ let state: Snapshot = {
   calendars: { personal: true, work: false, family: true },
   twoWay: false,
   emails: DEMO_EMAILS,
+  conflicts: DEMO_CONFLICTS,
   flash: null,
 };
 const listeners = new Set<() => void>();
@@ -57,7 +60,8 @@ export const integrationActions = {
   },
   /** Connecte ou déconnecte un compte ; renvoie de quoi annuler. */
   setConnected(account: 'gmail' | 'calendar' | 'outlook', value: boolean): () => void {
-    emit({ [account]: value });
+    // CI-005 : déconnecter le calendrier retire ses événements importés, donc ses conflits n'ont plus d'objet.
+    emit({ [account]: value, ...(account === 'calendar' && !value ? { conflicts: [] } : {}) });
     return () => emit({ [account]: !value });
   },
   setPermission(key: PermissionKey, value: boolean) {
@@ -80,6 +84,13 @@ export const integrationActions = {
       emails: state.emails.filter((email) => email.from !== from),
     });
     return () => emit({ senders: previous.senders, emails: previous.emails });
+  },
+  /** CI-010 : garder la version Bringo Mind (keep_local) ou celle du fournisseur (keep_provider). Définitif. */
+  resolveConflict(id: string, resolution: 'keep_local' | 'keep_provider'): SyncConflict | undefined {
+    const conflict = state.conflicts.find((entry) => entry.id === id);
+    emit({ conflicts: state.conflicts.filter((entry) => entry.id !== id) });
+    void resolution;
+    return conflict;
   },
   setFlash(flash: Snapshot['flash']) {
     emit({ flash });

@@ -21,3 +21,13 @@ export type ImportedEmail = {
 };
 
 export type CalendarKey = 'personal' | 'work' | 'family';
+
+/** Conflit de synchronisation (CI-009) : l'événement a changé des deux côtés. */
+export type SyncConflict = {
+  id: string;
+  eventId: string;
+  title: string;
+  field: string;
+  local: { value: string; changedAt: string };
+  provider: { value: string; changedAt: string };
+};

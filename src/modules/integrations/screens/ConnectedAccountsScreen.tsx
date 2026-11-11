@@ -19,6 +19,21 @@ type Sheet = { disconnect: Account } | 'outlook' | null;
 
 const ACCOUNT_NAMES: Record<Account, string> = { gmail: 'Gmail', calendar: 'Google Agenda', outlook: 'Microsoft Outlook' };
 
+/** Ce que la déconnexion garde et retire (guide d'API : EMAIL-004, CI-005). */
+const DISCONNECT_EFFECT: Record<Account, string> = {
+  gmail: 'Les e-mails et documents déjà importés restent dans Bringo Mind. Les nouveaux ne seront plus récupérés.',
+  calendar:
+    'Les événements importés de Google Agenda seront retirés de votre calendrier Bringo Mind. Les événements créés dans Bringo Mind sont conservés.',
+  outlook:
+    'Les e-mails déjà importés restent ; les événements importés d’Outlook seront retirés. Les événements créés dans Bringo Mind sont conservés.',
+};
+
+const DISCONNECTED_TOAST: Record<Account, string> = {
+  gmail: 'Gmail déconnecté • les éléments importés sont conservés',
+  calendar: 'Google Agenda déconnecté • ses événements importés ont été retirés',
+  outlook: 'Microsoft Outlook déconnecté',
+};
+
 function syncLabel(date: Date): string {
   const minutes = Math.round((DEMO_TODAY.getTime() - date.getTime()) / 60000);
   return minutes <= 0 ? 'à l’instant' : `il y a ${minutes} min`;
@@ -62,7 +77,7 @@ export default function ConnectedAccountsScreen() {
           <View style={styles.stats}>
             <Stat value={state.emails.length} label="e-mails importés" />
             <Stat value={toReview} label="à vérifier" highlight={toReview > 0} />
-            <Stat value={12} label="événements" />
+            <Stat value={state.calendar ? state.conflicts.length : 0} label={state.conflicts.length > 1 ? 'conflits' : 'conflit'} highlight={state.calendar && state.conflicts.length > 0} />
           </View>
           <SecondaryButton
             label="Synchroniser maintenant"
@@ -145,6 +160,25 @@ export default function ConnectedAccountsScreen() {
             integrationActions.setConnected('calendar', true);
             setToast({ text: 'Google Agenda reconnecté' });
           }} />
+          {state.calendar ? (
+            <SettingsRow
+              icon={state.conflicts.length ? 'sync_problem' : 'event_available'}
+              title={state.conflicts.length ? 'Conflits à résoudre' : 'Aucun conflit'}
+              subtitle={
+                state.conflicts.length
+                  ? 'Modifiés des deux côtés : vous choisissez la version à garder'
+                  : 'Bringo Mind et Google Agenda sont identiques'
+              }
+              onPress={state.conflicts.length ? () => router.push('/integrations/conflicts') : undefined}
+              right={
+                state.conflicts.length ? (
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>{state.conflicts.length}</Text>
+                  </View>
+                ) : undefined
+              }
+            />
+          ) : null}
           {state.calendar
             ? CALENDARS.map((calendar) => (
                 <SettingsRow
@@ -229,7 +263,7 @@ export default function ConnectedAccountsScreen() {
       <BottomSheet
         visible={typeof sheet === 'object' && sheet !== null}
         title={typeof sheet === 'object' && sheet ? `Déconnecter ${ACCOUNT_NAMES[sheet.disconnect]} ?` : ''}
-        subtitle="Les éléments déjà importés restent dans Bringo Mind. Les nouveaux ne seront plus récupérés."
+        subtitle={typeof sheet === 'object' && sheet ? DISCONNECT_EFFECT[sheet.disconnect] : undefined}
         onClose={close}>
         <SecondaryButton
           label="Déconnecter"
@@ -237,10 +271,10 @@ export default function ConnectedAccountsScreen() {
           danger
           onPress={() => {
             if (typeof sheet !== 'object' || !sheet) return;
-            const name = ACCOUNT_NAMES[sheet.disconnect];
-            const undo = integrationActions.setConnected(sheet.disconnect, false);
+            // Pas d'« Annuler » : se reconnecter demande une nouvelle autorisation chez le fournisseur.
+            integrationActions.setConnected(sheet.disconnect, false);
+            setToast({ text: DISCONNECTED_TOAST[sheet.disconnect] });
             close();
-            setToast({ text: `${name} déconnecté`, undo });
           }}
         />
         <SecondaryButton label="Garder la connexion" onPress={close} />
