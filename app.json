@@ -8,9 +8,11 @@
     "scheme": "bringomind",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/images/icon.png"
+      "icon": "./assets/images/icon.png",
+      "bundleIdentifier": "com.bringomind.app"
     },
     "android": {
+      "package": "com.bringomind.app",
       "adaptiveIcon": {
         "backgroundColor": "#0F1839",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -37,11 +39,24 @@
           }
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-status-bar",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "9eab4726-6caa-4f82-934d-25b39d35137d"
+      }
+    },
+    "owner": "pauldushime"
   }
 }
