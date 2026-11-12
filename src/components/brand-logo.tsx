@@ -1,30 +1,39 @@
-// Logo Bringo Mind : le « b » (barre arrondie + anneau) et le point turquoise, dans une tuile arrondie.
-// Redessiné en formes simples d'après le logo officiel (assets/images/brand/) : net à toutes les tailles.
-// Coordonnées d'origine sur une tuile de 1024 px, mises à l'échelle avec `size`.
-import { StyleSheet, Text, View } from 'react-native';
-
-import { FontFamily } from '@/constants/design';
+// Logo officiel Bringo Mind : le « B » en bulle de dialogue (dégradé cyan → vert) dans une tuile bleu nuit,
+// et le nom « BringoMind » (« Bringo » bleu nuit, « Mind » en dégradé).
+// Images dans assets/images/brand/ ; la tuile est dessinée en vue pour rester nette à toutes les tailles.
+import { Image } from 'expo-image';
+import { StyleSheet, View } from 'react-native';
 
 export const BRAND = {
-  navy: '#131c2d',
+  navy: '#0F1839',
+  cyan: '#00D4FF',
+  green: '#9BE83A',
   teal: '#2fd5c1',
   tealDark: '#006a61',
   mint: '#86f2e4',
   white: '#ffffff',
 } as const;
 
+export const BRAND_IMAGES = {
+  symbol: require('@/assets/images/brand/bringo-mind-symbol.png'),
+  wordmark: require('@/assets/images/brand/bringo-mind-wordmark.png'),
+  wordmarkDark: require('@/assets/images/brand/bringo-mind-wordmark-dark.png'),
+} as const;
+
+/** Rapport largeur / hauteur de l'image du nom. */
+export const WORDMARK_RATIO = 3123 / 636;
+/** Place du symbole dans la tuile (comme sur le logo officiel). */
+export const SYMBOL_RATIO = 0.88;
+
 type Variant = 'dark' | 'light';
 
 /**
  * Tuile du logo.
- * - `dark` (par défaut) : tuile bleu nuit, « b » blanc, point turquoise vif.
- * - `light` : tuile blanche, « b » bleu nuit, point vert foncé (pour un fond sombre).
+ * - `dark` (par défaut) : tuile bleu nuit, comme le logo officiel.
+ * - `light` : tuile blanche (sur un fond bleu nuit).
  */
 export function BrandLogo({ size = 40, variant = 'dark', shadow = true }: { size?: number; variant?: Variant; shadow?: boolean }) {
-  const s = size / 1024;
-  const tile = variant === 'dark' ? BRAND.navy : BRAND.white;
-  const ink = variant === 'dark' ? BRAND.white : BRAND.navy;
-  const dot = variant === 'dark' ? BRAND.teal : BRAND.tealDark;
+  const symbol = size * SYMBOL_RATIO;
   return (
     <View
       style={[
@@ -33,69 +42,50 @@ export function BrandLogo({ size = 40, variant = 'dark', shadow = true }: { size
           width: size,
           height: size,
           borderRadius: size * 0.225,
-          backgroundColor: tile,
+          backgroundColor: variant === 'dark' ? BRAND.navy : BRAND.white,
         },
         shadow && styles.shadow,
         shadow && { shadowOpacity: size >= 56 ? 0.25 : 0.16, shadowRadius: size >= 56 ? 12 : 6 },
       ]}
       accessibilityRole="image"
       accessibilityLabel="Bringo Mind">
-      {/* Anneau du « b » */}
-      <View
-        style={{
-          position: 'absolute',
-          left: 296 * s,
-          top: 373 * s,
-          width: 464 * s,
-          height: 464 * s,
-          borderRadius: 232 * s,
-          borderWidth: 129 * s,
-          borderColor: ink,
-        }}
-      />
-      {/* Barre du « b » */}
-      <View
-        style={{
-          position: 'absolute',
-          left: 265 * s,
-          top: 187 * s,
-          width: 127 * s,
-          height: 648 * s,
-          borderRadius: 63.5 * s,
-          backgroundColor: ink,
-        }}
-      />
-      {/* Point */}
-      <View
-        style={{
-          position: 'absolute',
-          left: 661 * s,
-          top: 183 * s,
-          width: 162 * s,
-          height: 162 * s,
-          borderRadius: 81 * s,
-          backgroundColor: dot,
-        }}
-      />
+      <Image source={BRAND_IMAGES.symbol} style={{ width: symbol, height: symbol }} contentFit="contain" />
     </View>
   );
 }
 
-/** Logo complet : tuile + « bringo mind ». `onDark` pour un fond bleu nuit. */
+/** Nom officiel « BringoMind » (image) ; `height` en points, `onDark` pour un fond bleu nuit. */
+export function BrandName({ height = 30, onDark = false }: { height?: number; onDark?: boolean }) {
+  return (
+    <Image
+      source={onDark ? BRAND_IMAGES.wordmarkDark : BRAND_IMAGES.wordmark}
+      style={{ width: height * WORDMARK_RATIO, height }}
+      contentFit="contain"
+      accessibilityRole="image"
+      accessibilityLabel="Bringo Mind"
+    />
+  );
+}
+
+/** Logo complet : tuile + nom « BringoMind ». `onDark` pour un fond bleu nuit. */
 export function BrandWordmark({ size = 40, onDark = false }: { size?: number; onDark?: boolean }) {
+  const height = size * 0.62;
   return (
     <View style={styles.row} accessibilityRole="image" accessibilityLabel="Bringo Mind">
-      <BrandLogo size={size} variant={onDark ? 'light' : 'dark'} shadow={!onDark} />
-      <Text style={[styles.word, { fontSize: size * 0.62, lineHeight: size * 0.8, marginLeft: size * 0.3 }]}>
-        <Text style={{ color: onDark ? BRAND.white : BRAND.navy }}>bringo </Text>
-        <Text style={[styles.mind, { color: onDark ? BRAND.mint : BRAND.tealDark }]}>mind</Text>
-      </Text>
+      <BrandLogo size={size} shadow={!onDark} />
+      <Image
+        source={onDark ? BRAND_IMAGES.wordmarkDark : BRAND_IMAGES.wordmark}
+        style={{ width: height * WORDMARK_RATIO, height, marginLeft: size * 0.3 }}
+        contentFit="contain"
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   tile: {
+    alignItems: 'center',
+    justifyContent: 'center',
     overflow: 'hidden',
   },
   shadow: {
@@ -106,12 +96,5 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  word: {
-    fontFamily: FontFamily.headingBold,
-    letterSpacing: -0.5,
-  },
-  mind: {
-    fontFamily: FontFamily.bodySemiBold,
   },
 });

@@ -30,6 +30,14 @@
       "id": "02-connexion",
       "chapter": "02-ouverture",
       "file": "assets/ecrans/02-connexion.png",
+      "scroll": {
+        "top": 0,
+        "height": 844,
+        "contentH": 967,
+        "scrollTop": 0,
+        "content": "assets/ecrans/02-connexion-contenu.png",
+        "overlay": null
+      },
       "tap": {
         "label": "Se connecter",
         "x": 0.4564,
@@ -47,9 +55,17 @@
       "id": "03-accueil",
       "chapter": "03-accueil",
       "file": "assets/ecrans/03-accueil.png",
+      "scroll": {
+        "top": 64,
+        "height": 719,
+        "contentH": 1785,
+        "scrollTop": 0,
+        "content": "assets/ecrans/03-accueil-contenu.png",
+        "overlay": "assets/ecrans/03-accueil-dessus.png"
+      },
       "tap": {
         "label": "Vérifier",
-        "x": 0.3572,
+        "x": 0.3432,
         "y": 0.4218,
         "w": 0.1465,
         "h": 0.0249
@@ -58,12 +74,28 @@
     {
       "id": "03-accueil-suite",
       "chapter": "03-accueil",
-      "file": "assets/ecrans/03-accueil-suite.png"
+      "file": "assets/ecrans/03-accueil-suite.png",
+      "scroll": {
+        "top": 64,
+        "height": 719,
+        "contentH": 1785,
+        "scrollTop": 0,
+        "content": "assets/ecrans/03-accueil-suite-contenu.png",
+        "overlay": "assets/ecrans/03-accueil-suite-dessus.png"
+      }
     },
     {
       "id": "04-taches",
       "chapter": "04-taches",
       "file": "assets/ecrans/04-taches.png",
+      "scroll": {
+        "top": 64,
+        "height": 719,
+        "contentH": 1913,
+        "scrollTop": 0,
+        "content": "assets/ecrans/04-taches-contenu.png",
+        "overlay": "assets/ecrans/04-taches-dessus.png"
+      },
       "tap": {
         "label": "En retard",
         "x": 0.3733,
@@ -88,6 +120,14 @@
       "id": "04-nouvelle-tache",
       "chapter": "04-taches",
       "file": "assets/ecrans/04-nouvelle-tache.png",
+      "scroll": {
+        "top": 56,
+        "height": 703,
+        "contentH": 1148,
+        "scrollTop": 0,
+        "content": "assets/ecrans/04-nouvelle-tache-contenu.png",
+        "overlay": null
+      },
       "tap": {
         "label": "Créer la tâche",
         "x": 0.541,
@@ -99,12 +139,28 @@
     {
       "id": "04-detail-tache",
       "chapter": "04-taches",
-      "file": "assets/ecrans/04-detail-tache.png"
+      "file": "assets/ecrans/04-detail-tache.png",
+      "scroll": {
+        "top": 56,
+        "height": 727,
+        "contentH": 1592,
+        "scrollTop": 0,
+        "content": "assets/ecrans/04-detail-tache-contenu.png",
+        "overlay": "assets/ecrans/04-detail-tache-dessus.png"
+      }
     },
     {
       "id": "05-rappels",
       "chapter": "05-rappels",
       "file": "assets/ecrans/05-rappels.png",
+      "scroll": {
+        "top": 64,
+        "height": 719,
+        "contentH": 1534,
+        "scrollTop": 0,
+        "content": "assets/ecrans/05-rappels-contenu.png",
+        "overlay": "assets/ecrans/05-rappels-dessus.png"
+      },
       "tap": {
         "label": "Nouveau rappel",
         "x": 0.541,
@@ -116,12 +172,28 @@
     {
       "id": "05-nouveau-rappel",
       "chapter": "05-rappels",
-      "file": "assets/ecrans/05-nouveau-rappel.png"
+      "file": "assets/ecrans/05-nouveau-rappel.png",
+      "scroll": {
+        "top": 56,
+        "height": 703,
+        "contentH": 1357,
+        "scrollTop": 0,
+        "content": "assets/ecrans/05-nouveau-rappel-contenu.png",
+        "overlay": null
+      }
     },
     {
       "id": "06-mois",
       "chapter": "06-calendrier",
       "file": "assets/ecrans/06-mois.png",
+      "scroll": {
+        "top": 64,
+        "height": 719,
+        "contentH": 1105,
+        "scrollTop": 0,
+        "content": "assets/ecrans/06-mois-contenu.png",
+        "overlay": "assets/ecrans/06-mois-dessus.png"
+      },
       "tap": {
         "label": "Année",
         "x": 0.8346,
@@ -134,6 +206,14 @@
       "id": "06-annee",
       "chapter": "06-calendrier",
       "file": "assets/ecrans/06-annee.png",
+      "scroll": {
+        "top": 64,
+        "height": 719,
+        "contentH": 1676,
+        "scrollTop": 0,
+        "content": "assets/ecrans/06-annee-contenu.png",
+        "overlay": "assets/ecrans/06-annee-dessus.png"
+      },
       "tap": {
         "label": "Voir le planning",
         "x": 0.9026,
@@ -145,17 +225,41 @@
     {
       "id": "06-planning",
       "chapter": "06-calendrier",
-      "file": "assets/ecrans/06-planning.png"
+      "file": "assets/ecrans/06-planning.png",
+      "scroll": {
+        "top": 56,
+        "height": 727,
+        "contentH": 2157,
+        "scrollTop": 651,
+        "content": "assets/ecrans/06-planning-contenu.png",
+        "overlay": "assets/ecrans/06-planning-dessus.png"
+      }
     },
     {
       "id": "06-nouvel-evenement",
       "chapter": "06-calendrier",
-      "file": "assets/ecrans/06-nouvel-evenement.png"
+      "file": "assets/ecrans/06-nouvel-evenement.png",
+      "scroll": {
+        "top": 56,
+        "height": 703,
+        "contentH": 1145,
+        "scrollTop": 0,
+        "content": "assets/ecrans/06-nouvel-evenement-contenu.png",
+        "overlay": null
+      }
     },
     {
       "id": "07-documents",
       "chapter": "07-documents",
       "file": "assets/ecrans/07-documents.png",
+      "scroll": {
+        "top": 64,
+        "height": 719,
+        "contentH": 2145,
+        "scrollTop": 0,
+        "content": "assets/ecrans/07-documents-contenu.png",
+        "overlay": "assets/ecrans/07-documents-dessus.png"
+      },
       "tap": {
         "label": "Vérifier",
         "x": 0.8248,
@@ -168,6 +272,14 @@
       "id": "07-document-kora",
       "chapter": "07-documents",
       "file": "assets/ecrans/07-document-kora.png",
+      "scroll": {
+        "top": 56,
+        "height": 727,
+        "contentH": 1540,
+        "scrollTop": 0,
+        "content": "assets/ecrans/07-document-kora-contenu.png",
+        "overlay": "assets/ecrans/07-document-kora-dessus.png"
+      },
       "tap": {
         "label": "C’est correct",
         "x": 0.3789,
@@ -180,6 +292,14 @@
       "id": "07-document-actions",
       "chapter": "07-documents",
       "file": "assets/ecrans/07-document-actions.png",
+      "scroll": {
+        "top": 56,
+        "height": 727,
+        "contentH": 1349,
+        "scrollTop": 622,
+        "content": "assets/ecrans/07-document-actions-contenu.png",
+        "overlay": "assets/ecrans/07-document-actions-dessus.png"
+      },
       "tap": {
         "label": "Créer un rappel",
         "x": 0.5205,
@@ -191,12 +311,28 @@
     {
       "id": "07-rappel-document",
       "chapter": "07-documents",
-      "file": "assets/ecrans/07-rappel-document.png"
+      "file": "assets/ecrans/07-rappel-document.png",
+      "scroll": {
+        "top": 56,
+        "height": 703,
+        "contentH": 1357,
+        "scrollTop": 0,
+        "content": "assets/ecrans/07-rappel-document-contenu.png",
+        "overlay": null
+      }
     },
     {
       "id": "08-kora",
       "chapter": "08-kora",
       "file": "assets/ecrans/08-kora.png",
+      "scroll": {
+        "top": 115,
+        "height": 555,
+        "contentH": 1062,
+        "scrollTop": 507,
+        "content": "assets/ecrans/08-kora-contenu.png",
+        "overlay": null
+      },
       "tap": {
         "label": "Que dois-je payer ?",
         "x": 0.3198,
@@ -209,6 +345,14 @@
       "id": "08-kora-reponse",
       "chapter": "08-kora",
       "file": "assets/ecrans/08-kora-reponse.png",
+      "scroll": {
+        "top": 115,
+        "height": 555,
+        "contentH": 1576,
+        "scrollTop": 1021,
+        "content": "assets/ecrans/08-kora-reponse-contenu.png",
+        "overlay": null
+      },
       "tap": {
         "label": "Commande vocale",
         "x": 0.8923,
@@ -232,12 +376,28 @@
     {
       "id": "08-voix-compris",
       "chapter": "08-kora",
-      "file": "assets/ecrans/08-voix-compris.png"
+      "file": "assets/ecrans/08-voix-compris.png",
+      "scroll": {
+        "top": 56,
+        "height": 727,
+        "contentH": 1086,
+        "scrollTop": 0,
+        "content": "assets/ecrans/08-voix-compris-contenu.png",
+        "overlay": "assets/ecrans/08-voix-compris-dessus.png"
+      }
     },
     {
       "id": "09-foyer",
       "chapter": "09-foyer",
       "file": "assets/ecrans/09-foyer.png",
+      "scroll": {
+        "top": 56,
+        "height": 727,
+        "contentH": 1993,
+        "scrollTop": 0,
+        "content": "assets/ecrans/09-foyer-contenu.png",
+        "overlay": "assets/ecrans/09-foyer-dessus.png"
+      },
       "tap": {
         "label": "Léo",
         "x": 0.6513,
@@ -249,12 +409,28 @@
     {
       "id": "09-foyer-leo",
       "chapter": "09-foyer",
-      "file": "assets/ecrans/09-foyer-leo.png"
+      "file": "assets/ecrans/09-foyer-leo.png",
+      "scroll": {
+        "top": 56,
+        "height": 727,
+        "contentH": 1147,
+        "scrollTop": 0,
+        "content": "assets/ecrans/09-foyer-leo-contenu.png",
+        "overlay": "assets/ecrans/09-foyer-leo-dessus.png"
+      }
     },
     {
       "id": "09-membres",
       "chapter": "09-foyer",
       "file": "assets/ecrans/09-membres.png",
+      "scroll": {
+        "top": 56,
+        "height": 727,
+        "contentH": 1147,
+        "scrollTop": 0,
+        "content": "assets/ecrans/09-membres-contenu.png",
+        "overlay": "assets/ecrans/09-membres-dessus.png"
+      },
       "tap": {
         "label": "Inviter un membre",
         "x": 0.9282,
@@ -271,17 +447,41 @@
     {
       "id": "09-activite",
       "chapter": "09-foyer",
-      "file": "assets/ecrans/09-activite.png"
+      "file": "assets/ecrans/09-activite.png",
+      "scroll": {
+        "top": 56,
+        "height": 727,
+        "contentH": 1317,
+        "scrollTop": 0,
+        "content": "assets/ecrans/09-activite-contenu.png",
+        "overlay": "assets/ecrans/09-activite-dessus.png"
+      }
     },
     {
       "id": "10-notifications",
       "chapter": "10-notifications",
-      "file": "assets/ecrans/10-notifications.png"
+      "file": "assets/ecrans/10-notifications.png",
+      "scroll": {
+        "top": 56,
+        "height": 727,
+        "contentH": 1265,
+        "scrollTop": 0,
+        "content": "assets/ecrans/10-notifications-contenu.png",
+        "overlay": "assets/ecrans/10-notifications-dessus.png"
+      }
     },
     {
       "id": "11-connexions",
       "chapter": "11-connexions",
       "file": "assets/ecrans/11-connexions.png",
+      "scroll": {
+        "top": 56,
+        "height": 727,
+        "contentH": 1723,
+        "scrollTop": 659,
+        "content": "assets/ecrans/11-connexions-contenu.png",
+        "overlay": "assets/ecrans/11-connexions-dessus.png"
+      },
       "tap": {
         "label": "Conflits à résoudre",
         "x": 0.5154,
@@ -293,12 +493,28 @@
     {
       "id": "11-conflits",
       "chapter": "11-connexions",
-      "file": "assets/ecrans/11-conflits.png"
+      "file": "assets/ecrans/11-conflits.png",
+      "scroll": {
+        "top": 56,
+        "height": 727,
+        "contentH": 1004,
+        "scrollTop": 0,
+        "content": "assets/ecrans/11-conflits-contenu.png",
+        "overlay": "assets/ecrans/11-conflits-dessus.png"
+      }
     },
     {
       "id": "12-profil",
       "chapter": "12-profil",
       "file": "assets/ecrans/12-profil.png",
+      "scroll": {
+        "top": 56,
+        "height": 727,
+        "contentH": 1930,
+        "scrollTop": 552,
+        "content": "assets/ecrans/12-profil-contenu.png",
+        "overlay": "assets/ecrans/12-profil-dessus.png"
+      },
       "tap": {
         "label": "Langue et région",
         "x": 0.5205,
@@ -310,12 +526,28 @@
     {
       "id": "12-preferences",
       "chapter": "12-profil",
-      "file": "assets/ecrans/12-preferences.png"
+      "file": "assets/ecrans/12-preferences.png",
+      "scroll": {
+        "top": 56,
+        "height": 709,
+        "contentH": 1409,
+        "scrollTop": 0,
+        "content": "assets/ecrans/12-preferences-contenu.png",
+        "overlay": null
+      }
     },
     {
       "id": "12-confidentialite",
       "chapter": "12-profil",
-      "file": "assets/ecrans/12-confidentialite.png"
+      "file": "assets/ecrans/12-confidentialite.png",
+      "scroll": {
+        "top": 56,
+        "height": 727,
+        "contentH": 1089,
+        "scrollTop": 0,
+        "content": "assets/ecrans/12-confidentialite-contenu.png",
+        "overlay": "assets/ecrans/12-confidentialite-dessus.png"
+      }
     }
   ]
 }

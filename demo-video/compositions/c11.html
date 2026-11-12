@@ -20,13 +20,19 @@
     .c11-phone-body { position: absolute; left: 1150px; top: 86px; width: 437px; height: 908px;
       border-radius: 64px; background: #131c2d; box-shadow: 0 40px 90px rgba(19,28,45,0.28), 0 0 0 2px #2a3550 inset; }
     .c11-screen { position: absolute; left: 1166px; top: 102px; width: 405px; height: 876px; border-radius: 50px; object-fit: cover; }
+    .c11-scroller { overflow: hidden; background: #f8f9ff; }
+    .c11-layer { position: absolute; left: 0; top: 0; width: 405px; height: 876px; }
+    .c11-window { position: absolute; left: 0; width: 405px; overflow: hidden; background: #f8f9ff; }
+    .c11-content { position: absolute; left: 0; width: 405px; }
+    .c11-finger { position: absolute; left: -26px; top: -26px; width: 52px; height: 52px; border-radius: 50%; background: rgba(47,213,193,0.55); border: 4px solid #ffffff; box-shadow: 0 8px 18px rgba(19,28,45,0.3); }
+    .c11-vtrail { position: absolute; left: -4px; width: 8px; height: 220px; border-radius: 8px; background: linear-gradient(180deg, rgba(47,213,193,0.9), rgba(47,213,193,0)); }
+    .c11-hintlabel { left: 96px; top: -26px; }
     .c11-splash { background: #f8f9ff; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px; overflow: hidden; }
-    .c11-tile { position: relative; width: 150px; height: 150px; border-radius: 34px; background: #131c2d; overflow: hidden; }
-    .c11-ring { position: absolute; left: 43.4px; top: 54.6px; width: 68px; height: 68px; border-radius: 50%; border: 18.9px solid #fff; }
-    .c11-bar { position: absolute; left: 38.8px; top: 27.4px; width: 18.6px; height: 94.9px; border-radius: 9.3px; background: #fff; transform-origin: top center; }
-    .c11-ldot { position: absolute; left: 96.8px; top: 26.8px; width: 23.7px; height: 23.7px; border-radius: 50%; background: #2fd5c1; }
-    .c11-word { font-family: 'Plus Jakarta Sans'; font-weight: 700; font-size: 38px; color: #131c2d; letter-spacing: -0.02em; }
-    .c11-word span { font-family: 'Inter App'; font-weight: 600; color: #006a61; }
+    .c11-tile { position: absolute; inset: 0; border-radius: 34px; background: #0f1839; overflow: hidden; }
+    .c11-tilewrap { position: relative; width: 150px; height: 150px; }
+    .c11-halo { position: absolute; inset: 0; border-radius: 50%; background: #00d4ff; }
+    .c11-sym { position: absolute; left: 9px; top: 9px; width: 132px; height: 132px; }
+    .c11-word { height: 52px; width: auto; }
     .c11-gesture { position: absolute; width: 0; height: 0; z-index: 50; }
     .c11-tapring { position: absolute; left: -46px; top: -46px; width: 92px; height: 92px; border-radius: 50%; border: 5px solid #2fd5c1; }
     .c11-press { position: absolute; left: -30px; top: -30px; width: 60px; height: 60px; border-radius: 50%; background: #2fd5c1; }
@@ -35,9 +41,9 @@
       background: #131c2d; padding: 10px 18px; border-radius: 14px; box-shadow: 0 10px 24px rgba(19,28,45,0.25); }
     .c11-trail { position: absolute; left: 0; top: -4px; width: 240px; height: 8px; border-radius: 8px; background: linear-gradient(90deg, rgba(47,213,193,0), #2fd5c1); transform-origin: left center; }
     .c11-end { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-    .c11-logo { width: 220px; height: 220px; border-radius: 50px; }
-    .c11-endword { margin-top: 40px; font-family: 'Plus Jakarta Sans'; font-weight: 700; font-size: 96px; letter-spacing: -0.03em; color: #131c2d; }
-    .c11-endword span { font-family: 'Inter App'; font-weight: 600; color: #006a61; }
+    .c11-logo { position: relative; width: 220px; height: 220px; border-radius: 50px; background: #0f1839; box-shadow: 0 30px 70px rgba(15,24,57,0.25); }
+    .c11-logosym { position: absolute; left: 13px; top: 13px; width: 194px; height: 194px; }
+    .c11-endword { margin-top: 44px; height: 120px; width: auto; }
     .c11-claim { margin-top: 18px; font-family: 'Inter App'; font-size: 40px; color: #45464d; }
     .c11-promise { margin-top: 30px; font-family: 'Plus Jakarta Sans'; font-weight: 700; font-size: 44px; color: #006a61; }
     .c11-fade { position: absolute; inset: 0; background: #f8f9ff; z-index: 90; }
@@ -52,8 +58,30 @@
     <div id="c11-phone" class="clip c11-phone" data-start="0" data-duration="21.362" data-track-index="2">
       <div id="c11-phone-body" class="c11-phone-body"></div>
     </div>
-    <img id="c11-s0" class="clip c11-screen" src="assets/ecrans/11-connexions.png" alt="" data-start="0" data-duration="12.861" data-track-index="3" style="z-index:10" />
-    <img id="c11-s1" class="clip c11-screen" src="assets/ecrans/11-conflits.png" alt="" data-start="12.461" data-duration="8.901" data-track-index="3" style="z-index:11" />
+    <div id="c11-s0" class="clip c11-screen c11-scroller" data-start="0" data-duration="12.861" data-track-index="3" style="z-index:10">
+      <img class="c11-layer" src="assets/ecrans/11-connexions.png" alt="" />
+      <div class="c11-window" style="top:58.123px; height:754.564px">
+        <img id="c11-s0-content" class="c11-content" src="assets/ecrans/11-connexions-contenu.png" alt="" style="top:-684.346px; height:1789.269px" />
+      </div>
+      <img class="c11-layer" src="assets/ecrans/11-connexions-dessus.png" alt="" />
+    </div>
+    <div id="c11-s0-hint" class="clip c11-gesture" data-start="3.05" data-duration="2.809" data-track-index="4" style="left:1506.2px; top:583.8px">
+      <div id="c11-s0-hint-trail" class="c11-vtrail" style="top:-110px"></div>
+      <div id="c11-s0-hint-finger" class="c11-finger"></div>
+      <div id="c11-s0-hint-label" class="c11-label c11-hintlabel">Faire défiler</div>
+    </div>
+    <div id="c11-s1" class="clip c11-screen c11-scroller" data-start="12.461" data-duration="8.901" data-track-index="3" style="z-index:11">
+      <img class="c11-layer" src="assets/ecrans/11-conflits.png" alt="" />
+      <div class="c11-window" style="top:58.123px; height:754.564px">
+        <img id="c11-s1-content" class="c11-content" src="assets/ecrans/11-conflits-contenu.png" alt="" style="top:0.0px; height:1042.615px" />
+      </div>
+      <img class="c11-layer" src="assets/ecrans/11-conflits-dessus.png" alt="" />
+    </div>
+    <div id="c11-s1-hint" class="clip c11-gesture" data-start="15.111" data-duration="2.45" data-track-index="4" style="left:1506.2px; top:583.8px">
+      <div id="c11-s1-hint-trail" class="c11-vtrail" style="top:-110px"></div>
+      <div id="c11-s1-hint-finger" class="c11-finger"></div>
+      <div id="c11-s1-hint-label" class="c11-label c11-hintlabel">Faire défiler</div>
+    </div>
     <div id="c11-g1" class="clip c11-gesture" data-start="11.311" data-duration="1.6" data-track-index="4" style="left:1374.737px; top:518.713px">
       <div id="c11-g1-ring" class="c11-tapring"></div>
       <div id="c11-g1-press" class="c11-press"></div>
@@ -69,6 +97,19 @@
     tl.fromTo("#c11-summary", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.5, ease: "power3.out" }, 0.4);
     tl.fromTo("#c11-phone-body", { opacity: 0, y: 40, scale: 0.97 }, { opacity: 1, y: 0, scale: 1, duration: 0.6, ease: "power3.out" }, 0.15);
     tl.fromTo("#c11-phone-body", { y: 0, rotation: 0 }, { y: -14, rotation: -0.6, duration: 9.881, ease: "sine.inOut", yoyo: true, repeat: 1, immediateRender: false }, 0.8);
+    tl.fromTo("#c11-s0-content", { y: 0 }, { y: 684.346, duration: 2.059, ease: "power1.inOut" }, 3.4);
+    tl.fromTo("#c11-s0-content", { y: 684.346 }, { y: 0, duration: 1.098, ease: "power2.inOut", immediateRender: false }, 9.513);
+    tl.fromTo("#c11-s0-hint-finger", { y: -110, opacity: 0 }, { y: -110, opacity: 1, duration: 0.3 }, 3.05);
+    tl.fromTo("#c11-s0-hint-label", { opacity: 0, x: 20 }, { opacity: 1, x: 0, duration: 0.3, ease: "power2.out" }, 3.05);
+    tl.fromTo("#c11-s0-hint-finger", { y: -110 }, { y: 110, duration: 1.4, ease: "power2.inOut", immediateRender: false }, 3.4);
+    tl.fromTo("#c11-s0-hint-trail", { opacity: 0 }, { opacity: 1, duration: 0.4 }, 3.4);
+    tl.fromTo("#c11-s0-hint", { opacity: 1 }, { opacity: 0, duration: 0.3 }, 5.559);
+    tl.fromTo("#c11-s1-content", { y: 0 }, { y: -287.654, duration: 1.4, ease: "power1.inOut" }, 15.461);
+    tl.fromTo("#c11-s1-hint-finger", { y: 110, opacity: 0 }, { y: 110, opacity: 1, duration: 0.3 }, 15.111);
+    tl.fromTo("#c11-s1-hint-label", { opacity: 0, x: 20 }, { opacity: 1, x: 0, duration: 0.3, ease: "power2.out" }, 15.111);
+    tl.fromTo("#c11-s1-hint-finger", { y: 110 }, { y: -110, duration: 1.4, ease: "power2.inOut", immediateRender: false }, 15.461);
+    tl.fromTo("#c11-s1-hint-trail", { opacity: 0 }, { opacity: 1, duration: 0.4 }, 15.461);
+    tl.fromTo("#c11-s1-hint", { opacity: 1 }, { opacity: 0, duration: 0.3 }, 17.261);
     tl.fromTo("#c11-s1", { opacity: 0 }, { opacity: 1, duration: 0.4, ease: "power2.out" }, 12.461);
     tl.fromTo("#c11-g1-arrow", { x: 150, y: 120, opacity: 0 }, { x: 0, y: 0, opacity: 1, duration: 0.55, ease: "power3.out" }, 10.961);
     tl.fromTo("#c11-g1-label", { opacity: 0, x: 20 }, { opacity: 1, x: 0, duration: 0.35, ease: "power2.out" }, 11.161);

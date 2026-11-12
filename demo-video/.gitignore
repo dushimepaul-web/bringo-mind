@@ -1,0 +1,5 @@
+# Outils et fichiers temporaires de HyperFrames
+.venv/
+node_modules/
+.hyperframes/
+renders/.*-transaction-*/

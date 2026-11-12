@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { BrandLogo } from '@/components/brand-logo';
+import { BrandLogo, BrandName } from '@/components/brand-logo';
 import { Icon } from '@/components/icon';
 import { FontFamily, Radius, Serene, Space, Tint } from '@/constants/design';
 
@@ -88,9 +88,9 @@ export function AuthBrand({ compact, large }: { compact?: boolean; large?: boole
     <View style={[styles.brandRow, large && styles.brandColumn]}>
       <BrandLogo size={large ? 96 : 64} />
       <View style={large && styles.brandTextCentered}>
-        <Text style={[styles.wordmark, large && styles.wordmarkLarge]}>
-          bringo <Text style={[styles.accent, styles.wordmarkMind]}>mind</Text>
-        </Text>
+        <View style={styles.wordmark}>
+          <BrandName height={large ? 36 : 30} />
+        </View>
         <Text style={[styles.tagline, large && styles.taglineCentered]}>
           Organisez • Gérez • Avancez
         </Text>
@@ -440,21 +440,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   wordmark: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 28,
-    lineHeight: 34,
-    letterSpacing: -0.4,
-    color: Tint.navy,
-  },
-  wordmarkLarge: {
-    fontSize: 34,
-    lineHeight: 40,
+    marginBottom: 4,
   },
   accent: {
     color: Tint.primary,
-  },
-  wordmarkMind: {
-    fontFamily: FontFamily.bodySemiBold,
   },
   tagline: {
     fontFamily: FontFamily.bodyMedium,

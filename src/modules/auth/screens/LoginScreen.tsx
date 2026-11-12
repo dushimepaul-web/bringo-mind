@@ -17,7 +17,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { BrandLogo } from '@/components/brand-logo';
+import { BrandLogo, BrandName } from '@/components/brand-logo';
 import { Icon } from '@/components/icon';
 import { appLock } from '@/lib/app-lock';
 import { FontFamily, Radius, Serene, Space, Tint } from '@/constants/design';
@@ -81,9 +81,9 @@ export default function LoginScreen() {
           <View style={styles.brandRow}>
             <BrandLogo size={64} />
             <View>
-              <Text style={styles.wordmark}>
-                bringo <Text style={styles.wordmarkAccent}>mind</Text>
-              </Text>
+              <View style={styles.wordmark}>
+                <BrandName height={30} />
+              </View>
               <Text style={styles.tagline}>Organisez • Gérez • Avancez</Text>
             </View>
           </View>
@@ -408,15 +408,7 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   wordmark: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 28,
-    lineHeight: 34,
-    letterSpacing: -0.4,
-    color: Tint.navy,
-  },
-  wordmarkAccent: {
-    fontFamily: FontFamily.bodySemiBold,
-    color: Tint.primary,
+    marginBottom: 4,
   },
   tagline: {
     fontFamily: FontFamily.bodyMedium,

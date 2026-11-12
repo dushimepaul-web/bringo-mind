@@ -31,6 +31,9 @@ await page.emulate({
     'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1',
 });
 
+// « Réduire les animations » : le carrousel de suggestions reste sur la première carte.
+await page.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'reduce' }]);
+
 /** Chargement complet d'une adresse : laisse passer l'animation d'ouverture et Face ID. */
 async function open(route, settle = 4200) {
   await page.goto(BASE + route, { waitUntil: 'networkidle0', timeout: 120000 });
@@ -57,8 +60,107 @@ async function locate(label) {
   }, label);
 }
 
+/**
+ * Si l'écran défile, capture deux calques pour animer le défilement dans la vidéo :
+ * - <id>-contenu.png : tout le contenu de la zone qui défile, de haut en bas ;
+ * - <id>-dessus.png : les éléments posés au-dessus (bouton flottant, barre de saisie…), fond transparent.
+ */
+async function scrollLayers(id, keep) {
+  const info = await page.evaluate(() => {
+    const visible = (el) => {
+      const r = el.getBoundingClientRect();
+      return r.width > 300 && r.height > 120 && r.top < window.innerHeight && r.bottom > 0;
+    };
+    const scrollers = [...document.querySelectorAll('div')].filter(
+      (el) => el.scrollHeight > el.clientHeight + 80 && ['auto', 'scroll'].includes(getComputedStyle(el).overflowY) && visible(el),
+    );
+    const main = scrollers.sort((a, b) => b.clientHeight - a.clientHeight)[0];
+    if (!main) return null;
+    document.querySelectorAll('[data-cap-scroller],[data-cap-float]').forEach((el) => {
+      el.removeAttribute('data-cap-scroller');
+      el.removeAttribute('data-cap-float');
+    });
+    main.setAttribute('data-cap-scroller', '1');
+    const r = main.getBoundingClientRect();
+    let floats = 0;
+    for (const el of document.querySelectorAll('body *')) {
+      if (main.contains(el) || el.contains(main)) continue;
+      const cs = getComputedStyle(el);
+      if (cs.visibility === 'hidden' || cs.display === 'none') continue;
+      const b = el.getBoundingClientRect();
+      if (b.width < 4 || b.height < 4 || b.width * b.height > 0.5 * window.innerWidth * window.innerHeight) continue;
+      if (b.bottom <= r.top + 1 || b.top >= r.bottom - 1) continue;
+      // Seulement ce qui est vraiment au premier plan (pas les écrans cachés derrière).
+      const hit = document.elementFromPoint(Math.min(window.innerWidth - 1, b.left + b.width / 2), Math.min(window.innerHeight - 1, b.top + b.height / 2));
+      if (!hit || !el.contains(hit)) continue;
+      el.setAttribute('data-cap-float', '1');
+      floats += 1;
+    }
+    return { top: r.top, height: main.clientHeight, contentH: main.scrollHeight, scrollTop: main.scrollTop, floats };
+  });
+  if (!info) return null;
+
+  const style = await page.addStyleTag({ content: '[data-cap-float], [data-cap-float] * { visibility: hidden !important; }' });
+  await page.setViewport({ width: W, height: H + (info.contentH - info.height), deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+  await wait(900);
+  if (keep) await waitText(keep).catch(() => console.warn('! carrousel', id));
+  const tall = await page.evaluate(() => {
+    const main = document.querySelector('[data-cap-scroller]');
+    if (!main) return null;
+    main.scrollTo(0, 0);
+    return { top: main.getBoundingClientRect().top };
+  });
+  await wait(300);
+  let content = null;
+  if (tall) {
+    content = `${id}-contenu.png`;
+    await page.screenshot({ path: path.join(OUT, content), clip: { x: 0, y: tall.top, width: W, height: info.contentH } });
+  }
+  await style.evaluate((el) => el.remove());
+  await page.setViewport({ width: W, height: H, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+  await wait(900);
+  await page.evaluate((y) => document.querySelector('[data-cap-scroller]')?.scrollTo(0, y), info.scrollTop);
+  await wait(500);
+
+  let overlay = null;
+  if (info.floats) {
+    overlay = `${id}-dessus.png`;
+    const only = await page.addStyleTag({
+      content:
+        'html, body { background: transparent !important; } * { visibility: hidden !important; } [data-cap-float], [data-cap-float] * { visibility: visible !important; }',
+    });
+    await wait(200);
+    await page.screenshot({ path: path.join(OUT, overlay), omitBackground: true });
+    await only.evaluate((el) => el.remove());
+    await wait(200);
+  }
+  if (!content) return null;
+  return {
+    top: +info.top.toFixed(1),
+    height: info.height,
+    contentH: info.contentH,
+    scrollTop: Math.round(info.scrollTop),
+    content: `assets/ecrans/${content}`,
+    overlay: overlay ? `assets/ecrans/${overlay}` : null,
+  };
+}
+
 /** Capture l'écran ; si `tap` est donné, note où se trouve ce bouton puis le touche. */
-async function shot(id, { chapter, tap, after = 1300, scrollY, reveal } = {}) {
+/** Attend qu'un texte soit visible (ex. le bon slide d'un carrousel qui tourne seul). */
+async function waitText(text, timeout = 20000) {
+  await page.waitForFunction(
+    (wanted) => [...document.querySelectorAll('body *')].some((el) => {
+      if ((el.innerText || '').trim() !== wanted) return false;
+      const r = el.getBoundingClientRect();
+      return r.left >= 0 && r.right <= window.innerWidth && r.width > 0;
+    }),
+    { timeout, polling: 100 },
+    text,
+  );
+  await wait(400);
+}
+
+async function shot(id, { chapter, tap, after = 1300, scrollY, reveal, noScroll, keep } = {}) {
   if (reveal) {
     // Fait défiler jusqu'au bouton pour qu'il soit visible au centre de l'écran.
     await page.evaluate((wanted) => {
@@ -81,13 +183,29 @@ async function shot(id, { chapter, tap, after = 1300, scrollY, reveal } = {}) {
   const file = `${id}.png`;
   await page.screenshot({ path: path.join(OUT, file) });
   const entry = { id, chapter, file: `assets/ecrans/${file}` };
+  // Position du bouton telle qu'elle apparaît sur la capture (avant la capture longue).
+  const shown = tap ? await locate(tap) : null;
+  if (!id.startsWith('tmp-') && !noScroll) {
+    const scroll = await scrollLayers(id, keep);
+    if (scroll) entry.scroll = scroll;
+  }
   if (tap) {
-    const box = await locate(tap);
-    if (!box) {
+    if (reveal) {
+      await page.evaluate((wanted) => {
+        const norm = (value) => (value || '').replace(/\s+/g, ' ').trim();
+        const el = [...document.querySelectorAll('body *')].find(
+          (node) => norm(node.innerText) === wanted || norm(node.getAttribute('aria-label')).startsWith(wanted),
+        );
+        el?.scrollIntoView({ block: 'center' });
+      }, reveal);
+      await wait(500);
+    }
+    const now = (await locate(tap)) || shown;
+    if (!shown || !now) {
       console.warn(`! bouton introuvable « ${tap} » sur ${id}`);
     } else {
-      entry.tap = { label: tap, x: +(box.x / W).toFixed(4), y: +(box.y / H).toFixed(4), w: +(box.w / W).toFixed(4), h: +(box.h / H).toFixed(4) };
-      await page.mouse.click(box.x, box.y);
+      entry.tap = { label: tap, x: +(shown.x / W).toFixed(4), y: +(shown.y / H).toFixed(4), w: +(shown.w / W).toFixed(4), h: +(shown.h / H).toFixed(4) };
+      await page.mouse.click(now.x, now.y);
       await wait(after);
     }
   }
@@ -105,14 +223,15 @@ await shot('02-connexion', { chapter: '02-ouverture', tap: 'Se connecter', after
 await open('/profile');
 await shot('tmp-profil', { reveal: 'Revoir l’ouverture', tap: 'Revoir l’ouverture', after: 900 });
 await shot('tmp-menu', { tap: 'Verrouillage Face ID', after: 650 });
-await shot('02-faceid', { chapter: '02-ouverture' });
+await shot('02-faceid', { chapter: '02-ouverture', noScroll: true });
 await wait(2500);
 
 // 03 — Accueil
 await open('/dashboard');
-await shot('03-accueil', { chapter: '03-accueil', tap: 'Vérifier', after: 2000 });
+await waitText('1/3');
+await shot('03-accueil', { keep: '1/3', chapter: '03-accueil', tap: 'Vérifier', after: 2000 });
 await open('/dashboard');
-await shot('03-accueil-suite', { chapter: '03-accueil', scrollY: 560 });
+await shot('03-accueil-suite', { keep: '1/3', chapter: '03-accueil', scrollY: 560 });
 
 // 04 — Tâches
 await open('/tasks');

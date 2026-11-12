@@ -20,13 +20,19 @@
     .c08-phone-body { position: absolute; left: 1150px; top: 86px; width: 437px; height: 908px;
       border-radius: 64px; background: #131c2d; box-shadow: 0 40px 90px rgba(19,28,45,0.28), 0 0 0 2px #2a3550 inset; }
     .c08-screen { position: absolute; left: 1166px; top: 102px; width: 405px; height: 876px; border-radius: 50px; object-fit: cover; }
+    .c08-scroller { overflow: hidden; background: #f8f9ff; }
+    .c08-layer { position: absolute; left: 0; top: 0; width: 405px; height: 876px; }
+    .c08-window { position: absolute; left: 0; width: 405px; overflow: hidden; background: #f8f9ff; }
+    .c08-content { position: absolute; left: 0; width: 405px; }
+    .c08-finger { position: absolute; left: -26px; top: -26px; width: 52px; height: 52px; border-radius: 50%; background: rgba(47,213,193,0.55); border: 4px solid #ffffff; box-shadow: 0 8px 18px rgba(19,28,45,0.3); }
+    .c08-vtrail { position: absolute; left: -4px; width: 8px; height: 220px; border-radius: 8px; background: linear-gradient(180deg, rgba(47,213,193,0.9), rgba(47,213,193,0)); }
+    .c08-hintlabel { left: 96px; top: -26px; }
     .c08-splash { background: #f8f9ff; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px; overflow: hidden; }
-    .c08-tile { position: relative; width: 150px; height: 150px; border-radius: 34px; background: #131c2d; overflow: hidden; }
-    .c08-ring { position: absolute; left: 43.4px; top: 54.6px; width: 68px; height: 68px; border-radius: 50%; border: 18.9px solid #fff; }
-    .c08-bar { position: absolute; left: 38.8px; top: 27.4px; width: 18.6px; height: 94.9px; border-radius: 9.3px; background: #fff; transform-origin: top center; }
-    .c08-ldot { position: absolute; left: 96.8px; top: 26.8px; width: 23.7px; height: 23.7px; border-radius: 50%; background: #2fd5c1; }
-    .c08-word { font-family: 'Plus Jakarta Sans'; font-weight: 700; font-size: 38px; color: #131c2d; letter-spacing: -0.02em; }
-    .c08-word span { font-family: 'Inter App'; font-weight: 600; color: #006a61; }
+    .c08-tile { position: absolute; inset: 0; border-radius: 34px; background: #0f1839; overflow: hidden; }
+    .c08-tilewrap { position: relative; width: 150px; height: 150px; }
+    .c08-halo { position: absolute; inset: 0; border-radius: 50%; background: #00d4ff; }
+    .c08-sym { position: absolute; left: 9px; top: 9px; width: 132px; height: 132px; }
+    .c08-word { height: 52px; width: auto; }
     .c08-gesture { position: absolute; width: 0; height: 0; z-index: 50; }
     .c08-tapring { position: absolute; left: -46px; top: -46px; width: 92px; height: 92px; border-radius: 50%; border: 5px solid #2fd5c1; }
     .c08-press { position: absolute; left: -30px; top: -30px; width: 60px; height: 60px; border-radius: 50%; background: #2fd5c1; }
@@ -35,9 +41,9 @@
       background: #131c2d; padding: 10px 18px; border-radius: 14px; box-shadow: 0 10px 24px rgba(19,28,45,0.25); }
     .c08-trail { position: absolute; left: 0; top: -4px; width: 240px; height: 8px; border-radius: 8px; background: linear-gradient(90deg, rgba(47,213,193,0), #2fd5c1); transform-origin: left center; }
     .c08-end { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-    .c08-logo { width: 220px; height: 220px; border-radius: 50px; }
-    .c08-endword { margin-top: 40px; font-family: 'Plus Jakarta Sans'; font-weight: 700; font-size: 96px; letter-spacing: -0.03em; color: #131c2d; }
-    .c08-endword span { font-family: 'Inter App'; font-weight: 600; color: #006a61; }
+    .c08-logo { position: relative; width: 220px; height: 220px; border-radius: 50px; background: #0f1839; box-shadow: 0 30px 70px rgba(15,24,57,0.25); }
+    .c08-logosym { position: absolute; left: 13px; top: 13px; width: 194px; height: 194px; }
+    .c08-endword { margin-top: 44px; height: 120px; width: auto; }
     .c08-claim { margin-top: 18px; font-family: 'Inter App'; font-size: 40px; color: #45464d; }
     .c08-promise { margin-top: 30px; font-family: 'Plus Jakarta Sans'; font-weight: 700; font-size: 44px; color: #006a61; }
     .c08-fade { position: absolute; inset: 0; background: #f8f9ff; z-index: 90; }
@@ -52,9 +58,42 @@
     <div id="c08-phone" class="clip c08-phone" data-start="0" data-duration="19.363" data-track-index="2">
       <div id="c08-phone-body" class="c08-phone-body"></div>
     </div>
-    <img id="c08-s0" class="clip c08-screen" src="assets/ecrans/08-kora.png" alt="" data-start="0" data-duration="8.167" data-track-index="3" style="z-index:10" />
-    <img id="c08-s1" class="clip c08-screen" src="assets/ecrans/08-kora-reponse.png" alt="" data-start="7.767" data-duration="7.511" data-track-index="3" style="z-index:11" />
-    <img id="c08-s2" class="clip c08-screen" src="assets/ecrans/08-voix-compris.png" alt="" data-start="14.878" data-duration="4.485" data-track-index="3" style="z-index:12" />
+    <div id="c08-s0" class="clip c08-screen c08-scroller" data-start="0" data-duration="8.167" data-track-index="3" style="z-index:10">
+      <img class="c08-layer" src="assets/ecrans/08-kora.png" alt="" />
+      <div class="c08-window" style="top:119.36px; height:576.043px">
+        <img id="c08-s0-content" class="c08-content" src="assets/ecrans/08-kora-contenu.png" alt="" style="top:-526.5px; height:1102.846px" />
+      </div>
+      
+    </div>
+    <div id="c08-s0-hint" class="clip c08-gesture" data-start="1.623" data-duration="2.45" data-track-index="4" style="left:1506.2px; top:583.8px">
+      <div id="c08-s0-hint-trail" class="c08-vtrail" style="top:-110px"></div>
+      <div id="c08-s0-hint-finger" class="c08-finger"></div>
+      <div id="c08-s0-hint-label" class="c08-label c08-hintlabel">Faire défiler</div>
+    </div>
+    <div id="c08-s1" class="clip c08-screen c08-scroller" data-start="7.767" data-duration="7.511" data-track-index="3" style="z-index:11">
+      <img class="c08-layer" src="assets/ecrans/08-kora-reponse.png" alt="" />
+      <div class="c08-window" style="top:119.36px; height:576.043px">
+        <img id="c08-s1-content" class="c08-content" src="assets/ecrans/08-kora-reponse-contenu.png" alt="" style="top:-1060.269px; height:1636.615px" />
+      </div>
+      
+    </div>
+    <div id="c08-s1-hint" class="clip c08-gesture" data-start="8.417" data-duration="3.138" data-track-index="4" style="left:1506.2px; top:583.8px">
+      <div id="c08-s1-hint-trail" class="c08-vtrail" style="top:-110px"></div>
+      <div id="c08-s1-hint-finger" class="c08-finger"></div>
+      <div id="c08-s1-hint-label" class="c08-label c08-hintlabel">Faire défiler</div>
+    </div>
+    <div id="c08-s2" class="clip c08-screen c08-scroller" data-start="14.878" data-duration="4.485" data-track-index="3" style="z-index:12">
+      <img class="c08-layer" src="assets/ecrans/08-voix-compris.png" alt="" />
+      <div class="c08-window" style="top:58.123px; height:754.564px">
+        <img id="c08-s2-content" class="c08-content" src="assets/ecrans/08-voix-compris-contenu.png" alt="" style="top:0.0px; height:1127.769px" />
+      </div>
+      <img class="c08-layer" src="assets/ecrans/08-voix-compris-dessus.png" alt="" />
+    </div>
+    <div id="c08-s2-hint" class="clip c08-gesture" data-start="16.162" data-duration="2.45" data-track-index="4" style="left:1506.2px; top:583.8px">
+      <div id="c08-s2-hint-trail" class="c08-vtrail" style="top:-110px"></div>
+      <div id="c08-s2-hint-finger" class="c08-finger"></div>
+      <div id="c08-s2-hint-label" class="c08-label c08-hintlabel">Faire défiler</div>
+    </div>
     <div id="c08-g1" class="clip c08-gesture" data-start="6.617" data-duration="1.6" data-track-index="4" style="left:1295.519px; top:827.503px">
       <div id="c08-g1-ring" class="c08-tapring"></div>
       <div id="c08-g1-press" class="c08-press"></div>
@@ -76,7 +115,27 @@
     tl.fromTo("#c08-summary", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.5, ease: "power3.out" }, 0.4);
     tl.fromTo("#c08-phone-body", { opacity: 0, y: 40, scale: 0.97 }, { opacity: 1, y: 0, scale: 1, duration: 0.6, ease: "power3.out" }, 0.15);
     tl.fromTo("#c08-phone-body", { y: 0, rotation: 0 }, { y: -14, rotation: -0.6, duration: 8.881, ease: "sine.inOut", yoyo: true, repeat: 1, immediateRender: false }, 0.8);
+    tl.fromTo("#c08-s0-content", { y: 0 }, { y: 526.5, duration: 1.584, ease: "power1.inOut" }, 1.973);
+    tl.fromTo("#c08-s0-content", { y: 526.5 }, { y: 0, duration: 0.9, ease: "power2.inOut", immediateRender: false }, 5.017);
+    tl.fromTo("#c08-s0-hint-finger", { y: -110, opacity: 0 }, { y: -110, opacity: 1, duration: 0.3 }, 1.623);
+    tl.fromTo("#c08-s0-hint-label", { opacity: 0, x: 20 }, { opacity: 1, x: 0, duration: 0.3, ease: "power2.out" }, 1.623);
+    tl.fromTo("#c08-s0-hint-finger", { y: -110 }, { y: 110, duration: 1.4, ease: "power2.inOut", immediateRender: false }, 1.973);
+    tl.fromTo("#c08-s0-hint-trail", { opacity: 0 }, { opacity: 1, duration: 0.4 }, 1.973);
+    tl.fromTo("#c08-s0-hint", { opacity: 1 }, { opacity: 0, duration: 0.3 }, 3.773);
+    tl.fromTo("#c08-s1-content", { y: 0 }, { y: 1060.269, duration: 2.388, ease: "power1.inOut" }, 8.767);
+    tl.fromTo("#c08-s1-content", { y: 1060.269 }, { y: 0, duration: 1.273, ease: "power2.inOut", immediateRender: false }, 11.755);
+    tl.fromTo("#c08-s1-hint-finger", { y: -110, opacity: 0 }, { y: -110, opacity: 1, duration: 0.3 }, 8.417);
+    tl.fromTo("#c08-s1-hint-label", { opacity: 0, x: 20 }, { opacity: 1, x: 0, duration: 0.3, ease: "power2.out" }, 8.417);
+    tl.fromTo("#c08-s1-hint-finger", { y: -110 }, { y: 110, duration: 1.4, ease: "power2.inOut", immediateRender: false }, 8.767);
+    tl.fromTo("#c08-s1-hint-trail", { opacity: 0 }, { opacity: 1, duration: 0.4 }, 8.767);
+    tl.fromTo("#c08-s1-hint", { opacity: 1 }, { opacity: 0, duration: 0.3 }, 11.255);
     tl.fromTo("#c08-s1", { opacity: 0 }, { opacity: 1, duration: 0.4, ease: "power2.out" }, 7.767);
+    tl.fromTo("#c08-s2-content", { y: 0 }, { y: -372.808, duration: 1.4, ease: "power1.inOut" }, 16.512);
+    tl.fromTo("#c08-s2-hint-finger", { y: 110, opacity: 0 }, { y: 110, opacity: 1, duration: 0.3 }, 16.162);
+    tl.fromTo("#c08-s2-hint-label", { opacity: 0, x: 20 }, { opacity: 1, x: 0, duration: 0.3, ease: "power2.out" }, 16.162);
+    tl.fromTo("#c08-s2-hint-finger", { y: 110 }, { y: -110, duration: 1.4, ease: "power2.inOut", immediateRender: false }, 16.512);
+    tl.fromTo("#c08-s2-hint-trail", { opacity: 0 }, { opacity: 1, duration: 0.4 }, 16.512);
+    tl.fromTo("#c08-s2-hint", { opacity: 1 }, { opacity: 0, duration: 0.3 }, 18.312);
     tl.fromTo("#c08-s2", { opacity: 0 }, { opacity: 1, duration: 0.4, ease: "power2.out" }, 14.878);
     tl.fromTo("#c08-g1-arrow", { x: 150, y: 120, opacity: 0 }, { x: 0, y: 0, opacity: 1, duration: 0.55, ease: "power3.out" }, 6.267);
     tl.fromTo("#c08-g1-label", { opacity: 0, x: 20 }, { opacity: 1, x: 0, duration: 0.35, ease: "power2.out" }, 6.467);

@@ -83,6 +83,47 @@ def plan(chapter):
     return out, r(t - (TAP_GAP if out[-1]['gesture'] else GAP) + TAIL + (1.0 if out[-1]['gesture'] else 0) + (2.6 if chapter == '13-conclusion' else 0))
 
 
+SX = SCREEN_W / capture['width']   # échelle horizontale capture -> vidéo
+SY = SCREEN_H / capture['height']
+
+
+def clamp(value, low, high):
+    return max(low, min(high, value))
+
+
+def scroll_plan(shot, win, beats_in_win, end, i):
+    """Défilement d'un écran long pendant que la voix parle ; revient en place avant le prochain geste."""
+    sc = shot.get('scroll')
+    if not sc:
+        return None
+    max_s, cur = sc['contentH'] - sc['height'], sc['scrollTop']
+    target = max_s if (max_s - cur) >= cur else 0
+    dist = abs(target - cur)
+    if dist < 120:
+        return None
+    gestures = [b for b in beats_in_win if b['gesture']]
+    s0 = win['start'] + (1.4 if i == 0 else 1.0)
+    if gestures:
+        g = gestures[0]
+        limit = g['gesture_at'] - (1.05 if g['gesture'] == 'tap' else 1.6) - 0.35
+        back = True
+    else:
+        limit = end - 0.5
+        back = False
+    avail = limit - s0
+    down = clamp(dist / 320, 1.4, 3.2)
+    up = clamp(dist / 600, 0.9, 1.8) if back else 0
+    hold = 0.6 if back else 0
+    if down + up + hold > avail:
+        f = (avail - hold) / (down + up)
+        if f * down < 0.9:
+            return None
+        down, up = down * f, up * f
+    slack = avail - down - up - hold
+    t_down = s0 + min(slack * 0.4, 2.0)
+    return {'sc': sc, 'target': target, 'back': back, 'down': r(down), 'up': r(up), 't_down': r(t_down), 't_up': r(limit - up)}
+
+
 def scene_html(chapter, index, beats, duration):
     cid = f'c{index:02d}'
     eyebrow, title, summary = CHAPTERS[chapter]
@@ -122,29 +163,63 @@ def scene_html(chapter, index, beats, duration):
             switch = 0 if i == 0 else (beats[i - 1]['gesture_at'] + 0.45 if beats[i - 1]['gesture'] == 'tap' else beat['start'] - 0.2)
             if windows and windows[-1]['shot'] == shot:
                 continue
-            windows.append({'shot': shot, 'start': r(max(0, switch))})
+            windows.append({'shot': shot, 'start': r(max(0, switch)), 'first': i})
         for i, win in enumerate(windows):
             end = windows[i + 1]['start'] + 0.4 if i + 1 < len(windows) else duration
             sid = f'{cid}-s{i}'
             if win['shot'] == 'logo':
                 parts.append(f'''
     <div id="{sid}" class="clip {cid}-screen {cid}-splash" data-start="{win['start']}" data-duration="{r(end - win['start'])}" data-track-index="3" style="z-index:{10 + i}">
-      <div id="{sid}-tile" class="{cid}-tile">
-        <div id="{sid}-ring" class="{cid}-ring"></div>
-        <div id="{sid}-bar" class="{cid}-bar"></div>
-        <div id="{sid}-dot" class="{cid}-ldot"></div>
+      <div class="{cid}-tilewrap">
+        <div id="{sid}-halo" class="{cid}-halo"></div>
+        <div id="{sid}-tile" class="{cid}-tile"><img id="{sid}-sym" class="{cid}-sym" src="assets/brand/bringo-mind-symbol.png" alt="" /></div>
       </div>
-      <div id="{sid}-word" class="{cid}-word">bringo <span>mind</span></div>
+      <img id="{sid}-word" class="{cid}-word" src="assets/brand/bringo-mind-wordmark.png" alt="BringoMind" />
     </div>''')
                 t0 = win['start'] + 0.4
-                tweens.append(f'tl.fromTo("#{sid}-bar", {{ scaleY: 0.2, opacity: 0 }}, {{ scaleY: 1, opacity: 1, duration: 0.35, ease: "power3.out" }}, {r(t0)});')
-                tweens.append(f'tl.fromTo("#{sid}-ring", {{ scale: 0.4, opacity: 0 }}, {{ scale: 1, opacity: 1, duration: 0.4, ease: "back.out(1.6)" }}, {r(t0 + 0.35)});')
-                tweens.append(f'tl.fromTo("#{sid}-dot", {{ scale: 0 }}, {{ scale: 1, duration: 0.5, ease: "elastic.out(1, 0.45)" }}, {r(t0 + 0.75)});')
+                tweens.append(f'tl.fromTo("#{sid}-tile", {{ scale: 0.6, opacity: 0 }}, {{ scale: 1, opacity: 1, duration: 0.45, ease: "back.out(1.6)" }}, {r(t0)});')
+                tweens.append(f'tl.fromTo("#{sid}-sym", {{ scale: 0.7, opacity: 0, rotation: -12 }}, {{ scale: 1, opacity: 1, rotation: 0, duration: 0.6, ease: "elastic.out(1, 0.55)" }}, {r(t0 + 0.3)});')
+                tweens.append(f'tl.fromTo("#{sid}-halo", {{ scale: 0.9, opacity: 0.6 }}, {{ scale: 1.9, opacity: 0, duration: 0.9, ease: "power2.out" }}, {r(t0 + 0.45)});')
                 tweens.append(f'tl.fromTo("#{sid}-word", {{ opacity: 0, y: 14 }}, {{ opacity: 1, y: 0, duration: 0.4, ease: "power2.out" }}, {r(t0 + 1.1)});')
             else:
                 src = SHOTS[win['shot']]['file']
-                parts.append(f'''
+                last = windows[i + 1]['first'] if i + 1 < len(windows) else len(beats)
+                scroll = scroll_plan(SHOTS[win['shot']], win, beats[win['first']:last], windows[i + 1]['start'] if i + 1 < len(windows) else duration, i)
+                if not scroll:
+                    parts.append(f'''
     <img id="{sid}" class="clip {cid}-screen" src="{src}" alt="" data-start="{win['start']}" data-duration="{r(end - win['start'])}" data-track-index="3" style="z-index:{10 + i}" />''')
+                else:
+                    sc = scroll['sc']
+                    over = f'<img class="{cid}-layer" src="{sc["overlay"]}" alt="" />' if sc.get('overlay') else ''
+                    parts.append(f'''
+    <div id="{sid}" class="clip {cid}-screen {cid}-scroller" data-start="{win['start']}" data-duration="{r(end - win['start'])}" data-track-index="3" style="z-index:{10 + i}">
+      <img class="{cid}-layer" src="{src}" alt="" />
+      <div class="{cid}-window" style="top:{r(sc['top'] * SY)}px; height:{r(sc['height'] * SY)}px">
+        <img id="{sid}-content" class="{cid}-content" src="{sc['content']}" alt="" style="top:{r(-sc['scrollTop'] * SX)}px; height:{r(sc['contentH'] * SX)}px" />
+      </div>
+      {over}
+    </div>''')
+                    dy = r(-(scroll['target'] - sc['scrollTop']) * SX)
+                    tweens.append(f'tl.fromTo("#{sid}-content", {{ y: 0 }}, {{ y: {dy}, duration: {scroll["down"]}, ease: "power1.inOut" }}, {scroll["t_down"]});')
+                    if scroll['back']:
+                        tweens.append(f'tl.fromTo("#{sid}-content", {{ y: {dy} }}, {{ y: 0, duration: {scroll["up"]}, ease: "power2.inOut", immediateRender: false }}, {scroll["t_up"]});')
+                    # Indicateur « Faire défiler » : un doigt qui glisse dans le sens du geste
+                    hid = f'{sid}-hint'
+                    hint_start = r(scroll['t_down'] - 0.35)
+                    hint_len = r(max(scroll['down'], 1.7) + 0.75)
+                    up_gesture = scroll['target'] > sc['scrollTop']
+                    y_from, y_to = (110, -110) if up_gesture else (-110, 110)
+                    parts.append(f'''
+    <div id="{hid}" class="clip {cid}-gesture" data-start="{hint_start}" data-duration="{hint_len}" data-track-index="4" style="left:{r(SCREEN_X + 0.84 * SCREEN_W)}px; top:{r(SCREEN_Y + 0.55 * SCREEN_H)}px">
+      <div id="{hid}-trail" class="{cid}-vtrail" style="{'top:-110px' if up_gesture else 'top:-110px'}"></div>
+      <div id="{hid}-finger" class="{cid}-finger"></div>
+      <div id="{hid}-label" class="{cid}-label {cid}-hintlabel">Faire défiler</div>
+    </div>''')
+                    tweens.append(f'tl.fromTo("#{hid}-finger", {{ y: {y_from}, opacity: 0 }}, {{ y: {y_from}, opacity: 1, duration: 0.3 }}, {hint_start});')
+                    tweens.append(f'tl.fromTo("#{hid}-label", {{ opacity: 0, x: 20 }}, {{ opacity: 1, x: 0, duration: 0.3, ease: "power2.out" }}, {hint_start});')
+                    tweens.append(f'tl.fromTo("#{hid}-finger", {{ y: {y_from} }}, {{ y: {y_to}, duration: {r(min(scroll["down"], 1.4))}, ease: "power2.inOut", immediateRender: false }}, {scroll["t_down"]});')
+                    tweens.append(f'tl.fromTo("#{hid}-trail", {{ opacity: 0 }}, {{ opacity: 1, duration: 0.4 }}, {scroll["t_down"]});')
+                    tweens.append(f'tl.fromTo("#{hid}", {{ opacity: 1 }}, {{ opacity: 0, duration: 0.3 }}, {r(hint_start + hint_len - 0.3)});')
             if i > 0:
                 tweens.append(f'tl.fromTo("#{sid}", {{ opacity: 0 }}, {{ opacity: 1, duration: 0.4, ease: "power2.out" }}, {win["start"]});')
 
@@ -192,8 +267,8 @@ def scene_html(chapter, index, beats, duration):
         # Carte de fin : logo, nom, promesse
         parts.append(f'''
     <div id="{cid}-end" class="clip {cid}-end" data-start="0" data-duration="{duration}" data-track-index="1">
-      <img id="{cid}-logo" class="{cid}-logo" src="assets/brand/bringo-mind-icon.png" alt="Bringo Mind" />
-      <div id="{cid}-endword" class="{cid}-endword">bringo <span>mind</span></div>
+      <div id="{cid}-logo" class="{cid}-logo"><img class="{cid}-logosym" src="assets/brand/bringo-mind-symbol.png" alt="Bringo Mind" /></div>
+      <img id="{cid}-endword" class="{cid}-endword" src="assets/brand/bringo-mind-wordmark.png" alt="BringoMind" />
       <p id="{cid}-claim" class="{cid}-claim">Votre vie administrative, simplifiée.</p>
       <p id="{cid}-promise" class="{cid}-promise">Kora propose, vous décidez.</p>
     </div>''')
@@ -224,13 +299,19 @@ def scene_html(chapter, index, beats, duration):
     .{cid}-phone-body {{ position: absolute; left: {PHONE_X}px; top: {PHONE_Y}px; width: {SCREEN_W + 2 * BEZEL}px; height: {SCREEN_H + 2 * BEZEL}px;
       border-radius: 64px; background: #131c2d; box-shadow: 0 40px 90px rgba(19,28,45,0.28), 0 0 0 2px #2a3550 inset; }}
     .{cid}-screen {{ position: absolute; left: {SCREEN_X}px; top: {SCREEN_Y}px; width: {SCREEN_W}px; height: {SCREEN_H}px; border-radius: 50px; object-fit: cover; }}
+    .{cid}-scroller {{ overflow: hidden; background: #f8f9ff; }}
+    .{cid}-layer {{ position: absolute; left: 0; top: 0; width: {SCREEN_W}px; height: {SCREEN_H}px; }}
+    .{cid}-window {{ position: absolute; left: 0; width: {SCREEN_W}px; overflow: hidden; background: #f8f9ff; }}
+    .{cid}-content {{ position: absolute; left: 0; width: {SCREEN_W}px; }}
+    .{cid}-finger {{ position: absolute; left: -26px; top: -26px; width: 52px; height: 52px; border-radius: 50%; background: rgba(47,213,193,0.55); border: 4px solid #ffffff; box-shadow: 0 8px 18px rgba(19,28,45,0.3); }}
+    .{cid}-vtrail {{ position: absolute; left: -4px; width: 8px; height: 220px; border-radius: 8px; background: linear-gradient(180deg, rgba(47,213,193,0.9), rgba(47,213,193,0)); }}
+    .{cid}-hintlabel {{ left: 96px; top: -26px; }}
     .{cid}-splash {{ background: #f8f9ff; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px; overflow: hidden; }}
-    .{cid}-tile {{ position: relative; width: 150px; height: 150px; border-radius: 34px; background: #131c2d; overflow: hidden; }}
-    .{cid}-ring {{ position: absolute; left: 43.4px; top: 54.6px; width: 68px; height: 68px; border-radius: 50%; border: 18.9px solid #fff; }}
-    .{cid}-bar {{ position: absolute; left: 38.8px; top: 27.4px; width: 18.6px; height: 94.9px; border-radius: 9.3px; background: #fff; transform-origin: top center; }}
-    .{cid}-ldot {{ position: absolute; left: 96.8px; top: 26.8px; width: 23.7px; height: 23.7px; border-radius: 50%; background: #2fd5c1; }}
-    .{cid}-word {{ font-family: 'Plus Jakarta Sans'; font-weight: 700; font-size: 38px; color: #131c2d; letter-spacing: -0.02em; }}
-    .{cid}-word span {{ font-family: 'Inter App'; font-weight: 600; color: #006a61; }}
+    .{cid}-tile {{ position: absolute; inset: 0; border-radius: 34px; background: #0f1839; overflow: hidden; }}
+    .{cid}-tilewrap {{ position: relative; width: 150px; height: 150px; }}
+    .{cid}-halo {{ position: absolute; inset: 0; border-radius: 50%; background: #00d4ff; }}
+    .{cid}-sym {{ position: absolute; left: 9px; top: 9px; width: 132px; height: 132px; }}
+    .{cid}-word {{ height: 52px; width: auto; }}
     .{cid}-gesture {{ position: absolute; width: 0; height: 0; z-index: 50; }}
     .{cid}-tapring {{ position: absolute; left: -46px; top: -46px; width: 92px; height: 92px; border-radius: 50%; border: 5px solid #2fd5c1; }}
     .{cid}-press {{ position: absolute; left: -30px; top: -30px; width: 60px; height: 60px; border-radius: 50%; background: #2fd5c1; }}
@@ -239,9 +320,9 @@ def scene_html(chapter, index, beats, duration):
       background: #131c2d; padding: 10px 18px; border-radius: 14px; box-shadow: 0 10px 24px rgba(19,28,45,0.25); }}
     .{cid}-trail {{ position: absolute; left: 0; top: -4px; width: 240px; height: 8px; border-radius: 8px; background: linear-gradient(90deg, rgba(47,213,193,0), #2fd5c1); transform-origin: left center; }}
     .{cid}-end {{ position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }}
-    .{cid}-logo {{ width: 220px; height: 220px; border-radius: 50px; }}
-    .{cid}-endword {{ margin-top: 40px; font-family: 'Plus Jakarta Sans'; font-weight: 700; font-size: 96px; letter-spacing: -0.03em; color: #131c2d; }}
-    .{cid}-endword span {{ font-family: 'Inter App'; font-weight: 600; color: #006a61; }}
+    .{cid}-logo {{ position: relative; width: 220px; height: 220px; border-radius: 50px; background: #0f1839; box-shadow: 0 30px 70px rgba(15,24,57,0.25); }}
+    .{cid}-logosym {{ position: absolute; left: 13px; top: 13px; width: 194px; height: 194px; }}
+    .{cid}-endword {{ margin-top: 44px; height: 120px; width: auto; }}
     .{cid}-claim {{ margin-top: 18px; font-family: 'Inter App'; font-size: 40px; color: #45464d; }}
     .{cid}-promise {{ margin-top: 30px; font-family: 'Plus Jakarta Sans'; font-weight: 700; font-size: 44px; color: #006a61; }}
     .{cid}-fade {{ position: absolute; inset: 0; background: #f8f9ff; z-index: 90; }}
