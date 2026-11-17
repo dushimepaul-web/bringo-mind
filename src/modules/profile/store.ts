@@ -3,6 +3,7 @@ import { useSyncExternalStore } from 'react';
 
 import { appLock } from '@/lib/app-lock';
 import { DEMO_TODAY, addDays } from '@/lib/demo-dates';
+import { getThemeMode, setThemeMode, subscribeTheme, type ThemeMode } from '@/lib/theme';
 
 import { DELETION_GRACE_DAYS, SESSIONS, type ConsentKey } from './data';
 
@@ -55,7 +56,7 @@ let state: Snapshot = {
     timeFormat: '24h',
     currency: 'EUR',
     weekStart: 'monday',
-    theme: 'light',
+    theme: getThemeMode(),
     textSize: 'normal',
     calendarView: 'month',
     reduceMotion: false,
@@ -96,6 +97,12 @@ function subscribe(listener: () => void) {
 
 const getSnapshot = () => state;
 
+// L'apparence peut aussi changer depuis le bouton soleil/lune de l'accueil : on la reflète ici.
+subscribeTheme(() => {
+  const theme = getThemeMode();
+  if (state.preferences.theme !== theme) emit({ preferences: { ...state.preferences, theme } });
+});
+
 export function useProfileState(): Snapshot {
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
@@ -103,6 +110,7 @@ export function useProfileState(): Snapshot {
 export const profileActions = {
   savePreferences(preferences: Preferences) {
     emit({ preferences });
+    setThemeMode(preferences.theme as ThemeMode);
   },
   setBiometric(biometric: boolean) {
     emit({ biometric });

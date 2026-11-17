@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Icon } from '@/components/icon';
-import { FontFamily, Radius, Serene, Space, Tint } from '@/constants/design';
+import { DARK, LIGHT, useAppColors, type AppColors } from '@/constants/app-colors';
+import { FontFamily, Radius, Space } from '@/constants/design';
 
 import {
   AuthCard,
@@ -14,12 +15,14 @@ import {
   InfoNote,
   PrimaryButton,
   TextLink,
-  formStyles,
+  useFormStyles,
 } from '../components/auth-ui';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function ForgotPasswordScreen() {
+  const formStyles = useFormStyles();
+  const { c, styles } = useLook();
   const [email, setEmail] = useState('claire.martin@email.fr');
   const [focused, setFocused] = useState(false);
   const [touched, setTouched] = useState(false);
@@ -64,7 +67,7 @@ export default function ForgotPasswordScreen() {
         </AuthCard>
 
         {resent ? (
-          <InfoNote icon="check_circle" iconColor={Serene.success} tone="success">
+          <InfoNote icon="check_circle" iconColor={c.success} tone="success">
             Un nouvel e-mail vient d’être envoyé.
           </InfoNote>
         ) : null}
@@ -106,13 +109,13 @@ export default function ForgotPasswordScreen() {
           <Icon
             name="mail"
             size={20}
-            color={emailError ? Serene.error : focused ? Tint.primary : Serene.onSurfaceVariant}
+            color={emailError ? c.error : focused ? c.link : c.muted}
           />
           <TextInput
             style={formStyles.inputInline}
             placeholder="vous@email.fr"
-            placeholderTextColor={Serene.onSurfaceVariant}
-            selectionColor={Tint.primary}
+            placeholderTextColor={c.muted}
+            selectionColor={c.link}
             value={email}
             onChangeText={setEmail}
             onFocus={() => setFocused(true)}
@@ -133,7 +136,7 @@ export default function ForgotPasswordScreen() {
         </View>
         {emailError ? (
           <View style={formStyles.errorRow} accessibilityLiveRegion="polite">
-            <Icon name="error" size={16} color={Serene.error} />
+            <Icon name="error" size={16} color={c.error} />
             <Text style={formStyles.errorText}>Saisissez une adresse e-mail valide.</Text>
           </View>
         ) : null}
@@ -166,6 +169,7 @@ export default function ForgotPasswordScreen() {
 }
 
 function StepRow({ index, text, active }: { index: string; text: string; active?: boolean }) {
+  const { styles } = useLook();
   return (
     <View style={styles.stepRow}>
       <View style={[styles.stepIndex, active && styles.stepIndexActive]}>
@@ -176,55 +180,65 @@ function StepRow({ index, text, active }: { index: string; text: string; active?
   );
 }
 
-const styles = StyleSheet.create({
-  emailStrong: {
-    fontFamily: FontFamily.bodySemiBold,
-    color: Tint.navy,
-  },
-  stepRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 10,
-  },
-  stepIndex: {
-    width: 28,
-    height: 28,
-    borderRadius: Radius.full,
-    backgroundColor: Tint.soft,
-    borderWidth: 1,
-    borderColor: Tint.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepIndexActive: {
-    backgroundColor: Tint.primary,
-    borderColor: Tint.primary,
-  },
-  stepIndexText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurfaceVariant,
-  },
-  stepIndexTextActive: {
-    color: Serene.onPrimary,
-  },
-  stepText: {
-    flex: 1,
-    fontFamily: FontFamily.body,
-    fontSize: 15,
-    lineHeight: 21,
-    color: Tint.navy,
-  },
-  stepDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: Tint.border,
-    marginLeft: 40,
-  },
-  links: {
-    alignItems: 'center',
-    gap: 16,
-    marginTop: Space.lg,
-  },
-});
+const STYLES = { light: makeStyles(LIGHT), dark: makeStyles(DARK) };
+
+/** Couleurs et styles du mode actuel (clair ou sombre). */
+function useLook() {
+  const c = useAppColors();
+  return { c, styles: c.dark ? STYLES.dark : STYLES.light };
+}
+
+function makeStyles(c: AppColors) {
+  return StyleSheet.create({
+    emailStrong: {
+      fontFamily: FontFamily.bodySemiBold,
+      color: c.text,
+    },
+    stepRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      paddingVertical: 10,
+    },
+    stepIndex: {
+      width: 28,
+      height: 28,
+      borderRadius: Radius.full,
+      backgroundColor: c.soft,
+      borderWidth: 1,
+      borderColor: c.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    stepIndexActive: {
+      backgroundColor: c.link,
+      borderColor: c.link,
+    },
+    stepIndexText: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.muted,
+    },
+    stepIndexTextActive: {
+      color: c.solidText,
+    },
+    stepText: {
+      flex: 1,
+      fontFamily: FontFamily.body,
+      fontSize: 15,
+      lineHeight: 21,
+      color: c.text,
+    },
+    stepDivider: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: c.border,
+      marginLeft: 40,
+    },
+    links: {
+      alignItems: 'center',
+      gap: 16,
+      marginTop: Space.lg,
+    },
+  });
+}

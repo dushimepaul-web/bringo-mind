@@ -4,13 +4,17 @@
 import { Image } from 'expo-image';
 import { StyleSheet, View } from 'react-native';
 
+/** Couleurs mesurées sur le logo officiel (assets/images/brand/bringo-mind-logo.jpg). */
 export const BRAND = {
-  navy: '#0F1839',
-  cyan: '#00D4FF',
+  navy: '#0C1A37',
+  cyan: '#02DFF8',
+  blue: '#016EDE',
+  mint: '#14E5AA',
+  emerald: '#0CA07C',
+  lime: '#A9F423',
   green: '#9BE83A',
   teal: '#2fd5c1',
   tealDark: '#006a61',
-  mint: '#86f2e4',
   white: '#ffffff',
 } as const;
 
@@ -18,7 +22,12 @@ export const BRAND_IMAGES = {
   symbol: require('@/assets/images/brand/bringo-mind-symbol.png'),
   wordmark: require('@/assets/images/brand/bringo-mind-wordmark.png'),
   wordmarkDark: require('@/assets/images/brand/bringo-mind-wordmark-dark.png'),
+  full: require('@/assets/images/brand/bringo-mind-logo-auth.png'),
+  fullDark: require('@/assets/images/brand/bringo-mind-logo-auth-dark.png'),
 } as const;
+
+/** Rapport largeur / hauteur du logo complet (assets/images/logo-auth.jpeg, détouré). */
+export const FULL_LOGO_RATIO = 2798 / 596;
 
 /** Rapport largeur / hauteur de l'image du nom. */
 export const WORDMARK_RATIO = 3123 / 636;
@@ -51,6 +60,19 @@ export function BrandLogo({ size = 40, variant = 'dark', shadow = true }: { size
       accessibilityLabel="Bringo Mind">
       <Image source={BRAND_IMAGES.symbol} style={{ width: symbol, height: symbol }} contentFit="contain" />
     </View>
+  );
+}
+
+/** Logo officiel complet (tuile + « BringoMind ») en une image ; `onDark` = « Bringo » en blanc. */
+export function BrandFullLogo({ height = 44, onDark = false }: { height?: number; onDark?: boolean }) {
+  return (
+    <Image
+      source={onDark ? BRAND_IMAGES.fullDark : BRAND_IMAGES.full}
+      style={{ width: height * FULL_LOGO_RATIO, height }}
+      contentFit="contain"
+      accessibilityRole="image"
+      accessibilityLabel="Bringo Mind"
+    />
   );
 }
 

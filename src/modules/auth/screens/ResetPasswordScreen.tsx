@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Icon } from '@/components/icon';
-import { FontFamily, Radius, Serene, Space, Tint } from '@/constants/design';
+import { DARK, LIGHT, useAppColors, type AppColors } from '@/constants/app-colors';
+import { FontFamily, Radius, Space, Tint } from '@/constants/design';
 
 import {
   AuthCard,
@@ -13,12 +14,14 @@ import {
   AuthTitle,
   InfoNote,
   PrimaryButton,
-  formStyles,
+  useFormStyles,
 } from '../components/auth-ui';
 
 type Field = 'password' | 'confirm';
 
 export default function ResetPasswordScreen() {
+  const formStyles = useFormStyles();
+  const { c, styles } = useLook();
   // Démo : mot de passe prérempli qui respecte toutes les règles.
   const [password, setPassword] = useState('Demo2026!');
   const [confirm, setConfirm] = useState('Demo2026!');
@@ -40,7 +43,7 @@ export default function ResetPasswordScreen() {
   const valid = allRules && match;
 
   const iconColor = (field: Field) =>
-    focused === field ? Tint.primary : Serene.onSurfaceVariant;
+    focused === field ? c.link : c.muted;
 
   const handleSave = () => {
     if (!valid || loading) return;
@@ -88,8 +91,8 @@ export default function ResetPasswordScreen() {
           <TextInput
             style={formStyles.inputInline}
             placeholder="8 caractères minimum"
-            placeholderTextColor={Serene.onSurfaceVariant}
-            selectionColor={Tint.primary}
+            placeholderTextColor={c.muted}
+            selectionColor={c.link}
             value={password}
             onChangeText={setPassword}
             onFocus={() => setFocused('password')}
@@ -119,7 +122,7 @@ export default function ResetPasswordScreen() {
               <Icon
                 name={rule.met ? 'check_circle' : 'radio_button_unchecked'}
                 size={20}
-                color={rule.met ? Serene.success : Tint.border}
+                color={rule.met ? c.success : c.border}
                 filled={rule.met}
               />
               <Text style={[styles.ruleText, rule.met && styles.ruleTextMet]}>{rule.label}</Text>
@@ -136,12 +139,12 @@ export default function ResetPasswordScreen() {
             focused === 'confirm' && formStyles.inputRowFocused,
             mismatch && formStyles.inputRowError,
           ]}>
-          <Icon name="lock_reset" size={20} color={mismatch ? Serene.error : iconColor('confirm')} />
+          <Icon name="lock_reset" size={20} color={mismatch ? c.error : iconColor('confirm')} />
           <TextInput
             style={formStyles.inputInline}
             placeholder="Répétez le mot de passe"
-            placeholderTextColor={Serene.onSurfaceVariant}
-            selectionColor={Tint.primary}
+            placeholderTextColor={c.muted}
+            selectionColor={c.link}
             value={confirm}
             onChangeText={setConfirm}
             onFocus={() => setFocused('confirm')}
@@ -157,13 +160,13 @@ export default function ResetPasswordScreen() {
             <Icon
               name={match ? 'check_circle' : 'error'}
               size={20}
-              color={match ? Serene.success : Serene.error}
+              color={match ? c.success : c.error}
             />
           ) : null}
         </View>
         {mismatch ? (
           <View style={formStyles.errorRow} accessibilityLiveRegion="polite">
-            <Icon name="error" size={16} color={Serene.error} />
+            <Icon name="error" size={16} color={c.error} />
             <Text style={formStyles.errorText}>Les mots de passe ne correspondent pas.</Text>
           </View>
         ) : null}
@@ -186,37 +189,47 @@ export default function ResetPasswordScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  pressed: {
-    opacity: 0.55,
-  },
-  rules: {
-    gap: 10,
-    marginTop: 12,
-    padding: 14,
-    borderRadius: 14,
-    backgroundColor: Tint.softer,
-    borderWidth: 1,
-    borderColor: Tint.border,
-  },
-  ruleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  ruleText: {
-    fontFamily: FontFamily.body,
-    fontSize: 14,
-    lineHeight: 19,
-    color: Serene.onSurfaceVariant,
-  },
-  ruleTextMet: {
-    fontFamily: FontFamily.bodyMedium,
-    color: Serene.success,
-  },
-  successBody: {
-    alignItems: 'center',
-    marginBottom: Space.sm,
-    borderRadius: Radius.xl,
-  },
-});
+const STYLES = { light: makeStyles(LIGHT), dark: makeStyles(DARK) };
+
+/** Couleurs et styles du mode actuel (clair ou sombre). */
+function useLook() {
+  const c = useAppColors();
+  return { c, styles: c.dark ? STYLES.dark : STYLES.light };
+}
+
+function makeStyles(c: AppColors) {
+  return StyleSheet.create({
+    pressed: {
+      opacity: 0.55,
+    },
+    rules: {
+      gap: 10,
+      marginTop: 12,
+      padding: 14,
+      borderRadius: 14,
+      backgroundColor: c.page,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    ruleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    ruleText: {
+      fontFamily: FontFamily.body,
+      fontSize: 14,
+      lineHeight: 19,
+      color: c.muted,
+    },
+    ruleTextMet: {
+      fontFamily: FontFamily.bodyMedium,
+      color: c.success,
+    },
+    successBody: {
+      alignItems: 'center',
+      marginBottom: Space.sm,
+      borderRadius: Radius.xl,
+    },
+  });
+}

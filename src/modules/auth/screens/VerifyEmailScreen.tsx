@@ -4,7 +4,8 @@ import { useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, type TextInputInstance, View } from 'react-native';
 
 import { Icon } from '@/components/icon';
-import { FontFamily, Radius, Serene, Space, Tint } from '@/constants/design';
+import { DARK, LIGHT, useAppColors, type AppColors } from '@/constants/app-colors';
+import { FontFamily, Radius, Space } from '@/constants/design';
 
 import {
   AuthCard,
@@ -14,12 +15,14 @@ import {
   InfoNote,
   PrimaryButton,
   TextLink,
-  formStyles,
+  useFormStyles,
 } from '../components/auth-ui';
 
 const EMAIL = 'claire.martin@email.fr';
 
 export default function VerifyEmailScreen() {
+  const formStyles = useFormStyles();
+  const { c, styles } = useLook();
   // Démo : code prérempli.
   const [code, setCode] = useState('482913');
   const [codeFocused, setCodeFocused] = useState(true);
@@ -67,7 +70,7 @@ export default function VerifyEmailScreen() {
         subtitle="Nous avons envoyé un code à 6 chiffres à"
       />
       <View style={styles.emailPill}>
-        <Icon name="mail" size={16} color={Serene.onSecondaryContainer} />
+        <Icon name="mail" size={16} color={c.link} />
         <Text style={styles.emailText}>{EMAIL}</Text>
       </View>
 
@@ -146,71 +149,81 @@ export default function VerifyEmailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  emailPill: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.secondaryContainer,
-  },
-  emailText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 14,
-    lineHeight: 19,
-    color: Serene.onSecondaryContainer,
-  },
-  codeRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  codeBox: {
-    flex: 1,
-    height: 56,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: Tint.border,
-    backgroundColor: Tint.soft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  codeBoxFilled: {
-    backgroundColor: Serene.surfaceContainerLowest,
-  },
-  codeBoxFocused: {
-    borderWidth: 1.5,
-    borderColor: Tint.primary,
-    backgroundColor: Serene.surfaceContainerLowest,
-  },
-  codeDigit: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 22,
-    lineHeight: 28,
-    color: Tint.navy,
-  },
-  hiddenInput: {
-    position: 'absolute',
-    width: '100%',
-    height: '100%',
-    opacity: 0,
-  },
-  resendBlock: {
-    alignItems: 'center',
-    gap: 6,
-    marginTop: Space.md,
-  },
-  links: {
-    alignItems: 'center',
-    gap: 16,
-    marginTop: Space.lg,
-  },
-  successBody: {
-    alignItems: 'center',
-    marginBottom: Space.sm,
-  },
-});
+const STYLES = { light: makeStyles(LIGHT), dark: makeStyles(DARK) };
+
+/** Couleurs et styles du mode actuel (clair ou sombre). */
+function useLook() {
+  const c = useAppColors();
+  return { c, styles: c.dark ? STYLES.dark : STYLES.light };
+}
+
+function makeStyles(c: AppColors) {
+  return StyleSheet.create({
+    emailPill: {
+      alignSelf: 'flex-start',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginTop: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: Radius.full,
+      backgroundColor: c.tintMint,
+    },
+    emailText: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 14,
+      lineHeight: 19,
+      color: c.link,
+    },
+    codeRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      gap: 8,
+    },
+    codeBox: {
+      flex: 1,
+      height: 56,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.soft,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    codeBoxFilled: {
+      backgroundColor: c.card,
+    },
+    codeBoxFocused: {
+      borderWidth: 1.5,
+      borderColor: c.link,
+      backgroundColor: c.card,
+    },
+    codeDigit: {
+      fontFamily: FontFamily.headingBold,
+      fontSize: 22,
+      lineHeight: 28,
+      color: c.text,
+    },
+    hiddenInput: {
+      position: 'absolute',
+      width: '100%',
+      height: '100%',
+      opacity: 0,
+    },
+    resendBlock: {
+      alignItems: 'center',
+      gap: 6,
+      marginTop: Space.md,
+    },
+    links: {
+      alignItems: 'center',
+      gap: 16,
+      marginTop: Space.lg,
+    },
+    successBody: {
+      alignItems: 'center',
+      marginBottom: Space.sm,
+    },
+  });
+}

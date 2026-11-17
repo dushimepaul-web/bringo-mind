@@ -3,11 +3,13 @@ import { router } from 'expo-router';
 import { useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { FontFamily, Radius, Serene, Space, Tint } from '@/constants/design';
+import { DARK, LIGHT, useAppColors, type AppColors } from '@/constants/app-colors';
+import { FontFamily, Radius, Space } from '@/constants/design';
 
 import { AuthBrand, AuthScreen, TextLink } from '../components/auth-ui';
 
 export default function SplashScreen() {
+  const { styles } = useLook();
   useEffect(() => {
     const timer = setTimeout(() => router.replace('/welcome'), 2200);
     return () => clearTimeout(timer);
@@ -41,50 +43,60 @@ export default function SplashScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  body: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  halo: {
-    position: 'absolute',
-    width: 280,
-    height: 280,
-    borderRadius: Radius.full,
-    backgroundColor: Tint.glow,
-    opacity: 0.22,
-  },
-  claim: {
-    fontFamily: FontFamily.body,
-    fontSize: 15,
-    lineHeight: 22,
-    color: Serene.onSurfaceVariant,
-    textAlign: 'center',
-    marginTop: Space.md,
-  },
-  dots: {
-    flexDirection: 'row',
-    gap: 6,
-    marginTop: Space.xl,
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: Radius.full,
-    backgroundColor: Tint.border,
-  },
-  dotActive: {
-    width: 24,
-    backgroundColor: Tint.primary,
-  },
-  footer: {
-    alignItems: 'center',
-    gap: 10,
-  },
-  version: {
-    fontFamily: FontFamily.body,
-    fontSize: 12,
-    lineHeight: 16,
-    color: Serene.onSurfaceVariant,
-  },
-});
+const STYLES = { light: makeStyles(LIGHT), dark: makeStyles(DARK) };
+
+/** Couleurs et styles du mode actuel (clair ou sombre). */
+function useLook() {
+  const c = useAppColors();
+  return { c, styles: c.dark ? STYLES.dark : STYLES.light };
+}
+
+function makeStyles(c: AppColors) {
+  return StyleSheet.create({
+    body: {
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    halo: {
+      position: 'absolute',
+      width: 280,
+      height: 280,
+      borderRadius: Radius.full,
+      backgroundColor: c.glow,
+      opacity: 0.22,
+    },
+    claim: {
+      fontFamily: FontFamily.body,
+      fontSize: 15,
+      lineHeight: 22,
+      color: c.muted,
+      textAlign: 'center',
+      marginTop: Space.md,
+    },
+    dots: {
+      flexDirection: 'row',
+      gap: 6,
+      marginTop: Space.xl,
+    },
+    dot: {
+      width: 8,
+      height: 8,
+      borderRadius: Radius.full,
+      backgroundColor: c.border,
+    },
+    dotActive: {
+      width: 24,
+      backgroundColor: c.link,
+    },
+    footer: {
+      alignItems: 'center',
+      gap: 10,
+    },
+    version: {
+      fontFamily: FontFamily.body,
+      fontSize: 12,
+      lineHeight: 16,
+      color: c.muted,
+    },
+  });
+}

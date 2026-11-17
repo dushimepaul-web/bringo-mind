@@ -5,10 +5,11 @@ import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-nativ
 
 import { Icon } from '@/components/icon';
 import { appLock } from '@/lib/app-lock';
-import { FontFamily, Radius, Serene, Space, Tint } from '@/constants/design';
+import { DARK, LIGHT, useAppColors, type AppColors } from '@/constants/app-colors';
+import { FontFamily, Radius } from '@/constants/design';
 
 import {
-  AuthBrand,
+  AuthTopBar,
   AuthCard,
   AuthScreen,
   AuthTitle,
@@ -16,7 +17,7 @@ import {
   InfoNote,
   PrimaryButton,
   TextLink,
-  formStyles,
+  useFormStyles,
 } from '../components/auth-ui';
 
 type Field = 'firstName' | 'lastName' | 'email' | 'password' | 'confirm';
@@ -30,6 +31,8 @@ function openApp() {
 }
 
 export default function RegisterScreen() {
+  const formStyles = useFormStyles();
+  const { c, styles } = useLook();
   // Démo : formulaire prérempli pour parcourir l'inscription en un appui.
   const [firstName, setFirstName] = useState('Claire');
   const [lastName, setLastName] = useState('Martin');
@@ -61,11 +64,11 @@ export default function RegisterScreen() {
       setFocused(null);
       if (field === 'email') setEmailTouched(true);
     },
-    selectionColor: Tint.primary,
-    placeholderTextColor: Serene.onSurfaceVariant,
+    selectionColor: c.link,
+    placeholderTextColor: c.muted,
   });
   const iconColor = (field: Field) =>
-    focused === field ? Tint.primary : Serene.onSurfaceVariant;
+    focused === field ? c.link : c.muted;
 
   const handleSubmit = () => {
     if (!valid || loading) return;
@@ -75,28 +78,14 @@ export default function RegisterScreen() {
   };
 
   return (
-    <AuthScreen back>
-      <AuthBrand />
+    <AuthScreen toggle={false}>
+      <AuthTopBar />
       <AuthTitle
         lead="Créer votre"
         accent="compte"
         subtitle="Quelques informations suffisent pour commencer."
       />
 
-      <View style={styles.social}>
-        <SocialButton
-          label="Google"
-          source={require('../../../../assets/images/brand/google.png')}
-          onPress={() => openApp()}
-        />
-        <SocialButton
-          label="Apple"
-          source={require('../../../../assets/images/brand/apple.png')}
-          onPress={() => openApp()}
-        />
-      </View>
-
-      <Divider label="Ou avec un e-mail" />
 
       <AuthCard style={styles.card}>
         <View style={styles.row}>
@@ -135,7 +124,7 @@ export default function RegisterScreen() {
             focused === 'email' && formStyles.inputRowFocused,
             emailError && formStyles.inputRowError,
           ]}>
-          <Icon name="mail" size={20} color={emailError ? Serene.error : iconColor('email')} />
+          <Icon name="mail" size={20} color={emailError ? c.error : iconColor('email')} />
           <TextInput
             style={formStyles.inputInline}
             {...focusProps('email')}
@@ -153,7 +142,7 @@ export default function RegisterScreen() {
         </View>
         {emailError ? (
           <View style={formStyles.errorRow} accessibilityLiveRegion="polite">
-            <Icon name="error" size={16} color={Serene.error} />
+            <Icon name="error" size={16} color={c.error} />
             <Text style={formStyles.errorText}>Saisissez une adresse e-mail valide.</Text>
           </View>
         ) : null}
@@ -208,7 +197,7 @@ export default function RegisterScreen() {
             focused === 'confirm' && formStyles.inputRowFocused,
             mismatch && formStyles.inputRowError,
           ]}>
-          <Icon name="lock_reset" size={20} color={mismatch ? Serene.error : iconColor('confirm')} />
+          <Icon name="lock_reset" size={20} color={mismatch ? c.error : iconColor('confirm')} />
           <TextInput
             style={formStyles.inputInline}
             {...focusProps('confirm')}
@@ -224,13 +213,13 @@ export default function RegisterScreen() {
             <Icon
               name={mismatch ? 'error' : 'check_circle'}
               size={20}
-              color={mismatch ? Serene.error : Serene.success}
+              color={mismatch ? c.error : c.success}
             />
           ) : null}
         </View>
         {mismatch ? (
           <View style={formStyles.errorRow} accessibilityLiveRegion="polite">
-            <Icon name="error" size={16} color={Serene.error} />
+            <Icon name="error" size={16} color={c.error} />
             <Text style={formStyles.errorText}>Les mots de passe ne correspondent pas.</Text>
           </View>
         ) : null}
@@ -252,6 +241,23 @@ export default function RegisterScreen() {
         />
       </AuthCard>
 
+      <Divider label="Ou s’inscrire avec" />
+      <View style={styles.social}>
+        <SocialButton
+          label="Google"
+          source={require('../../../../assets/images/brand/google.png')}
+          onPress={() => openApp()}
+        />
+        <SocialButton
+          label="Apple"
+          source={require('../../../../assets/images/brand/apple.png')}
+          monochrome
+          onPress={() => openApp()}
+        />
+      </View>
+
+      
+
       <View style={formStyles.footerRow}>
         <Text style={formStyles.footerText}>Déjà un compte ?</Text>
         <TextLink label="Se connecter" onPress={() => router.push('/login')} />
@@ -266,6 +272,7 @@ export default function RegisterScreen() {
 }
 
 function FieldLabel({ text, required, spaced }: { text: string; required?: boolean; spaced?: boolean }) {
+  const formStyles = useFormStyles();
   return (
     <Text style={[formStyles.fieldLabel, spaced && formStyles.fieldLabelSpaced]}>
       {text}
@@ -277,19 +284,23 @@ function FieldLabel({ text, required, spaced }: { text: string; required?: boole
 function SocialButton({
   label,
   source,
+  monochrome,
   onPress,
 }: {
   label: string;
   source: number;
+  /** Logo noir : passe en blanc en mode sombre. */
+  monochrome?: boolean;
   onPress: () => void;
 }) {
+  const { c, styles } = useLook();
   return (
     <Pressable
       style={({ pressed }) => [styles.socialButton, pressed && styles.socialPressed]}
       accessibilityRole="button"
       accessibilityLabel={`Continuer avec ${label}`}
       onPress={onPress}>
-      <Image source={source} style={styles.socialIcon} resizeMode="contain" />
+      <Image source={source} style={[styles.socialIcon, monochrome && c.dark && styles.socialIconDark]} resizeMode="contain" />
       <Text style={styles.socialText}>{label}</Text>
     </Pressable>
   );
@@ -304,6 +315,7 @@ function CheckRow({
   onToggle: () => void;
   children: ReactNode;
 }) {
+  const { c, styles } = useLook();
   return (
     <Pressable
       style={styles.checkRow}
@@ -311,7 +323,7 @@ function CheckRow({
       accessibilityRole="checkbox"
       accessibilityState={{ checked }}>
       <View style={[styles.checkbox, checked && styles.checkboxActive]}>
-        {checked ? <Icon name="check" size={16} color={Serene.onPrimary} /> : null}
+        {checked ? <Icon name="check" size={16} color={c.solidText} /> : null}
       </View>
       <Text style={styles.checkText}>{children}</Text>
     </Pressable>
@@ -332,110 +344,122 @@ function getStrength(value: string) {
   return { score: 4, label: 'Excellent' };
 }
 
-const styles = StyleSheet.create({
-  pressed: {
-    opacity: 0.55,
-  },
-  social: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: Space.lg,
-  },
-  socialButton: {
-    flex: 1,
-    height: 56,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: Tint.border,
-    backgroundColor: Serene.surfaceContainerLowest,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-  },
-  socialPressed: {
-    backgroundColor: Tint.soft,
-    transform: [{ scale: 0.99 }],
-  },
-  socialIcon: {
-    width: 22,
-    height: 22,
-  },
-  socialText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 16,
-    lineHeight: 21,
-    color: Tint.navy,
-  },
-  card: {
-    marginTop: 0,
-  },
-  row: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  rowField: {
-    flex: 1,
-    minWidth: 0,
-  },
-  strengthBlock: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginTop: 10,
-  },
-  strengthTrack: {
-    flex: 1,
-    height: 6,
-    borderRadius: Radius.full,
-    backgroundColor: Tint.soft,
-    overflow: 'hidden',
-  },
-  strengthFill: {
-    height: '100%',
-    borderRadius: Radius.full,
-  },
-  strengthWeak: {
-    backgroundColor: Serene.error,
-  },
-  strengthGood: {
-    backgroundColor: Serene.success,
-  },
-  strengthText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurfaceVariant,
-  },
-  checkRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-    marginTop: 18,
-  },
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 7,
-    borderWidth: 1.5,
-    borderColor: Tint.border,
-    backgroundColor: Tint.soft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checkboxActive: {
-    backgroundColor: Tint.primary,
-    borderColor: Tint.primary,
-  },
-  checkText: {
-    flex: 1,
-    fontFamily: FontFamily.body,
-    fontSize: 14,
-    lineHeight: 21,
-    color: Serene.onSurfaceVariant,
-  },
-  link: {
-    fontFamily: FontFamily.bodySemiBold,
-    color: Tint.primary,
-  },
-});
+const STYLES = { light: makeStyles(LIGHT), dark: makeStyles(DARK) };
+
+/** Couleurs et styles du mode actuel (clair ou sombre). */
+function useLook() {
+  const c = useAppColors();
+  return { c, styles: c.dark ? STYLES.dark : STYLES.light };
+}
+
+function makeStyles(c: AppColors) {
+  return StyleSheet.create({
+    pressed: {
+      opacity: 0.55,
+    },
+    social: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    socialButton: {
+      flex: 1,
+      height: 56,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.card,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 10,
+    },
+    socialPressed: {
+      backgroundColor: c.soft,
+      transform: [{ scale: 0.99 }],
+    },
+    socialIcon: {
+      width: 22,
+      height: 22,
+    },
+    socialIconDark: {
+      tintColor: '#FFFFFF',
+    },
+    socialText: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 16,
+      lineHeight: 21,
+      color: c.text,
+    },
+    card: {
+      marginTop: 0,
+    },
+    row: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    rowField: {
+      flex: 1,
+      minWidth: 0,
+    },
+    strengthBlock: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      marginTop: 10,
+    },
+    strengthTrack: {
+      flex: 1,
+      height: 6,
+      borderRadius: Radius.full,
+      backgroundColor: c.soft,
+      overflow: 'hidden',
+    },
+    strengthFill: {
+      height: '100%',
+      borderRadius: Radius.full,
+    },
+    strengthWeak: {
+      backgroundColor: c.error,
+    },
+    strengthGood: {
+      backgroundColor: c.success,
+    },
+    strengthText: {
+      fontFamily: FontFamily.bodyMedium,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.muted,
+    },
+    checkRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 12,
+      marginTop: 18,
+    },
+    checkbox: {
+      width: 24,
+      height: 24,
+      borderRadius: 7,
+      borderWidth: 1.5,
+      borderColor: c.border,
+      backgroundColor: c.soft,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    checkboxActive: {
+      backgroundColor: c.link,
+      borderColor: c.link,
+    },
+    checkText: {
+      flex: 1,
+      fontFamily: FontFamily.body,
+      fontSize: 14,
+      lineHeight: 21,
+      color: c.muted,
+    },
+    link: {
+      fontFamily: FontFamily.bodySemiBold,
+      color: c.link,
+    },
+  });
+}

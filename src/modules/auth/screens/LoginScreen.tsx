@@ -10,17 +10,18 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { BrandLogo, BrandName } from '@/components/brand-logo';
+import { BrandFullLogo } from '@/components/brand-logo';
+import { ThemeToggle } from '@/components/theme-toggle';
 import { Icon } from '@/components/icon';
 import { appLock } from '@/lib/app-lock';
-import { FontFamily, Radius, Serene, Space, Tint } from '@/constants/design';
+import { DARK, LIGHT, useAppColors, type AppColors } from '@/constants/app-colors';
+import { FontFamily, Radius, Space } from '@/constants/design';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -38,6 +39,7 @@ function openApp() {
 }
 
 export default function LoginScreen() {
+  const { c, styles } = useLook();
   const [email, setEmail] = useState('claire.martin@email.fr');
   const [password, setPassword] = useState('demo123456');
   const [showPassword, setShowPassword] = useState(false);
@@ -60,7 +62,7 @@ export default function LoginScreen() {
   };
 
   const iconColor = (field: 'email' | 'password') =>
-    focusedField === field ? Tint.primary : Serene.onSurfaceVariant;
+    focusedField === field ? c.link : c.muted;
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -79,27 +81,15 @@ export default function LoginScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled">
           <View style={styles.brandRow}>
-            <BrandLogo size={64} />
-            <View>
-              <View style={styles.wordmark}>
-                <BrandName height={30} />
-              </View>
-              <Text style={styles.tagline}>Organisez • Gérez • Avancez</Text>
-            </View>
+            <BrandFullLogo height={46} onDark={c.dark} />
+            <ThemeToggle />
           </View>
 
           <View style={styles.hero}>
-            <View style={styles.heroText}>
-              <Text style={styles.title}>
-                Bon retour{'\n'}
-                <Text style={styles.titleAccent}>parmi nous !</Text>
-              </Text>
-              <View style={styles.titleUnderline} />
-              <Text style={styles.subtitle}>
-                Retrouvez vos tâches, documents et rappels en un seul endroit.
-              </Text>
-            </View>
-            <HeroIllustration />
+            <Text style={styles.title}>
+              Content de <Text style={styles.titleAccent}>vous revoir</Text>
+            </Text>
+            <Text style={styles.subtitle}>Connectez-vous pour retrouver votre journée.</Text>
           </View>
 
           <View style={styles.card}>
@@ -110,11 +100,11 @@ export default function LoginScreen() {
                 focusedField === 'email' && styles.inputRowFocused,
                 emailError && styles.inputRowError,
               ]}>
-              <Icon name="mail" size={20} color={emailError ? Serene.error : iconColor('email')} />
+              <Icon name="mail" size={20} color={emailError ? c.error : iconColor('email')} />
               <TextInput
                 style={styles.inputInline}
                 placeholder="vous@email.fr"
-                placeholderTextColor={Serene.onSurfaceVariant}
+                placeholderTextColor={c.muted}
                 value={email}
                 onChangeText={setEmail}
                 onFocus={() => setFocusedField('email')}
@@ -131,14 +121,14 @@ export default function LoginScreen() {
                 returnKeyType="next"
                 submitBehavior="submit"
                 onSubmitEditing={() => passwordRef.current?.focus()}
-                selectionColor={Tint.primary}
+                selectionColor={c.link}
                 accessibilityLabel="Adresse e-mail"
                 aria-invalid={emailError}
               />
             </View>
             {emailError ? (
               <View style={styles.errorRow} accessibilityLiveRegion="polite">
-                <Icon name="error" size={16} color={Serene.error} />
+                <Icon name="error" size={16} color={c.error} />
                 <Text style={styles.errorText}>Saisissez une adresse e-mail valide.</Text>
               </View>
             ) : null}
@@ -151,7 +141,7 @@ export default function LoginScreen() {
                 ref={passwordRef}
                 style={styles.inputInline}
                 placeholder="Votre mot de passe"
-                placeholderTextColor={Serene.onSurfaceVariant}
+                placeholderTextColor={c.muted}
                 value={password}
                 onChangeText={setPassword}
                 onFocus={() => setFocusedField('password')}
@@ -162,7 +152,7 @@ export default function LoginScreen() {
                 textContentType="password"
                 returnKeyType="go"
                 onSubmitEditing={handleSubmit}
-                selectionColor={Tint.primary}
+                selectionColor={c.link}
                 accessibilityLabel="Mot de passe"
               />
               <Pressable
@@ -182,27 +172,20 @@ export default function LoginScreen() {
             </View>
 
             <View style={styles.optionsRow}>
-              <View style={styles.rememberRow}>
-                <Switch
-                  value={remember}
-                  onValueChange={setRemember}
-                  trackColor={{ false: Serene.surfaceContainerHigh, true: Tint.primary }}
-                  thumbColor={Serene.surfaceContainerLowest}
-                  {...(Platform.OS === 'web' ? { activeThumbColor: Serene.surfaceContainerLowest } : {})}
-                  ios_backgroundColor={Serene.surfaceContainerHigh}
-                  accessibilityLabel="Rester connecté"
-                />
-                <Pressable
-                  hitSlop={8}
-                  onPress={() => setRemember((value) => !value)}
-                  accessibilityElementsHidden
-                  importantForAccessibility="no">
-                  <Text style={styles.rememberText} numberOfLines={1}>
-                    Rester connecté
-                  </Text>
-                </Pressable>
-              </View>
-              <View style={styles.optionsDivider} />
+              <Pressable
+                style={styles.rememberRow}
+                hitSlop={8}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: remember }}
+                accessibilityLabel="Rester connecté"
+                onPress={() => setRemember((value) => !value)}>
+                <View style={[styles.checkbox, remember && styles.checkboxOn]}>
+                  {remember ? <Icon name="check" size={16} color="#FFFFFF" /> : null}
+                </View>
+                <Text style={styles.rememberText} numberOfLines={1}>
+                  Rester connecté
+                </Text>
+              </Pressable>
               <Pressable
                 style={({ pressed }) => [pressed && styles.linkPressed]}
                 hitSlop={8}
@@ -224,7 +207,7 @@ export default function LoginScreen() {
               onPress={handleSubmit}>
               {loading ? (
                 <>
-                  <ActivityIndicator color={Serene.onPrimary} />
+                  <ActivityIndicator color={c.solidText} />
                   <Text style={styles.primaryButtonText}>Connexion…</Text>
                 </>
               ) : (
@@ -236,7 +219,7 @@ export default function LoginScreen() {
                   <Icon
                     name="arrow_forward"
                     size={22}
-                    color={Serene.onPrimary}
+                    color={c.solidText}
                   />
                 </>
               )}
@@ -269,7 +252,7 @@ export default function LoginScreen() {
               onPress={() => openApp()}>
               <Image
                 source={require('../../../../assets/images/brand/apple.png')}
-                style={styles.appleIcon}
+                style={[styles.appleIcon, c.dark && styles.appleIconDark]}
                 resizeMode="contain"
               />
               <Text style={styles.socialText}>Apple</Text>
@@ -281,9 +264,9 @@ export default function LoginScreen() {
             accessibilityRole="button"
             accessibilityLabel={BIOMETRIC.label}
             onPress={() => openApp()}>
-            <Icon name="verified_user" size={22} color={Tint.primary} />
+            <Icon name="verified_user" size={22} color={c.link} />
             <Text style={styles.biometricText}>{BIOMETRIC.label}</Text>
-            <Icon name={BIOMETRIC.icon} size={24} color={Tint.primary} />
+            <Icon name={BIOMETRIC.icon} size={24} color={c.link} />
           </Pressable>
 
           <View style={styles.footer}>
@@ -298,7 +281,7 @@ export default function LoginScreen() {
           </View>
 
           <View style={styles.securityRow}>
-            <Icon name="lock" size={16} color={Serene.onSurfaceVariant} filled />
+            <Icon name="lock" size={16} color={c.muted} filled />
             <Text style={styles.securityText}>Votre sécurité, notre priorité</Text>
           </View>
         </ScrollView>
@@ -307,480 +290,334 @@ export default function LoginScreen() {
   );
 }
 
-/** Illustration décorative : téléphone, calendrier et notifications. */
-function HeroIllustration() {
-  return (
-    <View style={styles.art} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-      <View style={styles.artBlob} />
-      <View style={styles.artPhone}>
-        {[0, 1, 2].map((row) => (
-          <View key={row} style={styles.artRow}>
-            <Icon
-              name="check_circle"
-              size={16}
-              color={row === 2 ? Serene.success : Tint.primary}
-              filled
-            />
-            <View style={styles.artLines}>
-              <View style={styles.artLine} />
-              <View style={[styles.artLine, styles.artLineShort]} />
-            </View>
-          </View>
-        ))}
-        <View style={styles.artButton} />
-      </View>
-      <View style={styles.artCalendar}>
-        <Icon name="calendar_month" size={30} color={Tint.primary} filled />
-      </View>
-      <View style={styles.artBell}>
-        <Icon name="notifications" size={40} color={Tint.amber} filled />
-        <View style={styles.artBellDot} />
-      </View>
-      <View style={styles.artBadge}>
-        <Icon name="notifications" size={20} color={Serene.onPrimary} filled />
-      </View>
-    </View>
-  );
+
+const STYLES = { light: makeStyles(LIGHT), dark: makeStyles(DARK) };
+
+/** Couleurs et styles du mode actuel (clair ou sombre). */
+function useLook() {
+  const c = useAppColors();
+  return { c, styles: c.dark ? STYLES.dark : STYLES.light };
 }
 
-const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: Tint.softer,
-  },
-  decor: {
-    ...StyleSheet.absoluteFill,
-    overflow: 'hidden',
-  },
-  flex: {
-    flex: 1,
-  },
-  scroll: {
-    flex: 1,
-  },
-  content: {
-    width: '100%',
-    maxWidth: 440,
-    alignSelf: 'center',
-    paddingHorizontal: 20,
-    paddingTop: Space.md,
-    paddingBottom: 40,
-  },
-  blobTop: {
-    position: 'absolute',
-    top: -120,
-    right: -110,
-    width: 300,
-    height: 300,
-    borderRadius: Radius.full,
-    backgroundColor: Tint.glow,
-    opacity: 0.28,
-  },
-  waveBottom: {
-    position: 'absolute',
-    bottom: -260,
-    left: -80,
-    right: -80,
-    height: 330,
-    borderRadius: 400,
-    backgroundColor: Tint.lavender,
-    opacity: 0.9,
-  },
-  waveBottomInner: {
-    position: 'absolute',
-    bottom: -300,
-    right: -160,
-    width: 420,
-    height: 340,
-    borderRadius: Radius.full,
-    backgroundColor: Tint.glow,
-    opacity: 0.25,
-  },
-  iconPressed: {
-    opacity: 0.55,
-  },
-  linkPressed: {
-    opacity: 0.65,
-  },
-  brandRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-  },
-  wordmark: {
-    marginBottom: 4,
-  },
-  tagline: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurfaceVariant,
-    marginTop: 2,
-  },
-  hero: {
-    marginTop: 28,
-    minHeight: 190,
-  },
-  heroText: {
-    width: '62%',
-    zIndex: 1,
-  },
-  title: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 34,
-    lineHeight: 40,
-    letterSpacing: -0.8,
-    color: Tint.navy,
-  },
-  titleAccent: {
-    color: Tint.primary,
-  },
-  titleUnderline: {
-    width: 150,
-    height: 4,
-    borderRadius: Radius.full,
-    backgroundColor: Tint.primary,
-    marginTop: 6,
-    marginLeft: 14,
-    transform: [{ rotate: '-2deg' }],
-  },
-  subtitle: {
-    fontFamily: FontFamily.body,
-    fontSize: 15,
-    lineHeight: 22,
-    color: Serene.onSurfaceVariant,
-    marginTop: 16,
-  },
-  art: {
-    position: 'absolute',
-    top: -6,
-    right: -8,
-    width: 150,
-    height: 190,
-  },
-  artBlob: {
-    position: 'absolute',
-    top: 10,
-    left: 0,
-    width: 150,
-    height: 170,
-    borderRadius: 80,
-    backgroundColor: Tint.lavender,
-  },
-  artPhone: {
-    position: 'absolute',
-    top: 8,
-    left: 42,
-    width: 88,
-    height: 160,
-    borderRadius: 20,
-    borderWidth: 4,
-    borderColor: Tint.navy,
-    backgroundColor: Serene.surfaceContainerLowest,
-    paddingTop: 22,
-    paddingHorizontal: 9,
-    gap: 12,
-    transform: [{ rotate: '12deg' }],
-    shadowColor: Tint.navy,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.18,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  artRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  artLines: {
-    flex: 1,
-    gap: 4,
-  },
-  artLine: {
-    height: 5,
-    borderRadius: Radius.full,
-    backgroundColor: Tint.border,
-  },
-  artLineShort: {
-    width: '60%',
-  },
-  artButton: {
-    height: 14,
-    borderRadius: 6,
-    backgroundColor: Tint.soft,
-    marginTop: 4,
-  },
-  artCalendar: {
-    position: 'absolute',
-    top: 62,
-    left: 6,
-    width: 50,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: Serene.surfaceContainerLowest,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: Tint.navy,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
-    elevation: 4,
-    transform: [{ rotate: '-8deg' }],
-  },
-  artBell: {
-    position: 'absolute',
-    top: 24,
-    right: -4,
-    transform: [{ rotate: '14deg' }],
-  },
-  artBellDot: {
-    position: 'absolute',
-    top: 2,
-    right: 2,
-    width: 10,
-    height: 10,
-    borderRadius: Radius.full,
-    backgroundColor: Tint.red,
-    borderWidth: 2,
-    borderColor: Serene.surfaceContainerLowest,
-  },
-  artBadge: {
-    position: 'absolute',
-    bottom: 14,
-    right: 8,
-    width: 38,
-    height: 38,
-    borderRadius: 11,
-    backgroundColor: Tint.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: Tint.primary,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 6,
-  },
-  card: {
-    marginTop: Space.lg,
-    padding: 16,
-    borderRadius: 22,
-    backgroundColor: Serene.surfaceContainerLowest,
-    shadowColor: Tint.navy,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.07,
-    shadowRadius: 24,
-    elevation: 4,
-  },
-  fieldLabel: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 15,
-    lineHeight: 20,
-    color: Tint.navy,
-    marginBottom: 10,
-  },
-  fieldLabelSpaced: {
-    marginTop: 20,
-  },
-  inputRowError: {
-    borderColor: Serene.error,
-    backgroundColor: Serene.surfaceContainerLowest,
-  },
-  errorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 8,
-  },
-  errorText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.error,
-  },
-  inputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    height: 54,
-    paddingHorizontal: 16,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: Tint.border,
-    backgroundColor: Tint.soft,
-  },
-  inputRowFocused: {
-    borderColor: Tint.primary,
-    backgroundColor: Serene.surfaceContainerLowest,
-  },
-  inputInline: {
-    flex: 1,
-    minWidth: 0,
-    outlineWidth: 0,
-    fontFamily: FontFamily.body,
-    fontSize: 16,
-    color: Tint.navy,
-    paddingVertical: 0,
-  },
-  optionsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 18,
-  },
-  rememberRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  rememberText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Tint.navy,
-  },
-  optionsDivider: {
-    width: StyleSheet.hairlineWidth,
-    height: 24,
-    backgroundColor: Tint.border,
-    marginHorizontal: 10,
-  },
-  forgotText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Tint.primary,
-  },
-  primaryButton: {
-    height: 56,
-    borderRadius: 18,
-    backgroundColor: Tint.black,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    marginTop: 22,
-    shadowColor: Tint.black,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.22,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  primaryButtonDisabled: {
-    // Bouton noir estompé : reste reconnaissable comme bouton, sans se confondre avec un champ.
-    opacity: 0.3,
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  primaryButtonPressed: {
-    backgroundColor: Tint.blackPressed,
-    transform: [{ scale: 0.99 }],
-  },
-  primaryButtonText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 18,
-    lineHeight: 23,
-    color: Serene.onPrimary,
-  },
-  primaryButtonTextDisabled: {
-    color: Serene.onPrimary,
-  },
-  dividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginTop: 28,
-    marginBottom: 18,
-  },
-  divider: {
-    flex: 1,
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: Tint.border,
-  },
-  dividerText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 14,
-    lineHeight: 18,
-    color: Serene.onSurfaceVariant,
-  },
-  social: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  socialButton: {
-    flex: 1,
-    height: 56,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: Tint.border,
-    backgroundColor: Serene.surfaceContainerLowest,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-  },
-  socialButtonPressed: {
-    backgroundColor: Tint.soft,
-    transform: [{ scale: 0.99 }],
-  },
-  socialText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 16,
-    lineHeight: 21,
-    color: Tint.navy,
-  },
-  brandIcon: {
-    width: 22,
-    height: 22,
-  },
-  appleIcon: {
-    width: 22,
-    height: 22,
-  },
-  biometricButton: {
-    height: 56,
-    borderRadius: 18,
-    backgroundColor: Tint.soft,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    marginTop: 14,
-  },
-  biometricText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 15,
-    lineHeight: 20,
-    color: Tint.primary,
-  },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 6,
-    marginTop: Space.lg,
-  },
-  footerText: {
-    fontFamily: FontFamily.body,
-    fontSize: 14,
-    lineHeight: 19,
-    color: Serene.onSurfaceVariant,
-  },
-  footerLink: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 14,
-    lineHeight: 19,
-    color: Tint.primary,
-  },
-  securityRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    marginTop: 14,
-  },
-  securityText: {
-    fontFamily: FontFamily.body,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurfaceVariant,
-  },
-});
+function makeStyles(c: AppColors) {
+  return StyleSheet.create({
+    safe: {
+      flex: 1,
+      backgroundColor: c.page,
+    },
+    decor: {
+      ...StyleSheet.absoluteFill,
+      overflow: 'hidden',
+    },
+    flex: {
+      flex: 1,
+    },
+    scroll: {
+      flex: 1,
+    },
+    content: {
+      width: '100%',
+      maxWidth: 440,
+      alignSelf: 'center',
+      paddingHorizontal: 20,
+      paddingTop: Space.md,
+      paddingBottom: 40,
+    },
+    blobTop: {
+      position: 'absolute',
+      top: -120,
+      right: -110,
+      width: 300,
+      height: 300,
+      borderRadius: Radius.full,
+      backgroundColor: c.glow,
+      opacity: 0.28,
+    },
+    waveBottom: {
+      position: 'absolute',
+      bottom: -260,
+      left: -80,
+      right: -80,
+      height: 330,
+      borderRadius: 400,
+      backgroundColor: c.soft,
+      opacity: 0.9,
+    },
+    waveBottomInner: {
+      position: 'absolute',
+      bottom: -300,
+      right: -160,
+      width: 420,
+      height: 340,
+      borderRadius: Radius.full,
+      backgroundColor: c.glow,
+      opacity: 0.25,
+    },
+    iconPressed: {
+      opacity: 0.55,
+    },
+    linkPressed: {
+      opacity: 0.65,
+    },
+    brandRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 12,
+    },
+    hero: {
+      marginTop: 28,
+      marginBottom: 18,
+    },
+    title: {
+      fontFamily: FontFamily.headingBold,
+      fontSize: 26,
+      lineHeight: 32,
+      letterSpacing: -0.5,
+      color: c.text,
+    },
+    titleAccent: {
+      color: c.link,
+    },
+    subtitle: {
+      fontFamily: FontFamily.body,
+      fontSize: 14,
+      lineHeight: 20,
+      color: c.muted,
+      marginTop: 6,
+    },
+    card: {
+      marginTop: Space.lg,
+      padding: 16,
+      borderRadius: 22,
+      backgroundColor: c.card,
+      shadowColor: c.text,
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.07,
+      shadowRadius: 24,
+      elevation: 4,
+    },
+    fieldLabel: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 15,
+      lineHeight: 20,
+      color: c.text,
+      marginBottom: 10,
+    },
+    fieldLabelSpaced: {
+      marginTop: 20,
+    },
+    inputRowError: {
+      borderColor: c.error,
+      backgroundColor: c.card,
+    },
+    errorRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginTop: 8,
+    },
+    errorText: {
+      fontFamily: FontFamily.bodyMedium,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.error,
+    },
+    inputRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      height: 54,
+      paddingHorizontal: 16,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.soft,
+    },
+    inputRowFocused: {
+      borderColor: c.link,
+      backgroundColor: c.card,
+    },
+    inputInline: {
+      flex: 1,
+      minWidth: 0,
+      outlineWidth: 0,
+      fontFamily: FontFamily.body,
+      fontSize: 16,
+      color: c.text,
+      paddingVertical: 0,
+    },
+    optionsRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginTop: 18,
+    },
+    rememberRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    checkbox: {
+      width: 20,
+      height: 20,
+      borderRadius: 5,
+      borderWidth: 2,
+      borderColor: c.muted,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    checkboxOn: {
+      borderColor: c.link,
+      backgroundColor: c.link,
+    },
+    rememberText: {
+      fontFamily: FontFamily.bodyMedium,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.text,
+    },
+    forgotText: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.link,
+    },
+    primaryButton: {
+      height: 56,
+      borderRadius: 18,
+      backgroundColor: c.solid,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 12,
+      marginTop: 22,
+      shadowColor: c.solid,
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.22,
+      shadowRadius: 16,
+      elevation: 8,
+    },
+    primaryButtonDisabled: {
+      // Bouton noir estompé : reste reconnaissable comme bouton, sans se confondre avec un champ.
+      opacity: 0.3,
+      shadowOpacity: 0,
+      elevation: 0,
+    },
+    primaryButtonPressed: {
+      backgroundColor: c.solidPressed,
+      transform: [{ scale: 0.99 }],
+    },
+    primaryButtonText: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 18,
+      lineHeight: 23,
+      color: c.solidText,
+    },
+    primaryButtonTextDisabled: {
+      color: c.solidText,
+    },
+    dividerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      marginTop: 28,
+      marginBottom: 18,
+    },
+    divider: {
+      flex: 1,
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: c.border,
+    },
+    dividerText: {
+      fontFamily: FontFamily.bodyMedium,
+      fontSize: 14,
+      lineHeight: 18,
+      color: c.muted,
+    },
+    social: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    socialButton: {
+      flex: 1,
+      height: 56,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.card,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 10,
+    },
+    socialButtonPressed: {
+      backgroundColor: c.soft,
+      transform: [{ scale: 0.99 }],
+    },
+    socialText: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 16,
+      lineHeight: 21,
+      color: c.text,
+    },
+    brandIcon: {
+      width: 22,
+      height: 22,
+    },
+    appleIcon: {
+      width: 22,
+      height: 22,
+    },
+    appleIconDark: {
+      tintColor: '#FFFFFF',
+    },
+    biometricButton: {
+      height: 56,
+      borderRadius: 18,
+      backgroundColor: c.soft,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 12,
+      marginTop: 14,
+    },
+    biometricText: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 15,
+      lineHeight: 20,
+      color: c.link,
+    },
+    footer: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      gap: 6,
+      marginTop: Space.lg,
+    },
+    footerText: {
+      fontFamily: FontFamily.body,
+      fontSize: 14,
+      lineHeight: 19,
+      color: c.muted,
+    },
+    footerLink: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 14,
+      lineHeight: 19,
+      color: c.link,
+    },
+    securityRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      marginTop: 14,
+    },
+    securityText: {
+      fontFamily: FontFamily.body,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.muted,
+    },
+  });
+}
