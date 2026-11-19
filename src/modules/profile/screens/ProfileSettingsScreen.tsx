@@ -1,35 +1,44 @@
 // S-20 - Profil et paramètres | Module M09 Profil | Phase S8
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, type Href } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AppHeader } from '@/components/app-header';
 import { Icon } from '@/components/icon';
-import {
-  BottomSheet,
-  PrimaryButton,
-  SecondaryButton,
-  SheetOption,
-  Tag,
-  TopBar,
-  UndoToast,
-  kitStyles,
-} from '@/components/ui/kit';
+import { BottomSheet, PrimaryButton, SecondaryButton, SheetOption, Tag, UndoToast, useKitStyles } from '@/components/ui/kit';
 import { SettingsRow, SettingsSection, ToggleSwitch } from '@/components/ui/settings';
 import { IS_DEMO } from '@/lib/config';
 import { appLock } from '@/lib/app-lock';
 import { DEMO_STATES, setDemoState, useDemoState } from '@/lib/demo-state';
 import { replayIntro } from '@/lib/launch';
-import { FontFamily, Radius, Serene, Tint } from '@/constants/design';
+import { DARK, LIGHT, useScopedColors, type AppColors } from '@/constants/app-colors';
+import { FontFamily, Radius } from '@/constants/design';
 import { formatLongDay } from '@/lib/demo-dates';
 
-import { CALENDAR_VIEWS, CURRENCIES, LANGUAGES, STATS, THEMES, TIMEZONES, USER } from '../data';
-import { LOCK_DELAYS, initialsOf, profileActions, useProfileState } from '../store';
+import { LANGUAGES, USER } from '../data';
+import { initialsOf, profileActions, useProfileState } from '../store';
 
 type Sheet = 'logout' | 'twoFactorOff' | 'sessions' | 'demo' | 'launch' | null;
 
+/** Réglages trouvables par la recherche. */
+const SEARCH_INDEX: { title: string; keywords: string; icon: string; tint: string; href: Href }[] = [
+  { title: 'Informations personnelles', keywords: 'nom prénom téléphone adresse photo e-mail naissance', icon: 'badge', tint: '#2F7BE0', href: '/profile/complete' },
+  { title: 'Mot de passe', keywords: 'sécurité changer', icon: 'lock', tint: '#6B7280', href: '/reset-password' },
+  { title: 'Face ID', keywords: 'biométrie empreinte verrouillage déverrouillage', icon: 'fingerprint', tint: '#16A34A', href: '/profile/biometric' },
+  { title: 'Langue et région', keywords: 'français anglais fuseau horaire devise date heure', icon: 'language', tint: '#2F7BE0', href: '/profile/preferences' },
+  { title: 'Affichage', keywords: 'thème sombre clair taille texte calendrier', icon: 'palette', tint: '#E0518E', href: '/profile/preferences' },
+  { title: 'Notifications', keywords: 'alertes silence canaux e-mail push', icon: 'notifications', tint: '#E5484D', href: '/notifications/settings' },
+  { title: 'Connexions externes', keywords: 'google gmail outlook calendrier messagerie', icon: 'cable', tint: '#0CA07C', href: '/integrations' },
+  { title: 'Bringo Mind Premium', keywords: 'abonnement facture paiement', icon: 'workspace_premium', tint: '#E0A100', href: '/billing' },
+  { title: 'Confidentialité et données', keywords: 'consentement export suppression compte rgpd', icon: 'shield', tint: '#1D5ED0', href: '/profile/privacy' },
+  { title: 'Aide et support', keywords: 'question contact faq', icon: 'help', tint: '#6B7280', href: '/support' },
+];
+
 export default function ProfileSettingsScreen() {
-  const { preferences, user, biometric, lockDelay, twoFactor, sessions, deletionAt, flash } = useProfileState();
+  const { c, styles } = useLook();
+  const kitStyles = useKitStyles();
+  const { preferences, user, biometric, twoFactor, sessions, deletionAt, flash } = useProfileState();
   const fullName = `${user.firstName} ${user.lastName}`.trim();
   const [sheet, setSheet] = useState<Sheet>(null);
   const [toast, setToast] = useState<{ text: string; undo?: () => void } | null>(null);
@@ -45,19 +54,47 @@ export default function ProfileSettingsScreen() {
   );
 
   const language = LANGUAGES.find((entry) => entry.key === preferences.language)?.title;
-  const zone = TIMEZONES.find((entry) => entry.key === preferences.timezone)?.title;
-  const currency = CURRENCIES.find((entry) => entry.key === preferences.currency)?.label.split(' ')[0];
-  const theme = THEMES.find((entry) => entry.key === preferences.theme)?.label.toLowerCase();
-  const view = CALENDAR_VIEWS.find((entry) => entry.key === preferences.calendarView)?.label.toLowerCase();
   const otherSessions = sessions.filter((session) => !session.current);
+  const [query, setQuery] = useState('');
+  const term = query.trim().toLowerCase();
+  const searchResults = term
+    ? SEARCH_INDEX.filter((entry) => `${entry.title} ${entry.keywords}`.toLowerCase().includes(term))
+    : null;
 
   return (
     <SafeAreaView style={kitStyles.safe} edges={['top']}>
-      <TopBar title="Mon profil" />
-      <ScrollView contentContainerStyle={[kitStyles.content, styles.content]} showsVerticalScrollIndicator={false}>
+      <AppHeader />
+      <ScrollView contentContainerStyle={[kitStyles.content, styles.content]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        <Text style={styles.pageTitle}>Paramètres</Text>
+        <View style={styles.search}>
+          <Icon name="search" size={20} color={c.muted} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Rechercher un réglage"
+            placeholderTextColor={c.muted}
+            selectionColor={c.link}
+            value={query}
+            onChangeText={setQuery}
+            accessibilityLabel="Rechercher un réglage"
+          />
+          {query ? (
+            <Pressable hitSlop={8} accessibilityRole="button" accessibilityLabel="Effacer" onPress={() => setQuery('')}>
+              <Icon name="cancel" size={18} color={c.muted} filled />
+            </Pressable>
+          ) : null}
+        </View>
+
+        {searchResults ? (
+          <SettingsSection title={searchResults.length ? 'Résultats' : 'Aucun réglage trouvé'} icon="search">
+            {searchResults.map((entry, index) => (
+              <SettingsRow key={entry.title} first={index === 0} icon={entry.icon} tint={entry.tint} title={entry.title} onPress={() => router.push(entry.href)} />
+            ))}
+          </SettingsSection>
+        ) : (
+        <>
         {deletionAt ? (
           <View style={styles.deletion}>
-            <Icon name="warning" size={22} color={Serene.error} />
+            <Icon name="warning" size={22} color={c.error} />
             <View style={styles.flex}>
               <Text style={styles.deletionTitle}>Suppression du compte prévue</Text>
               <Text style={styles.deletionText}>Le {formatLongDay(deletionAt).toLowerCase()}. Vous pouvez encore changer d’avis.</Text>
@@ -74,59 +111,41 @@ export default function ProfileSettingsScreen() {
           </View>
         ) : null}
 
-        {/* Identité */}
-        <View style={[kitStyles.card, styles.hero]}>
-          <Pressable
-            style={({ pressed }) => [styles.avatarWrap, pressed && styles.pressed]}
-            accessibilityRole="button"
-            accessibilityLabel="Modifier la photo et les informations"
-            onPress={() => router.push('/profile/complete')}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{initialsOf(user)}</Text>
-            </View>
-            <View style={styles.avatarEdit}>
-              <Icon name="photo_camera" size={16} color={Serene.onPrimary} />
-            </View>
-          </Pressable>
-          <Text style={styles.name}>{fullName}</Text>
-          <Text style={kitStyles.muted}>{USER.email}</Text>
-          <View style={styles.tags}>
-            <Tag label={USER.plan} icon="workspace_premium" tone="teal" />
-            <Tag label={`Membre depuis ${USER.memberSince}`} />
+        {/* Identité : toucher la carte ouvre les informations personnelles */}
+        <Pressable
+          style={({ pressed }) => [kitStyles.card, styles.profileCard, pressed && styles.pressed]}
+          accessibilityRole="button"
+          accessibilityLabel={`${fullName}, informations personnelles`}
+          onPress={() => router.push('/profile/complete')}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{initialsOf(user)}</Text>
           </View>
-          <View style={styles.stats}>
-            {STATS.map((stat, index) => (
-              <Pressable
-                key={stat.key}
-                style={({ pressed }) => [styles.stat, index > 0 && styles.statBorder, pressed && styles.pressed]}
-                accessibilityRole="button"
-                accessibilityLabel={`${stat.value} ${stat.label}`}
-                onPress={() => router.push(stat.href)}>
-                <Text style={styles.statValue}>{stat.value}</Text>
-                <Text style={styles.statLabel}>{stat.label}</Text>
-              </Pressable>
-            ))}
+          <View style={styles.flex}>
+            <Text style={styles.name} numberOfLines={1}>
+              {fullName}
+            </Text>
+            <Text style={kitStyles.muted} numberOfLines={1}>
+              {USER.email}
+            </Text>
+            <View style={styles.tags}>
+              <Tag label={USER.plan} icon="workspace_premium" tone="teal" />
+            </View>
           </View>
-        </View>
+          <Icon name="chevron_right" size={24} color={c.muted} />
+        </Pressable>
 
         <SettingsSection title="Compte" icon="person">
           <SettingsRow
             first
             icon="badge"
+            tint="#2F7BE0"
             title="Informations personnelles"
-            subtitle={`${fullName} • ${user.phone}`}
             onPress={() => router.push('/profile/complete')}
           />
           <SettingsRow
-            icon="mail"
-            title="Adresse e-mail"
-            subtitle={USER.email}
-            right={<Tag label="Vérifiée" icon="verified" tone="success" />}
-          />
-          <SettingsRow
             icon="lock"
+            tint="#6B7280"
             title="Mot de passe"
-            subtitle="Modifié il y a 3 mois"
             onPress={() => router.push('/reset-password')}
           />
         </SettingsSection>
@@ -135,24 +154,20 @@ export default function ProfileSettingsScreen() {
           <SettingsRow
             first
             icon="fingerprint"
-            title="Déverrouillage biométrique"
-            subtitle={
-              biometric
-                ? `Face ID • verrouillage ${LOCK_DELAYS.find((entry) => entry.key === lockDelay)?.label.toLowerCase()}`
-                : 'Désactivé'
-            }
+            tint="#16A34A"
+            title="Face ID"
             onPress={() => router.push('/profile/biometric')}
             right={
               <View style={styles.rowEnd}>
-                <Tag label={biometric ? 'Activé' : 'Désactivé'} tone={biometric ? 'success' : 'neutral'} />
-                <Icon name="chevron_right" size={22} color={Serene.onSurfaceVariant} />
+                <Text style={styles.rowValue}>{biometric ? 'Activé' : 'Désactivé'}</Text>
+                <Icon name="chevron_right" size={22} color={c.muted} />
               </View>
             }
           />
           <SettingsRow
             icon="verified_user"
+            tint="#0FB5A3"
             title="Double authentification"
-            subtitle={twoFactor ? 'Activée • code par SMS' : 'Recommandée pour protéger vos documents'}
             right={
               <ToggleSwitch
                 value={twoFactor}
@@ -170,9 +185,15 @@ export default function ProfileSettingsScreen() {
           />
           <SettingsRow
             icon="devices"
+            tint="#5B5BD6"
             title="Appareils connectés"
-            subtitle={`${sessions.length} appareil${sessions.length > 1 ? 's' : ''} • iPhone 15 (cet appareil)`}
             onPress={() => setSheet('sessions')}
+            right={
+              <View style={styles.rowEnd}>
+                <Text style={styles.rowValue}>{sessions.length}</Text>
+                <Icon name="chevron_right" size={22} color={c.muted} />
+              </View>
+            }
           />
         </SettingsSection>
 
@@ -180,59 +201,41 @@ export default function ProfileSettingsScreen() {
           <SettingsRow
             first
             icon="language"
+            tint="#2F7BE0"
             title="Langue et région"
-            subtitle={`${language} • ${zone} • ${currency}`}
             onPress={() => router.push('/profile/preferences')}
+            right={
+              <View style={styles.rowEnd}>
+                <Text style={styles.rowValue}>{language}</Text>
+                <Icon name="chevron_right" size={22} color={c.muted} />
+              </View>
+            }
           />
           <SettingsRow
             icon="palette"
+            tint="#E0518E"
             title="Affichage"
-            subtitle={`Thème ${theme} • calendrier en vue ${view}`}
             onPress={() => router.push('/profile/preferences')}
           />
           <SettingsRow
             icon="notifications"
+            tint="#E5484D"
             title="Notifications"
-            subtitle="Canaux, types et heures de silence"
             onPress={() => router.push('/notifications/settings')}
           />
           <SettingsRow
             icon="cable"
+            tint="#0CA07C"
             title="Connexions externes"
-            subtitle="Messagerie et calendrier"
             onPress={() => router.push('/integrations')}
           />
         </SettingsSection>
 
-        <SettingsSection title="Foyer" icon="family_restroom">
-          <SettingsRow
-            first
-            icon="home"
-            title={USER.household.name}
-            subtitle={`${USER.household.role} • ${USER.household.members} membres`}
-            onPress={() => router.push('/household')}
-          />
-        </SettingsSection>
 
-        <SettingsSection title="Abonnement" icon="workspace_premium">
-          <SettingsRow
-            first
-            icon="workspace_premium"
-            title="Bringo Mind Premium"
-            subtitle="Kora illimitée • documents avancés • foyer étendu"
-            onPress={() => router.push('/billing')}
-          />
-        </SettingsSection>
-
-        <SettingsSection title="Confidentialité et aide" icon="lock">
-          <SettingsRow
-            first
-            icon="shield"
-            title="Confidentialité et données"
-            subtitle="Consentements, export, suppression du compte"
-            onPress={() => router.push('/profile/privacy')}
-          />
-          <SettingsRow icon="help" title="Aide et support" subtitle="Questions fréquentes, contact" onPress={() => router.push('/support')} />
+        <SettingsSection title="Abonnement et aide" icon="workspace_premium">
+          <SettingsRow first icon="workspace_premium" tint="#E0A100" title="Bringo Mind Premium" onPress={() => router.push('/billing')} />
+          <SettingsRow icon="shield" tint="#1D5ED0" title="Confidentialité et données" onPress={() => router.push('/profile/privacy')} />
+          <SettingsRow icon="help" tint="#6B7280" title="Aide et support" onPress={() => router.push('/support')} />
         </SettingsSection>
 
         {IS_DEMO ? (
@@ -253,7 +256,10 @@ export default function ProfileSettingsScreen() {
           </SettingsSection>
         ) : null}
 
-        <SecondaryButton label="Se déconnecter" icon="logout" style={styles.logout} onPress={() => setSheet('logout')} />
+        </>
+        )}
+
+        <SecondaryButton label="Se déconnecter" icon="logout" danger style={styles.logout} onPress={() => setSheet('logout')} />
         <Text style={styles.version}>Bringo Mind 1.0.0 • version de démonstration</Text>
       </ScrollView>
 
@@ -301,7 +307,7 @@ export default function ProfileSettingsScreen() {
         {sessions.map((session) => (
           <View key={session.id} style={styles.session}>
             <View style={styles.sessionIcon}>
-              <Icon name={session.icon} size={22} color={Tint.navy} />
+              <Icon name={session.icon} size={22} color={c.text} />
             </View>
             <View style={styles.flex}>
               <Text style={styles.sessionTitle}>{session.device}</Text>
@@ -349,7 +355,7 @@ export default function ProfileSettingsScreen() {
               <Icon
                 name={demoState === entry.key ? 'radio_button_checked' : 'radio_button_unchecked'}
                 size={22}
-                color={demoState === entry.key ? Tint.black : Serene.onSurfaceVariant}
+                color={demoState === entry.key ? c.solid : c.muted}
               />
             </Pressable>
           ))}
@@ -408,191 +414,242 @@ export default function ProfileSettingsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-  },
-  pressed: {
-    opacity: 0.8,
-  },
-  content: {
-    paddingTop: 4,
-    paddingBottom: 40,
-  },
-  rowEnd: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  deletion: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 14,
-    padding: 14,
-    borderRadius: 16,
-    backgroundColor: '#fff5f5',
-    borderWidth: 1,
-    borderColor: '#fecaca',
-  },
-  deletionTitle: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 15,
-    lineHeight: 20,
-    color: Serene.error,
-  },
-  deletionText: {
-    fontFamily: FontFamily.body,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Tint.navy,
-  },
-  deletionAction: {
-    fontFamily: FontFamily.bodyBold,
-    fontSize: 15,
-    lineHeight: 20,
-    color: Tint.primary,
-  },
-  hero: {
-    alignItems: 'center',
-    gap: 6,
-    paddingTop: 22,
-  },
-  avatarWrap: {
-    marginBottom: 6,
-  },
-  avatar: {
-    width: 88,
-    height: 88,
-    borderRadius: Radius.full,
-    backgroundColor: Tint.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 32,
-    lineHeight: 40,
-    color: Serene.onPrimary,
-  },
-  avatarEdit: {
-    position: 'absolute',
-    right: -2,
-    bottom: -2,
-    width: 32,
-    height: 32,
-    borderRadius: Radius.full,
-    backgroundColor: Tint.black,
-    borderWidth: 3,
-    borderColor: Serene.surfaceContainerLowest,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  name: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 24,
-    lineHeight: 30,
-    letterSpacing: -0.3,
-    color: Tint.navy,
-  },
-  tags: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: 8,
-    marginTop: 4,
-  },
-  stats: {
-    alignSelf: 'stretch',
-    flexDirection: 'row',
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Tint.border,
-  },
-  stat: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 4,
-  },
-  statBorder: {
-    borderLeftWidth: StyleSheet.hairlineWidth,
-    borderLeftColor: Tint.border,
-  },
-  statValue: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 22,
-    lineHeight: 28,
-    color: Tint.navy,
-  },
-  statLabel: {
-    fontFamily: FontFamily.body,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurfaceVariant,
-    textAlign: 'center',
-  },
-  logout: {
-    marginTop: 26,
-  },
-  version: {
-    marginTop: 14,
-    textAlign: 'center',
-    fontFamily: FontFamily.body,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurfaceVariant,
-  },
-  session: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    padding: 12,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: Tint.border,
-  },
-  sessionIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: Tint.soft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sessionTitle: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 15,
-    lineHeight: 20,
-    color: Tint.navy,
-  },
-  sessionMeta: {
-    fontFamily: FontFamily.body,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurfaceVariant,
-  },
-  demoList: {
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: Tint.border,
-    overflow: 'hidden',
-  },
-  demoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  demoBorder: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Tint.border,
-  },
-  sessionAction: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 14,
-    lineHeight: 19,
-    color: Serene.error,
-  },
-});
+function makeStyles(c: AppColors) {
+  return StyleSheet.create({
+    pageTitle: {
+      marginTop: 12,
+      fontFamily: FontFamily.headingBold,
+      fontSize: 28,
+      lineHeight: 34,
+      letterSpacing: -0.5,
+      color: c.text,
+    },
+    search: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      minHeight: 46,
+      marginTop: 12,
+      paddingHorizontal: 12,
+      borderRadius: 14,
+      backgroundColor: c.soft,
+    },
+    searchInput: {
+      flex: 1,
+      paddingVertical: 10,
+      fontFamily: FontFamily.body,
+      fontSize: 16,
+      lineHeight: 22,
+      color: c.text,
+      outlineWidth: 0,
+      outlineStyle: 'solid',
+    },
+    profileCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 14,
+      marginTop: 16,
+    },
+    rowValue: {
+      fontFamily: FontFamily.body,
+      fontSize: 14,
+      lineHeight: 19,
+      color: c.muted,
+    },
+    flex: {
+      flex: 1,
+    },
+    pressed: {
+      opacity: 0.8,
+    },
+    content: {
+      paddingTop: 4,
+      paddingBottom: 40,
+    },
+    rowEnd: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+    },
+    deletion: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      marginBottom: 14,
+      padding: 14,
+      borderRadius: 16,
+      backgroundColor: c.dark ? '#3B1D24' : '#fff5f5',
+      borderWidth: 1,
+      borderColor: c.dark ? '#5B2A33' : '#fecaca',
+    },
+    deletionTitle: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 15,
+      lineHeight: 20,
+      color: c.error,
+    },
+    deletionText: {
+      fontFamily: FontFamily.body,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.text,
+    },
+    deletionAction: {
+      fontFamily: FontFamily.bodyBold,
+      fontSize: 15,
+      lineHeight: 20,
+      color: c.link,
+    },
+    hero: {
+      alignItems: 'center',
+      gap: 6,
+      paddingTop: 22,
+    },
+    avatarWrap: {
+      marginBottom: 6,
+    },
+    avatar: {
+      width: 60,
+      height: 60,
+      borderRadius: Radius.full,
+      backgroundColor: '#0C1A37',
+      borderWidth: c.dark ? 1.5 : 0,
+      borderColor: '#3B5079',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    avatarText: {
+      fontFamily: FontFamily.headingBold,
+      fontSize: 22,
+      lineHeight: 28,
+      color: '#FFFFFF',
+    },
+    avatarEdit: {
+      position: 'absolute',
+      right: -2,
+      bottom: -2,
+      width: 32,
+      height: 32,
+      borderRadius: Radius.full,
+      backgroundColor: c.solid,
+      borderWidth: 3,
+      borderColor: c.card,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    name: {
+      fontFamily: FontFamily.headingBold,
+      fontSize: 24,
+      lineHeight: 30,
+      letterSpacing: -0.3,
+      color: c.text,
+    },
+    tags: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+      marginTop: 4,
+    },
+    stats: {
+      alignSelf: 'stretch',
+      flexDirection: 'row',
+      marginTop: 12,
+      paddingTop: 12,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: c.border,
+    },
+    stat: {
+      flex: 1,
+      alignItems: 'center',
+      paddingVertical: 4,
+    },
+    statBorder: {
+      borderLeftWidth: StyleSheet.hairlineWidth,
+      borderLeftColor: c.border,
+    },
+    statValue: {
+      fontFamily: FontFamily.headingBold,
+      fontSize: 22,
+      lineHeight: 28,
+      color: c.text,
+    },
+    statLabel: {
+      fontFamily: FontFamily.body,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.muted,
+      textAlign: 'center',
+    },
+    logout: {
+      marginTop: 26,
+    },
+    version: {
+      marginTop: 14,
+      textAlign: 'center',
+      fontFamily: FontFamily.body,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.muted,
+    },
+    session: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      padding: 12,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    sessionIcon: {
+      width: 40,
+      height: 40,
+      borderRadius: 12,
+      backgroundColor: c.soft,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    sessionTitle: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 15,
+      lineHeight: 20,
+      color: c.text,
+    },
+    sessionMeta: {
+      fontFamily: FontFamily.body,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.muted,
+    },
+    demoList: {
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: c.border,
+      overflow: 'hidden',
+    },
+    demoRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+    },
+    demoBorder: {
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: c.border,
+    },
+    sessionAction: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 14,
+      lineHeight: 19,
+      color: c.error,
+    },
+  });
+}
+
+const STYLES = { light: makeStyles(LIGHT), dark: makeStyles(DARK) };
+
+/** Couleurs et styles du mode actuel (sombre seulement dans un module converti). */
+function useLook() {
+  const c = useScopedColors();
+  return { c, styles: c.dark ? STYLES.dark : STYLES.light };
+}

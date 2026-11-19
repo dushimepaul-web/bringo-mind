@@ -3,15 +3,17 @@ import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Icon } from '@/components/icon';
-import { kitStyles } from '@/components/ui/kit';
-import { FontFamily, Radius, Serene, Tint } from '@/constants/design';
+import { useKitStyles } from '@/components/ui/kit';
+import { DARK, LIGHT, useScopedColors, type AppColors } from '@/constants/app-colors';
+import { FontFamily, Radius } from '@/constants/design';
 
-import { CATEGORIES, addedLabel } from '../data';
+import { CATEGORIES, CATEGORIES_DARK, addedLabel } from '../data';
 import type { DocItem } from '../types';
 
 /** Vignette colorée selon la catégorie. */
 export function DocIcon({ doc, size = 48 }: { doc: DocItem; size?: number }) {
-  const category = CATEGORIES[doc.category];
+  const { styles } = useLook();
+  const category = useCategoryStyles()[doc.category];
   return (
     <View style={[styles.icon, { width: size, height: size, backgroundColor: category.bg }]}>
       <Icon name={category.icon} size={size * 0.46} color={category.fg} />
@@ -21,10 +23,11 @@ export function DocIcon({ doc, size = 48 }: { doc: DocItem; size?: number }) {
 
 /** Pastille « Personnel » ou « Foyer ». */
 export function ScopeTag({ doc }: { doc: DocItem }) {
+  const { c, styles } = useLook();
   const shared = doc.scope === 'household';
   return (
     <View style={[styles.scope, shared && styles.scopeShared]}>
-      <Icon name={shared ? 'group' : 'lock'} size={13} color={shared ? Tint.primary : Serene.onSurfaceVariant} />
+      <Icon name={shared ? 'group' : 'lock'} size={13} color={shared ? c.link : c.muted} />
       <Text style={[styles.scopeText, shared && styles.scopeTextShared]}>{shared ? 'Foyer' : 'Personnel'}</Text>
     </View>
   );
@@ -32,7 +35,9 @@ export function ScopeTag({ doc }: { doc: DocItem }) {
 
 /** Ligne de liste : toute la carte ouvre le détail (pas de bouton imbriqué). */
 export function DocRow({ doc }: { doc: DocItem }) {
-  const category = CATEGORIES[doc.category];
+  const { c, styles } = useLook();
+  const kitStyles = useKitStyles();
+  const category = useCategoryStyles()[doc.category];
   return (
     <Pressable
       style={({ pressed }) => [kitStyles.card, styles.row, pressed && kitStyles.cardPressed]}
@@ -57,83 +62,98 @@ export function DocRow({ doc }: { doc: DocItem }) {
           ) : null}
         </View>
       </View>
-      <Icon name="chevron_right" size={22} color={Serene.onSurfaceVariant} />
+      <Icon name="chevron_right" size={22} color={c.muted} />
     </Pressable>
   );
 }
 
-const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-    minWidth: 0,
-  },
-  icon: {
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 14,
-  },
-  title: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 16,
-    lineHeight: 21,
-    color: Tint.navy,
-  },
-  meta: {
-    marginTop: 2,
-    fontFamily: FontFamily.body,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurfaceVariant,
-  },
-  tags: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 6,
-  },
-  category: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 13,
-    lineHeight: 17,
-  },
-  scope: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: Radius.full,
-    backgroundColor: Tint.soft,
-  },
-  scopeShared: {
-    backgroundColor: '#e6f6f3',
-  },
-  scopeText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 13,
-    lineHeight: 17,
-    color: Serene.onSurfaceVariant,
-  },
-  scopeTextShared: {
-    color: Tint.primary,
-  },
-  review: {
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: Radius.full,
-    backgroundColor: '#fef3c7',
-  },
-  reviewText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 13,
-    lineHeight: 17,
-    color: '#92400e',
-  },
-});
+function makeStyles(c: AppColors) {
+  return StyleSheet.create({
+    flex: {
+      flex: 1,
+      minWidth: 0,
+    },
+    icon: {
+      borderRadius: 14,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      paddingVertical: 14,
+    },
+    title: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 16,
+      lineHeight: 21,
+      color: c.text,
+    },
+    meta: {
+      marginTop: 2,
+      fontFamily: FontFamily.body,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.muted,
+    },
+    tags: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      alignItems: 'center',
+      gap: 8,
+      marginTop: 6,
+    },
+    category: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 13,
+      lineHeight: 17,
+    },
+    scope: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 3,
+      paddingHorizontal: 7,
+      paddingVertical: 2,
+      borderRadius: Radius.full,
+      backgroundColor: c.soft,
+    },
+    scopeShared: {
+      backgroundColor: '#e6f6f3',
+    },
+    scopeText: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 13,
+      lineHeight: 17,
+      color: c.muted,
+    },
+    scopeTextShared: {
+      color: c.link,
+    },
+    review: {
+      paddingHorizontal: 7,
+      paddingVertical: 2,
+      borderRadius: Radius.full,
+      backgroundColor: '#fef3c7',
+    },
+    reviewText: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 13,
+      lineHeight: 17,
+      color: '#92400e',
+    },
+  });
+}
+
+const STYLES = { light: makeStyles(LIGHT), dark: makeStyles(DARK) };
+
+/** Couleurs et styles du mode actuel (sombre seulement dans un module converti). */
+function useLook() {
+  const c = useScopedColors();
+  return { c, styles: c.dark ? STYLES.dark : STYLES.light };
+}
+
+/** Couleurs des catégories du mode actuel. */
+function useCategoryStyles() {
+  return useScopedColors().dark ? CATEGORIES_DARK : CATEGORIES;
+}

@@ -4,7 +4,8 @@ import { Pressable, ScrollView, StyleSheet, Text, View, type ScrollViewInstance 
 
 import { Icon } from '@/components/icon';
 import { BottomSheet } from '@/components/ui/kit';
-import { FontFamily, Radius, Serene, Tint } from '@/constants/design';
+import { DARK, LIGHT, useScopedColors, type AppColors } from '@/constants/app-colors';
+import { FontFamily, Radius } from '@/constants/design';
 import { addDays, dayOffset, formatLongDay, startOfDay } from '@/lib/demo-dates';
 
 const MONTHS = [
@@ -54,6 +55,7 @@ export function DatePickerSheet({
   onSelect: (date: Date) => void;
   onClose: () => void;
 }) {
+  const { c, styles } = useLook();
   const [cursor, setCursor] = useState(() => new Date(value.getFullYear(), value.getMonth(), 1));
   const [lastValue, setLastValue] = useState(value);
   // Toucher le mois affiche la liste des années (utile pour une date de naissance).
@@ -81,7 +83,7 @@ export function DatePickerSheet({
           accessibilityRole="button"
           accessibilityLabel="Mois précédent"
           onPress={() => move(-1)}>
-          <Icon name="chevron_left" size={24} color={Tint.navy} />
+          <Icon name="chevron_left" size={24} color={c.text} />
         </Pressable>
         <Pressable
           style={({ pressed }) => [styles.monthButton, pressed && styles.pressed]}
@@ -91,14 +93,14 @@ export function DatePickerSheet({
           <Text style={styles.month}>
             {MONTHS[cursor.getMonth()]} {cursor.getFullYear()}
           </Text>
-          <Icon name={yearMode ? 'expand_less' : 'expand_more'} size={22} color={Tint.navy} />
+          <Icon name={yearMode ? 'expand_less' : 'expand_more'} size={22} color={c.text} />
         </Pressable>
         <Pressable
           style={({ pressed }) => [styles.arrow, pressed && styles.pressed]}
           accessibilityRole="button"
           accessibilityLabel="Mois suivant"
           onPress={() => move(1)}>
-          <Icon name="chevron_right" size={24} color={Tint.navy} />
+          <Icon name="chevron_right" size={24} color={c.text} />
         </Pressable>
       </View>
 
@@ -179,104 +181,114 @@ export function DatePickerSheet({
   );
 }
 
-const styles = StyleSheet.create({
-  pressed: {
-    opacity: 0.7,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  arrow: {
-    width: 44,
-    height: 44,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-    borderColor: Tint.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  monthButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
-  },
-  years: {
-    maxHeight: 300,
-  },
-  yearsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  year: {
-    width: '22%',
-    height: 44,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Tint.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  month: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 18,
-    lineHeight: 24,
-    color: Tint.navy,
-  },
-  letters: {
-    flexDirection: 'row',
-  },
-  letter: {
-    flex: 1,
-    textAlign: 'center',
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurfaceVariant,
-  },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  cell: {
-    width: `${100 / 7}%`,
-    height: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  day: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  today: {
-    borderWidth: 2,
-    borderColor: Tint.primary,
-  },
-  selected: {
-    backgroundColor: Tint.black,
-    borderColor: Tint.black,
-  },
-  dayText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 16,
-    lineHeight: 21,
-    color: Tint.navy,
-  },
-  outText: {
-    color: '#b6bfcd',
-  },
-  disabledText: {
-    color: '#d3d9e3',
-  },
-  selectedText: {
-    color: Serene.onPrimary,
-  },
-});
+function makeStyles(c: AppColors) {
+  return StyleSheet.create({
+    pressed: {
+      opacity: 0.7,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    arrow: {
+      width: 44,
+      height: 44,
+      borderRadius: Radius.full,
+      borderWidth: 1,
+      borderColor: c.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    monthButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 2,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 12,
+    },
+    years: {
+      maxHeight: 300,
+    },
+    yearsGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    year: {
+      width: '22%',
+      height: 44,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: c.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    month: {
+      fontFamily: FontFamily.headingBold,
+      fontSize: 18,
+      lineHeight: 24,
+      color: c.text,
+    },
+    letters: {
+      flexDirection: 'row',
+    },
+    letter: {
+      flex: 1,
+      textAlign: 'center',
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.muted,
+    },
+    grid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+    },
+    cell: {
+      width: `${100 / 7}%`,
+      height: 48,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    day: {
+      width: 40,
+      height: 40,
+      borderRadius: Radius.full,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    today: {
+      borderWidth: 2,
+      borderColor: c.link,
+    },
+    selected: {
+      backgroundColor: c.solid,
+      borderColor: c.solid,
+    },
+    dayText: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 16,
+      lineHeight: 21,
+      color: c.text,
+    },
+    outText: {
+      color: '#b6bfcd',
+    },
+    disabledText: {
+      color: '#d3d9e3',
+    },
+    selectedText: {
+      color: c.solidText,
+    },
+  });
+}
+
+const STYLES = { light: makeStyles(LIGHT), dark: makeStyles(DARK) };
+
+/** Couleurs et styles du mode actuel (sombre seulement dans un module converti). */
+function useLook() {
+  const c = useScopedColors();
+  return { c, styles: c.dark ? STYLES.dark : STYLES.light };
+}

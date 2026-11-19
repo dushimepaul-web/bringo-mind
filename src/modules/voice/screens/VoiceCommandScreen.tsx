@@ -6,8 +6,9 @@ import { AccessibilityInfo, Animated, Easing, Pressable, ScrollView, StyleSheet,
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icon';
-import { PrimaryButton, SecondaryButton, TopBar, kitStyles } from '@/components/ui/kit';
-import { FontFamily, Radius, Serene, Tint } from '@/constants/design';
+import { Chip, PrimaryButton, SecondaryButton, TopBar, useKitStyles } from '@/components/ui/kit';
+import { DARK, LIGHT, useScopedColors, type AppColors } from '@/constants/app-colors';
+import { FontFamily, Radius } from '@/constants/design';
 import { DEMO_TODAY, addDays, atTime } from '@/lib/demo-dates';
 
 type Phase = 'idle' | 'listening' | 'transcribing' | 'understood';
@@ -62,6 +63,8 @@ const COMMANDS: Command[] = [
 const BARS = [10, 18, 28, 16, 34, 22, 12, 26, 38, 20, 14, 30, 18, 10];
 
 export default function VoiceCommandScreen() {
+  const { c, styles } = useLook();
+  const kitStyles = useKitStyles();
   const [phase, setPhase] = useState<Phase>('idle');
   const [command, setCommand] = useState<Command>(COMMANDS[0]);
   const [words, setWords] = useState(0);
@@ -139,7 +142,7 @@ export default function VoiceCommandScreen() {
               accessibilityRole="button"
               accessibilityLabel={active ? 'Arrêter l’écoute' : 'Parler à Kora'}
               onPress={() => (active ? setPhase('idle') : start(command))}>
-              <Icon name={active ? 'stop' : 'mic'} size={40} color={Serene.onPrimary} />
+              <Icon name={active ? 'stop' : 'mic'} size={40} color={c.solidText} />
             </Pressable>
           </Animated.View>
           <Text style={styles.status} accessibilityLiveRegion="polite">
@@ -163,25 +166,19 @@ export default function VoiceCommandScreen() {
           </View>
         </View>
 
-        <View style={[kitStyles.card, styles.transcript]}>
-          <View style={styles.cardHead}>
-            <Icon name="record_voice_over" size={18} color={Serene.onSurfaceVariant} />
-            <Text style={styles.cardLabel}>Transcription</Text>
-          </View>
-          <Text style={[styles.transcriptText, !transcript && styles.placeholder]}>
-            {transcript ? `« ${transcript} »` : '« Votre voix apparaîtra ici… »'}
-          </Text>
-        </View>
+        <Text style={[styles.liveText, !transcript && styles.placeholder]} accessibilityLiveRegion="polite">
+          {transcript ? `« ${transcript} »` : 'Votre voix apparaîtra ici…'}
+        </Text>
 
         {phase === 'understood' ? (
           <View style={styles.understood}>
             <View style={styles.cardHead}>
-              <Icon name="auto_awesome" size={18} color={Tint.primary} />
+              <Icon name="auto_awesome" size={18} color={c.link} />
               <Text style={[styles.cardLabel, styles.understoodLabel]}>Kora a compris</Text>
             </View>
             <View style={styles.intent}>
               <View style={styles.intentIcon}>
-                <Icon name={command.icon} size={22} color={Tint.primary} />
+                <Icon name={command.icon} size={22} color={c.link} />
               </View>
               <View style={styles.flex}>
                 <Text style={styles.intentKind}>{command.kind}</Text>
@@ -198,217 +195,247 @@ export default function VoiceCommandScreen() {
           </View>
         ) : null}
 
-        <Text style={styles.sectionLabel}>Exemples à essayer</Text>
-        <View style={[kitStyles.card, styles.examples]}>
-          {COMMANDS.map((entry, index) => (
-            <Pressable
-              key={entry.id}
-              style={({ pressed }) => [styles.example, index > 0 && styles.exampleBorder, pressed && styles.examplePressed]}
-              accessibilityRole="button"
-              accessibilityLabel={`Essayer : ${entry.say}`}
-              onPress={() => start(entry)}>
-              <Icon name="mic_none" size={20} color={Tint.primary} />
-              <Text style={styles.exampleText}>{entry.say}</Text>
-              <Icon name="play_arrow" size={20} color={Serene.onSurfaceVariant} />
-            </Pressable>
+        <Text style={styles.sectionLabel}>Essayez par exemple</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.examplesScroll} contentContainerStyle={styles.examplesRow}>
+          {COMMANDS.map((entry) => (
+            <Chip key={entry.id} label={entry.say} icon="mic_none" onPress={() => start(entry)} />
           ))}
-        </View>
+        </ScrollView>
 
-        <View style={styles.note}>
-          <Icon name="lock" size={18} color={Tint.primary} />
-          <Text style={styles.noteText}>L’audio sert seulement à la transcription, puis il est supprimé. Aucun enregistrement n’est conservé.</Text>
+        <View style={styles.privacy}>
+          <Icon name="lock" size={14} color={c.muted} />
+          <Text style={styles.privacyText}>L’audio est supprimé après la transcription.</Text>
         </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-  },
-  pressed: {
-    opacity: 0.85,
-  },
-  content: {
-    paddingTop: 4,
-    paddingBottom: 40,
-  },
-  micZone: {
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 14,
-  },
-  halo: {
-    width: 150,
-    height: 150,
-    borderRadius: Radius.full,
-    backgroundColor: Tint.soft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  haloActive: {
-    backgroundColor: '#ccfbf1',
-  },
-  mic: {
-    width: 104,
-    height: 104,
-    borderRadius: Radius.full,
-    backgroundColor: Tint.black,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  micActive: {
-    backgroundColor: Tint.primary,
-  },
-  status: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 18,
-    lineHeight: 24,
-    color: Tint.navy,
-  },
-  wave: {
-    height: 40,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  bar: {
-    width: 5,
-    borderRadius: Radius.full,
-    backgroundColor: '#b9c4d6',
-  },
-  barActive: {
-    backgroundColor: Tint.primary,
-  },
-  transcript: {
-    gap: 8,
-  },
-  cardHead: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  cardLabel: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 13,
-    lineHeight: 18,
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
-    color: Serene.onSurfaceVariant,
-  },
-  transcriptText: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 18,
-    lineHeight: 25,
-    color: Tint.navy,
-  },
-  placeholder: {
-    color: Serene.onSurfaceVariant,
-  },
-  understood: {
-    marginTop: 14,
-    gap: 12,
-    padding: 16,
-    borderRadius: 20,
-    backgroundColor: '#f0fdfa',
-    borderWidth: 1,
-    borderColor: '#99f6e4',
-  },
-  understoodLabel: {
-    color: Tint.primary,
-  },
-  intent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  intentIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: Serene.surfaceContainerLowest,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  intentKind: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Tint.primary,
-  },
-  intentTitle: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 18,
-    lineHeight: 24,
-    color: Tint.navy,
-  },
-  intentDetail: {
-    fontFamily: FontFamily.body,
-    fontSize: 14,
-    lineHeight: 19,
-    color: Tint.navy,
-  },
-  row: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  hint: {
-    fontFamily: FontFamily.body,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurfaceVariant,
-    textAlign: 'center',
-  },
-  sectionLabel: {
-    marginTop: 22,
-    marginBottom: 8,
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 13,
-    lineHeight: 18,
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
-    color: Serene.onSurfaceVariant,
-  },
-  examples: {
-    paddingVertical: 4,
-    paddingHorizontal: 0,
-  },
-  example: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-  },
-  exampleBorder: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Tint.border,
-  },
-  examplePressed: {
-    backgroundColor: Tint.soft,
-  },
-  exampleText: {
-    flex: 1,
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 15,
-    lineHeight: 21,
-    color: Tint.navy,
-  },
-  note: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    marginTop: 18,
-    padding: 14,
-    borderRadius: 16,
-    backgroundColor: Tint.soft,
-  },
-  noteText: {
-    flex: 1,
-    fontFamily: FontFamily.body,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Tint.navy,
-  },
-});
+function makeStyles(c: AppColors) {
+  return StyleSheet.create({
+    liveText: {
+      minHeight: 56,
+      paddingHorizontal: 12,
+      textAlign: 'center',
+      fontFamily: FontFamily.heading,
+      fontSize: 20,
+      lineHeight: 28,
+      color: c.text,
+    },
+    examplesScroll: {
+      marginHorizontal: -16,
+    },
+    examplesRow: {
+      gap: 8,
+      paddingHorizontal: 16,
+    },
+    privacy: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      marginTop: 24,
+    },
+    privacyText: {
+      fontFamily: FontFamily.body,
+      fontSize: 13,
+      lineHeight: 17,
+      color: c.muted,
+    },
+    flex: {
+      flex: 1,
+    },
+    pressed: {
+      opacity: 0.85,
+    },
+    content: {
+      paddingTop: 4,
+      paddingBottom: 40,
+    },
+    micZone: {
+      alignItems: 'center',
+      gap: 12,
+      paddingVertical: 14,
+    },
+    halo: {
+      width: 150,
+      height: 150,
+      borderRadius: Radius.full,
+      backgroundColor: c.soft,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    haloActive: {
+      backgroundColor: c.tintMint,
+    },
+    mic: {
+      width: 104,
+      height: 104,
+      borderRadius: Radius.full,
+      backgroundColor: c.solid,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    micActive: {
+      backgroundColor: c.link,
+    },
+    status: {
+      fontFamily: FontFamily.headingBold,
+      fontSize: 18,
+      lineHeight: 24,
+      color: c.text,
+    },
+    wave: {
+      height: 40,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+    },
+    bar: {
+      width: 5,
+      borderRadius: Radius.full,
+      backgroundColor: c.dark ? '#3B5079' : '#b9c4d6',
+    },
+    barActive: {
+      backgroundColor: c.link,
+    },
+    transcript: {
+      gap: 8,
+    },
+    cardHead: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    cardLabel: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 13,
+      lineHeight: 18,
+      letterSpacing: 0.4,
+      textTransform: 'uppercase',
+      color: c.muted,
+    },
+    transcriptText: {
+      fontFamily: FontFamily.headingBold,
+      fontSize: 18,
+      lineHeight: 25,
+      color: c.text,
+    },
+    placeholder: {
+      color: c.muted,
+    },
+    understood: {
+      marginTop: 14,
+      gap: 12,
+      padding: 16,
+      borderRadius: 20,
+      backgroundColor: c.tintMint,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    understoodLabel: {
+      color: c.link,
+    },
+    intent: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    intentIcon: {
+      width: 44,
+      height: 44,
+      borderRadius: 14,
+      backgroundColor: c.card,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    intentKind: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.link,
+    },
+    intentTitle: {
+      fontFamily: FontFamily.headingBold,
+      fontSize: 18,
+      lineHeight: 24,
+      color: c.text,
+    },
+    intentDetail: {
+      fontFamily: FontFamily.body,
+      fontSize: 14,
+      lineHeight: 19,
+      color: c.text,
+    },
+    row: {
+      flexDirection: 'row',
+      gap: 8,
+    },
+    hint: {
+      fontFamily: FontFamily.body,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.muted,
+      textAlign: 'center',
+    },
+    sectionLabel: {
+      marginTop: 22,
+      marginBottom: 8,
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 13,
+      lineHeight: 18,
+      letterSpacing: 0.4,
+      textTransform: 'uppercase',
+      color: c.muted,
+    },
+    examples: {
+      paddingVertical: 4,
+      paddingHorizontal: 0,
+    },
+    example: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      paddingHorizontal: 14,
+      paddingVertical: 14,
+    },
+    exampleBorder: {
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: c.border,
+    },
+    examplePressed: {
+      backgroundColor: c.soft,
+    },
+    exampleText: {
+      flex: 1,
+      fontFamily: FontFamily.bodyMedium,
+      fontSize: 15,
+      lineHeight: 21,
+      color: c.text,
+    },
+    note: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 8,
+      marginTop: 18,
+      padding: 14,
+      borderRadius: 16,
+      backgroundColor: c.soft,
+    },
+    noteText: {
+      flex: 1,
+      fontFamily: FontFamily.body,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.text,
+    },
+  });
+}
+
+const STYLES = { light: makeStyles(LIGHT), dark: makeStyles(DARK) };
+
+/** Couleurs et styles du mode actuel (sombre seulement dans un module converti). */
+function useLook() {
+  const c = useScopedColors();
+  return { c, styles: c.dark ? STYLES.dark : STYLES.light };
+}

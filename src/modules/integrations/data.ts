@@ -18,9 +18,9 @@ export type PermissionKey = (typeof PERMISSIONS)[number]['key'];
 export const SENDERS = ['Foncia', 'Engie', 'MAIF', 'CAF', 'Cabinet Dr Lemoine', 'Pharmacie Bastille'];
 
 export const CALENDARS: { key: CalendarKey; title: string; subtitle: string; color: string }[] = [
-  { key: 'personal', title: 'Personnel', subtitle: '42 événements', color: '#006a61' },
-  { key: 'work', title: 'Travail', subtitle: '18 événements', color: '#131b2e' },
-  { key: 'family', title: 'Famille', subtitle: 'Partagé avec Thomas • 9 événements', color: '#d97706' },
+  { key: 'personal', title: 'Personnel', subtitle: '42 événements', color: '#16A34A' },
+  { key: 'work', title: 'Travail', subtitle: '18 événements', color: '#2F7BE0' },
+  { key: 'family', title: 'Famille', subtitle: 'Partagé avec Thomas • 9 événements', color: '#E08A00' },
 ];
 
 export const DEMO_EMAILS: ImportedEmail[] = [

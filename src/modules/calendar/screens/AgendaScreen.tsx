@@ -14,12 +14,13 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icon';
-import { Chip, IconButton, TopBar, kitStyles } from '@/components/ui/kit';
-import { FontFamily, Radius, Serene, Tint } from '@/constants/design';
+import { Chip, IconButton, TopBar, useKitStyles } from '@/components/ui/kit';
+import { DARK, LIGHT, useScopedColors, type AppColors } from '@/constants/app-colors';
+import { FontFamily, Radius } from '@/constants/design';
 import { DEMO_TODAY, dayOffset, formatTime, startOfDay } from '@/lib/demo-dates';
 
-import { ViewSwitcher, itemsForDay, type DayItem, type SpaceFilter } from '../components/calendar-ui';
-import { MONTHS, TASK_DEADLINES, TONES, WEEKDAY_SHORT, durationOf, formatDuration } from '../data';
+import { itemsForDay, type DayItem, type SpaceFilter, useTones } from '../components/calendar-ui';
+import { MONTHS, TASK_DEADLINES, WEEKDAY_SHORT, durationOf, formatDuration } from '../data';
 import { QueryView } from '@/components/ui/states';
 import { useQuery } from '@/hooks/use-query';
 
@@ -36,6 +37,8 @@ type Row =
   | { type: 'day'; key: string; day: Date; items: DayItem[] };
 
 export default function AgendaScreen() {
+  const { c, styles } = useLook();
+  const kitStyles = useKitStyles();
   const { events } = useCalendarState();
   const sync = useQuery('events', syncEvents);
   const [filter, setFilter] = useState<SpaceFilter>('all');
@@ -125,14 +128,8 @@ export default function AgendaScreen() {
         showsVerticalScrollIndicator={false}>
         {/* Vues, recherche et filtres défilent avec la liste */}
         <View style={styles.toolbar}>
-          <ViewSwitcher
-            value="planning"
-            onChange={(next) => {
-              if (next !== 'planning') router.navigate({ pathname: '/calendar', params: { view: next } });
-            }}
-          />
           <View style={[styles.search, searchFocused && kitStyles.inputFocused]}>
-            <Icon name="search" size={20} color={searchFocused ? Tint.primary : Serene.onSurfaceVariant} />
+            <Icon name="search" size={20} color={searchFocused ? c.link : c.muted} />
             <TextInput
               style={styles.searchInput}
               value={query}
@@ -140,13 +137,13 @@ export default function AgendaScreen() {
               onFocus={() => setSearchFocused(true)}
               onBlur={() => setSearchFocused(false)}
               placeholder="Rechercher un événement…"
-              placeholderTextColor={Serene.onSurfaceVariant}
-              selectionColor={Tint.primary}
+              placeholderTextColor={c.muted}
+              selectionColor={c.link}
               accessibilityLabel="Rechercher dans le planning"
             />
             {query ? (
               <Pressable hitSlop={10} accessibilityRole="button" accessibilityLabel="Effacer" onPress={() => setQuery('')}>
-                <Icon name="cancel" size={20} color={Serene.onSurfaceVariant} filled />
+                <Icon name="cancel" size={20} color={c.muted} filled />
               </Pressable>
             ) : null}
           </View>
@@ -174,7 +171,7 @@ export default function AgendaScreen() {
         <QueryView query={sync} empty={{ icon: 'event_available', title: 'Rien de prévu', text: 'Ajoutez un événement ou connectez votre calendrier Google.', actionLabel: 'Nouvel événement', onAction: () => router.push('/calendar/add') }}>
         {rows.length === 0 ? (
           <View style={[kitStyles.card, styles.empty]}>
-            <Icon name="search_off" size={28} color={Tint.primary} />
+            <Icon name="search_off" size={28} color={c.link} />
             <Text style={styles.emptyTitle}>Aucun résultat</Text>
             <Text style={kitStyles.muted}>Essayez un autre mot-clé ou retirez un filtre.</Text>
           </View>
@@ -222,6 +219,7 @@ export default function AgendaScreen() {
 
 /** Colonne de gauche : jour de la semaine et numéro, entouré si c'est aujourd'hui. */
 function DayColumn({ day }: { day: Date }) {
+  const { styles } = useLook();
   const today = dayOffset(day) === 0;
   return (
     <View style={styles.dayColumn}>
@@ -237,6 +235,8 @@ function DayColumn({ day }: { day: Date }) {
 
 /** Ligne compacte d'un événement ou d'une échéance de tâche. */
 function PlanningItem({ item }: { item: DayItem }) {
+  const tones = useTones();
+  const { c, styles } = useLook();
   if (item.kind === 'task') {
     const { task } = item;
     return (
@@ -246,7 +246,7 @@ function PlanningItem({ item }: { item: DayItem }) {
         accessibilityLabel={`Échéance : ${task.title}`}
         onPress={() => router.push({ pathname: '/tasks/detail', params: { id: task.id } })}>
         <View style={styles.taskBox}>
-          <Icon name="check" size={12} color={Tint.primary} />
+          <Icon name="check" size={12} color={c.link} />
         </View>
         <View style={styles.itemBody}>
           <Text style={styles.itemTitle} numberOfLines={2}>
@@ -259,14 +259,14 @@ function PlanningItem({ item }: { item: DayItem }) {
   }
 
   const { event } = item;
-  const tone = TONES[event.tone];
+  const tone = tones[event.tone];
   return (
     <Pressable
-      style={({ pressed }) => [styles.item, { backgroundColor: event.cancelled ? Tint.soft : tone.bg }, pressed && styles.pressed]}
+      style={({ pressed }) => [styles.item, { backgroundColor: event.cancelled ? c.soft : tone.bg }, pressed && styles.pressed]}
       accessibilityRole="button"
       accessibilityLabel={`${event.title}${event.allDay ? ', toute la journée' : `, ${formatTime(event.start)}`}`}
       onPress={() => router.push({ pathname: '/calendar/detail', params: { id: event.id } })}>
-      <View style={[styles.itemBar, { backgroundColor: event.cancelled ? Tint.border : tone.bar }]} />
+      <View style={[styles.itemBar, { backgroundColor: event.cancelled ? c.border : tone.bar }]} />
       <View style={styles.itemBody}>
         <Text style={[styles.itemTitle, event.cancelled && styles.cancelled]} numberOfLines={2}>
           {event.title}
@@ -283,227 +283,237 @@ function PlanningItem({ item }: { item: DayItem }) {
           </Text>
         ) : null}
       </View>
-      {event.shared ? <Icon name="group" size={18} color={Tint.primary} /> : null}
+      {event.shared ? <Icon name="group" size={18} color={c.link} /> : null}
     </Pressable>
   );
 }
 
-const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-  },
-  pressed: {
-    opacity: 0.8,
-  },
-  todayButton: {
-    height: 36,
-    paddingHorizontal: 12,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-    borderColor: Tint.border,
-    backgroundColor: Serene.surfaceContainerLowest,
-    justifyContent: 'center',
-  },
-  todayText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 14,
-    lineHeight: 19,
-    color: Tint.navy,
-  },
-  toolbar: {
-    gap: 10,
-    paddingBottom: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Tint.border,
-  },
-  search: {
-    height: 48,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: Tint.border,
-    backgroundColor: Serene.surfaceContainerLowest,
-  },
-  searchInput: {
-    flex: 1,
-    minWidth: 0,
-    outlineWidth: 0,
-    outlineStyle: 'solid',
-    fontFamily: FontFamily.body,
-    fontSize: 16,
-    color: Tint.navy,
-    paddingVertical: 0,
-  },
-  filters: {
-    gap: 8,
-  },
-  summary: {
-    fontFamily: FontFamily.body,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurfaceVariant,
-  },
-  content: {
-    paddingTop: 4,
-    paddingBottom: 40,
-  },
-  monthBanner: {
-    marginTop: 18,
-    marginBottom: 6,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-    backgroundColor: Tint.lavender,
-  },
-  monthText: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 18,
-    lineHeight: 24,
-    color: Tint.navy,
-  },
-  dayRow: {
-    flexDirection: 'row',
-    gap: 12,
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Tint.border,
-  },
-  pastRow: {
-    opacity: 0.6,
-  },
-  dayColumn: {
-    width: 48,
-    alignItems: 'center',
-    gap: 2,
-    paddingTop: 2,
-  },
-  weekday: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 12,
-    lineHeight: 16,
-    letterSpacing: 0.4,
-    color: Serene.onSurfaceVariant,
-  },
-  weekdayToday: {
-    color: Tint.primary,
-  },
-  dayNumberWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dayNumberToday: {
-    backgroundColor: Tint.primary,
-  },
-  dayNumber: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 20,
-    lineHeight: 26,
-    color: Tint.navy,
-  },
-  dayNumberTodayText: {
-    color: Serene.onPrimary,
-  },
-  dayItems: {
-    flex: 1,
-    minWidth: 0,
-    gap: 8,
-  },
-  item: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 10,
-    paddingRight: 12,
-    borderRadius: 14,
-    overflow: 'hidden',
-  },
-  itemBar: {
-    width: 4,
-    alignSelf: 'stretch',
-    borderRadius: Radius.full,
-    marginLeft: 6,
-  },
-  itemBody: {
-    flex: 1,
-    minWidth: 0,
-    gap: 2,
-  },
-  itemTitle: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 15,
-    lineHeight: 20,
-    color: Tint.navy,
-  },
-  itemTime: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  itemPlace: {
-    fontFamily: FontFamily.body,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurfaceVariant,
-  },
-  cancelled: {
-    textDecorationLine: 'line-through',
-    color: Serene.onSurfaceVariant,
-  },
-  taskItem: {
-    paddingLeft: 10,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: '#99f6e4',
-    backgroundColor: '#f0fdfa',
-  },
-  taskBox: {
-    width: 20,
-    height: 20,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: Tint.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  taskMeta: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Tint.primary,
-  },
-  freeDay: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    minHeight: 44,
-    paddingHorizontal: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: Tint.border,
-  },
-  freeText: {
-    fontFamily: FontFamily.body,
-    fontSize: 14,
-    lineHeight: 19,
-    color: Serene.onSurfaceVariant,
-  },
-  empty: {
-    marginTop: 22,
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 24,
-  },
-  emptyTitle: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 18,
-    lineHeight: 24,
-    color: Tint.navy,
-  },
-});
+function makeStyles(c: AppColors) {
+  return StyleSheet.create({
+    flex: {
+      flex: 1,
+    },
+    pressed: {
+      opacity: 0.8,
+    },
+    todayButton: {
+      height: 36,
+      paddingHorizontal: 12,
+      borderRadius: Radius.full,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.card,
+      justifyContent: 'center',
+    },
+    todayText: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 14,
+      lineHeight: 19,
+      color: c.text,
+    },
+    toolbar: {
+      gap: 10,
+      paddingBottom: 12,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: c.border,
+    },
+    search: {
+      height: 48,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      paddingHorizontal: 14,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.card,
+    },
+    searchInput: {
+      flex: 1,
+      minWidth: 0,
+      outlineWidth: 0,
+      outlineStyle: 'solid',
+      fontFamily: FontFamily.body,
+      fontSize: 16,
+      color: c.text,
+      paddingVertical: 0,
+    },
+    filters: {
+      gap: 8,
+    },
+    summary: {
+      fontFamily: FontFamily.body,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.muted,
+    },
+    content: {
+      paddingTop: 4,
+      paddingBottom: 40,
+    },
+    monthBanner: {
+      marginTop: 18,
+      marginBottom: 6,
+      paddingVertical: 10,
+      paddingHorizontal: 14,
+      borderRadius: 14,
+      backgroundColor: c.soft,
+    },
+    monthText: {
+      fontFamily: FontFamily.headingBold,
+      fontSize: 18,
+      lineHeight: 24,
+      color: c.text,
+    },
+    dayRow: {
+      flexDirection: 'row',
+      gap: 12,
+      paddingVertical: 10,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: c.border,
+    },
+    pastRow: {
+      opacity: 0.6,
+    },
+    dayColumn: {
+      width: 48,
+      alignItems: 'center',
+      gap: 2,
+      paddingTop: 2,
+    },
+    weekday: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 12,
+      lineHeight: 16,
+      letterSpacing: 0.4,
+      color: c.muted,
+    },
+    weekdayToday: {
+      color: c.link,
+    },
+    dayNumberWrap: {
+      width: 40,
+      height: 40,
+      borderRadius: Radius.full,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    dayNumberToday: {
+      backgroundColor: c.link,
+    },
+    dayNumber: {
+      fontFamily: FontFamily.headingBold,
+      fontSize: 20,
+      lineHeight: 26,
+      color: c.text,
+    },
+    dayNumberTodayText: {
+      color: c.solidText,
+    },
+    dayItems: {
+      flex: 1,
+      minWidth: 0,
+      gap: 8,
+    },
+    item: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      paddingVertical: 10,
+      paddingRight: 12,
+      borderRadius: 14,
+      overflow: 'hidden',
+    },
+    itemBar: {
+      width: 4,
+      alignSelf: 'stretch',
+      borderRadius: Radius.full,
+      marginLeft: 6,
+    },
+    itemBody: {
+      flex: 1,
+      minWidth: 0,
+      gap: 2,
+    },
+    itemTitle: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 15,
+      lineHeight: 20,
+      color: c.text,
+    },
+    itemTime: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 13,
+      lineHeight: 18,
+    },
+    itemPlace: {
+      fontFamily: FontFamily.body,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.muted,
+    },
+    cancelled: {
+      textDecorationLine: 'line-through',
+      color: c.muted,
+    },
+    taskItem: {
+      paddingLeft: 10,
+      borderWidth: 1,
+      borderStyle: 'dashed',
+      borderColor: '#99f6e4',
+      backgroundColor: '#f0fdfa',
+    },
+    taskBox: {
+      width: 20,
+      height: 20,
+      borderRadius: 6,
+      borderWidth: 2,
+      borderColor: c.link,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    taskMeta: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.link,
+    },
+    freeDay: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      minHeight: 44,
+      paddingHorizontal: 12,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderStyle: 'dashed',
+      borderColor: c.border,
+    },
+    freeText: {
+      fontFamily: FontFamily.body,
+      fontSize: 14,
+      lineHeight: 19,
+      color: c.muted,
+    },
+    empty: {
+      marginTop: 22,
+      alignItems: 'center',
+      gap: 8,
+      paddingVertical: 24,
+    },
+    emptyTitle: {
+      fontFamily: FontFamily.headingBold,
+      fontSize: 18,
+      lineHeight: 24,
+      color: c.text,
+    },
+  });
+}
+
+const STYLES = { light: makeStyles(LIGHT), dark: makeStyles(DARK) };
+
+/** Couleurs et styles du mode actuel (sombre seulement dans un module converti). */
+function useLook() {
+  const c = useScopedColors();
+  return { c, styles: c.dark ? STYLES.dark : STYLES.light };
+}

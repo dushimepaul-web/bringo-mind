@@ -12,7 +12,8 @@ import {
 } from 'react-native';
 
 import { BottomSheet, PrimaryButton } from '@/components/ui/kit';
-import { FontFamily, Serene, Tint } from '@/constants/design';
+import { DARK, LIGHT, useScopedColors, type AppColors } from '@/constants/app-colors';
+import { FontFamily } from '@/constants/design';
 
 const ITEM = 44;
 const VISIBLE = 5;
@@ -31,6 +32,7 @@ export function WheelColumn({
   onChange: (value: number) => void;
   label: string;
 }) {
+  const { styles } = useLook();
   const ref = useRef<ScrollViewInstance>(null);
   const placed = useRef(false);
   const index = Math.max(0, values.indexOf(value));
@@ -115,6 +117,7 @@ export function TimeWheelSheet({
   onConfirm: (hours: number, minutes: number) => void;
   onClose: () => void;
 }) {
+  const { styles } = useLook();
   const [h, setH] = useState(hours);
   const [m, setM] = useState(minutes);
   const [opened, setOpened] = useState(false);
@@ -149,61 +152,71 @@ export function TimeWheelSheet({
   );
 }
 
-const styles = StyleSheet.create({
-  wheels: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    marginBottom: 8,
-  },
-  separator: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 28,
-    lineHeight: 34,
-    color: Tint.navy,
-  },
-  column: {
-    width: 96,
-    height: ITEM * VISIBLE,
-    overflow: 'hidden',
-  },
-  band: {
-    position: 'absolute',
-    top: PAD,
-    left: 0,
-    right: 0,
-    height: ITEM,
-    borderRadius: 12,
-    backgroundColor: Tint.soft,
-    borderWidth: 1,
-    borderColor: Tint.border,
-  },
-  content: {
-    paddingVertical: PAD,
-  },
-  item: {
-    height: ITEM,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  text: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 22,
-    lineHeight: 28,
-    color: Tint.navy,
-    fontVariant: ['tabular-nums'],
-  },
-  textSelected: {
-    fontSize: 26,
-    lineHeight: 32,
-  },
-  textNear: {
-    color: Serene.onSurfaceVariant,
-    opacity: 0.7,
-  },
-  textFar: {
-    color: Serene.onSurfaceVariant,
-    opacity: 0.35,
-  },
-});
+function makeStyles(c: AppColors) {
+  return StyleSheet.create({
+    wheels: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      marginBottom: 8,
+    },
+    separator: {
+      fontFamily: FontFamily.headingBold,
+      fontSize: 28,
+      lineHeight: 34,
+      color: c.text,
+    },
+    column: {
+      width: 96,
+      height: ITEM * VISIBLE,
+      overflow: 'hidden',
+    },
+    band: {
+      position: 'absolute',
+      top: PAD,
+      left: 0,
+      right: 0,
+      height: ITEM,
+      borderRadius: 12,
+      backgroundColor: c.soft,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    content: {
+      paddingVertical: PAD,
+    },
+    item: {
+      height: ITEM,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    text: {
+      fontFamily: FontFamily.headingBold,
+      fontSize: 22,
+      lineHeight: 28,
+      color: c.text,
+      fontVariant: ['tabular-nums'],
+    },
+    textSelected: {
+      fontSize: 26,
+      lineHeight: 32,
+    },
+    textNear: {
+      color: c.muted,
+      opacity: 0.7,
+    },
+    textFar: {
+      color: c.muted,
+      opacity: 0.35,
+    },
+  });
+}
+
+const STYLES = { light: makeStyles(LIGHT), dark: makeStyles(DARK) };
+
+/** Couleurs et styles du mode actuel (sombre seulement dans un module converti). */
+function useLook() {
+  const c = useScopedColors();
+  return { c, styles: c.dark ? STYLES.dark : STYLES.light };
+}

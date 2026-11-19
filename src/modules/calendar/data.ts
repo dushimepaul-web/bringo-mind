@@ -1,5 +1,4 @@
 // Données de démonstration et outils du module Calendrier, cohérents avec Tâches et Rappels.
-import { Serene } from '@/constants/design';
 import { DEMO_TODAY, addDays, atTime, dayOffset, startOfDay } from '@/lib/demo-dates';
 
 import type { CalendarEvent, EventRecurrence, EventTone, TaskDeadline } from './types';
@@ -25,12 +24,24 @@ export const MONTHS = [
 export const WEEKDAY_LETTERS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
 export const WEEKDAY_SHORT = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
 
-export const TONES: Record<EventTone, { label: string; icon: string; bg: string; fg: string; bar: string }> = {
-  health: { label: 'Santé', icon: 'medical_services', bg: Serene.secondaryContainer, fg: Serene.onSecondaryContainer, bar: '#006a61' },
-  work: { label: 'Travail', icon: 'work', bg: '#dce9ff', fg: '#1e3a8a', bar: '#131b2e' },
-  family: { label: 'Famille', icon: 'family_restroom', bg: '#fef3c7', fg: '#92400e', bar: '#d97706' },
-  admin: { label: 'Démarche', icon: 'account_balance', bg: '#e2dfff', fg: '#3323cc', bar: '#4f46e5' },
-  leisure: { label: 'Loisirs', icon: 'sports_soccer', bg: '#fce7f3', fg: '#9d174d', bar: '#db2777' },
+type ToneStyle = { label: string; icon: string; bg: string; fg: string; bar: string };
+
+/** Catégories d'événements (couleurs de l'app, mode clair). */
+export const TONES: Record<EventTone, ToneStyle> = {
+  health: { label: 'Santé', icon: 'medical_services', bg: '#D3F5EE', fg: '#0B7A6E', bar: '#0FB5A3' },
+  work: { label: 'Travail', icon: 'work', bg: '#DDE9FB', fg: '#1D5ED0', bar: '#1D6FE0' },
+  family: { label: 'Famille', icon: 'family_restroom', bg: '#FCEFC4', fg: '#8A6100', bar: '#F2B01E' },
+  admin: { label: 'Démarche', icon: 'account_balance', bg: '#E4E3FB', fg: '#4338CA', bar: '#5B5BD6' },
+  leisure: { label: 'Loisirs', icon: 'sports_soccer', bg: '#FCE4EF', fg: '#B0306A', bar: '#E0518E' },
+};
+
+/** Mêmes catégories en mode sombre : fonds foncés, textes clairs. */
+export const TONES_DARK: Record<EventTone, ToneStyle> = {
+  health: { ...TONES.health, bg: '#0F3B3B', fg: '#5EEAD4' },
+  work: { ...TONES.work, bg: '#1B3058', fg: '#8DBBFF' },
+  family: { ...TONES.family, bg: '#3D3216', fg: '#F5C84B' },
+  admin: { ...TONES.admin, bg: '#262A55', fg: '#A5B4FC' },
+  leisure: { ...TONES.leisure, bg: '#3B1D2E', fg: '#F9A8D4' },
 };
 
 export const RECURRENCE_LABELS: Record<EventRecurrence, string> = {

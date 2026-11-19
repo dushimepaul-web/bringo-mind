@@ -6,10 +6,11 @@ import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Switch, Text, T
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icon';
-import { Chip, PrimaryButton, TopBar, kitStyles } from '@/components/ui/kit';
-import { FontFamily, Serene, Tint } from '@/constants/design';
+import { Chip, PrimaryButton, TopBar, useKitStyles } from '@/components/ui/kit';
+import { DARK, LIGHT, useScopedColors, type AppColors } from '@/constants/app-colors';
+import { FontFamily } from '@/constants/design';
 
-import { householdStyles } from '../components/household-ui';
+import { useHouseholdStyles } from '../components/household-ui';
 import { isValidEmail } from '../data';
 import { householdActions } from '../store';
 
@@ -21,6 +22,9 @@ const KINDS = [
 ];
 
 export default function CreateHouseholdScreen() {
+  const { c, styles } = useLook();
+  const kitStyles = useKitStyles();
+  const householdStyles = useHouseholdStyles();
   const [name, setName] = useState('Foyer Martin');
   const [kind, setKind] = useState('family');
   const [inviteNow, setInviteNow] = useState(true);
@@ -52,8 +56,8 @@ export default function CreateHouseholdScreen() {
             onBlur={() => setFocus(null)}
             maxLength={40}
             placeholder="Ex. Foyer Martin"
-            placeholderTextColor={Serene.onSurfaceVariant}
-            selectionColor={Tint.primary}
+            placeholderTextColor={c.muted}
+            selectionColor={c.link}
             accessibilityLabel="Nom du foyer"
           />
           {!nameOk ? <Text style={styles.error}>Donnez un nom d’au moins 2 caractères.</Text> : null}
@@ -67,7 +71,7 @@ export default function CreateHouseholdScreen() {
 
           <View style={[kitStyles.card, styles.inviteCard]}>
             <View style={styles.switchRow}>
-              <Icon name="person_add" size={22} color={Tint.navy} />
+              <Icon name="person_add" size={22} color={c.text} />
               <View style={styles.flex}>
                 <Text style={kitStyles.label}>Inviter quelqu’un maintenant</Text>
                 <Text style={styles.hint}>Vous pourrez aussi le faire plus tard.</Text>
@@ -75,7 +79,7 @@ export default function CreateHouseholdScreen() {
               <Switch
                 value={inviteNow}
                 onValueChange={setInviteNow}
-                trackColor={{ false: '#cbd5e1', true: Tint.primary }}
+                trackColor={{ false: c.border, true: c.link }}
                 thumbColor="#ffffff"
                 {...(Platform.OS === 'web' ? { activeThumbColor: '#ffffff' } : {})}
                 accessibilityLabel="Inviter quelqu’un maintenant"
@@ -93,8 +97,8 @@ export default function CreateHouseholdScreen() {
                   autoCapitalize="none"
                   autoCorrect={false}
                   placeholder="prenom.nom@email.fr"
-                  placeholderTextColor={Serene.onSurfaceVariant}
-                  selectionColor={Tint.primary}
+                  placeholderTextColor={c.muted}
+                  selectionColor={c.link}
                   accessibilityLabel="Adresse e-mail à inviter"
                 />
                 {!emailOk ? <Text style={styles.error}>Saisissez une adresse e-mail valide.</Text> : null}
@@ -104,7 +108,7 @@ export default function CreateHouseholdScreen() {
           </View>
 
           <View style={[householdStyles.note, styles.note]}>
-            <Icon name="lock" size={20} color={Tint.primary} />
+            <Icon name="lock" size={20} color={c.link} />
             <Text style={householdStyles.noteText}>
               Rien n’est partagé automatiquement : vous choisissez, élément par élément, ce que le foyer peut voir.
             </Text>
@@ -130,55 +134,65 @@ export default function CreateHouseholdScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-  },
-  content: {
-    paddingTop: 4,
-    paddingBottom: 24,
-  },
-  label: {
-    marginTop: 20,
-    marginBottom: 8,
-  },
-  chips: {
-    gap: 8,
-  },
-  inviteCard: {
-    marginTop: 20,
-    gap: 12,
-  },
-  switchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  hint: {
-    fontFamily: FontFamily.body,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurfaceVariant,
-  },
-  error: {
-    marginTop: 6,
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.error,
-  },
-  note: {
-    marginTop: 18,
-  },
-  footer: {
-    width: '100%',
-    maxWidth: 560,
-    alignSelf: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Tint.border,
-    backgroundColor: Tint.softer,
-  },
-});
+function makeStyles(c: AppColors) {
+  return StyleSheet.create({
+    flex: {
+      flex: 1,
+    },
+    content: {
+      paddingTop: 4,
+      paddingBottom: 24,
+    },
+    label: {
+      marginTop: 20,
+      marginBottom: 8,
+    },
+    chips: {
+      gap: 8,
+    },
+    inviteCard: {
+      marginTop: 20,
+      gap: 12,
+    },
+    switchRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    hint: {
+      fontFamily: FontFamily.body,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.muted,
+    },
+    error: {
+      marginTop: 6,
+      fontFamily: FontFamily.bodyMedium,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.error,
+    },
+    note: {
+      marginTop: 18,
+    },
+    footer: {
+      width: '100%',
+      maxWidth: 560,
+      alignSelf: 'center',
+      paddingHorizontal: 20,
+      paddingTop: 10,
+      paddingBottom: 12,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: c.border,
+      backgroundColor: c.page,
+    },
+  });
+}
+
+const STYLES = { light: makeStyles(LIGHT), dark: makeStyles(DARK) };
+
+/** Couleurs et styles du mode actuel (sombre seulement dans un module converti). */
+function useLook() {
+  const c = useScopedColors();
+  return { c, styles: c.dark ? STYLES.dark : STYLES.light };
+}

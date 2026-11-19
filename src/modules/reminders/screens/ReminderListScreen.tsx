@@ -1,83 +1,77 @@
-// S-11 - Rappels | Module M05 Rappels | Phase S5
+// S-10 - Rappels | Module M05 Rappels | Phase S5
+// Dans l'esprit de l'application Réveil du téléphone : l'heure en grand, le titre et la répétition dessous,
+// l'interrupteur à droite. Rappels classés Aujourd'hui / Demain / Plus tard / En pause / Passés.
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import {
-  Platform,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  View,
-} from 'react-native';
+import { Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppHeader } from '@/components/app-header';
 import { Icon } from '@/components/icon';
-import { Chip, PrimaryButton, SwipeRow, Tag, UndoToast, kitStyles } from '@/components/ui/kit';
-import { FontFamily, Radius, Serene, Space, Tint } from '@/constants/design';
-import { dayOffset, formatDay, formatLongDay, formatTime } from '@/lib/demo-dates';
-
-import { CHANNEL_META, QUIET_HOURS, linkIcon, linkLabel, repeatSummary } from '../data';
+import { TURQUOISE } from '@/components/rings';
+import { BottomSheet, SheetOption, UndoToast, useKitStyles } from '@/components/ui/kit';
 import { QueryView } from '@/components/ui/states';
+import { DARK, LIGHT, useScopedColors, type AppColors } from '@/constants/app-colors';
+import { FontFamily, Radius } from '@/constants/design';
 import { useQuery } from '@/hooks/use-query';
+import { dayOffset, formatDay, formatTime } from '@/lib/demo-dates';
 
+import { CHANNEL_META, linkHref, linkLabel, repeatSummary } from '../data';
 import { reminderActions, syncReminders, useReminderState } from '../store';
 import type { Reminder } from '../types';
+import { REMINDER_VIEWS, setReminderView, useReminderView, type ReminderView } from '../view-mode';
 
-type FilterKey = 'upcoming' | 'past' | 'paused' | 'all';
-type SectionKey = 'today' | 'tomorrow' | 'week' | 'later' | 'paused' | 'past';
-type Toast = { text: string; undo?: () => void };
+type Group = 'today' | 'tomorrow' | 'later' | 'paused' | 'past';
 
-const FILTERS: { key: FilterKey; label: string }[] = [
-  { key: 'upcoming', label: 'À venir' },
-  { key: 'past', label: 'Passés' },
-  { key: 'paused', label: 'En pause' },
-  { key: 'all', label: 'Tous' },
-];
+const GROUP_LABELS: Record<Group, string> = {
+  today: 'Aujourd’hui',
+  tomorrow: 'Demain',
+  later: 'Plus tard',
+  paused: 'En pause',
+  past: 'Passés',
+};
 
-const DAY_SHORT = ['Dim.', 'Lun.', 'Mar.', 'Mer.', 'Jeu.', 'Ven.', 'Sam.'];
+const GROUP_ICONS: Record<Group, string> = {
+  today: 'today',
+  tomorrow: 'event',
+  later: 'date_range',
+  paused: 'pause_circle',
+  past: 'history',
+};
 
-function sectionOf(reminder: Reminder): SectionKey {
+function groupOf(reminder: Reminder): Group {
   if (reminder.delivery) return 'past';
   if (reminder.paused) return 'paused';
   const offset = dayOffset(reminder.at);
   if (offset <= 0) return 'today';
   if (offset === 1) return 'tomorrow';
-  if (offset < 7) return 'week';
   return 'later';
 }
 
-function sectionTitle(key: SectionKey, sample: Reminder): string {
-  switch (key) {
-    case 'today':
-      return `Aujourd’hui • ${formatLongDay(sample.at)}`;
-    case 'tomorrow':
-      return `Demain • ${formatLongDay(sample.at)}`;
-    case 'week':
-      return 'Cette semaine';
-    case 'later':
-      return 'Plus tard';
-    case 'paused':
-      return 'En pause';
-    default:
-      return 'Passés';
-  }
+/** « Aujourd'hui », « Demain », sinon « 16 mai ». */
+function dayText(at: Date): string {
+  const offset = dayOffset(at);
+  if (offset === 0) return 'Aujourd’hui';
+  if (offset === 1) return 'Demain';
+  if (offset === -1) return 'Hier';
+  return formatDay(at);
 }
 
-const ORDER: Record<FilterKey, SectionKey[]> = {
-  upcoming: ['today', 'tomorrow', 'week', 'later'],
-  past: ['past'],
-  paused: ['paused'],
-  all: ['today', 'tomorrow', 'week', 'later', 'paused', 'past'],
-};
+type Toast = { text: string; undo?: () => void };
 
 export default function ReminderListScreen() {
+  const { c, styles } = useLook();
+  const kit = useKitStyles();
   const { reminders, notificationsAllowed, flash } = useReminderState();
-  const [filter, setFilter] = useState<FilterKey>('upcoming');
-  const [toast, setToast] = useState<Toast | null>(null);
   const sync = useQuery('reminders', syncReminders);
+  const view = useReminderView();
+  const viewInfo = REMINDER_VIEWS.find((entry) => entry.key === view) ?? REMINDER_VIEWS[0];
+  const [searching, setSearching] = useState(false);
+  const [query, setQuery] = useState('');
+  const [sheet, setSheet] = useState<'view' | null>(null);
+  const [menuItem, setMenuItem] = useState<Reminder | null>(null);
+  const [collapsed, setCollapsed] = useState<Record<Group, boolean>>({ today: false, tomorrow: false, later: false, paused: false, past: true });
+  const [toast, setToast] = useState<Toast | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -88,650 +82,428 @@ export default function ReminderListScreen() {
     }, [flash]),
   );
 
-  const counts = useMemo(() => {
-    const result = { today: 0, tomorrow: 0, paused: 0, past: 0, missed: 0, upcoming: 0 };
-    for (const item of reminders) {
-      const section = sectionOf(item);
-      if (section === 'today') result.today += 1;
-      if (section === 'tomorrow') result.tomorrow += 1;
-      if (section === 'paused') result.paused += 1;
-      if (section === 'past') result.past += 1;
-      if (item.delivery?.status === 'missed') result.missed += 1;
-      if (!item.delivery && !item.paused) result.upcoming += 1;
-    }
-    return result;
-  }, [reminders]);
+  const sections = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    const list = term ? reminders.filter((item) => `${item.title} ${linkLabel(item.link)}`.toLowerCase().includes(term)) : reminders;
+    return (['today', 'tomorrow', 'later', 'paused', 'past'] as Group[])
+      .map((group) => ({
+        group,
+        items: list
+          .filter((item) => groupOf(item) === group)
+          .sort((a, b) => (group === 'past' ? b.at.getTime() - a.at.getTime() : a.at.getTime() - b.at.getTime())),
+      }))
+      .filter((section) => section.items.length > 0);
+  }, [reminders, query]);
 
-  const sections = useMemo(
-    () =>
-      ORDER[filter]
-        .map((key) => ({
-          key,
-          items: reminders
-            .filter((item) => sectionOf(item) === key)
-            .sort((a, b) =>
-              key === 'past' ? b.at.getTime() - a.at.getTime() : a.at.getTime() - b.at.getTime(),
-            ),
-        }))
-        .filter((section) => section.items.length > 0),
-    [reminders, filter],
-  );
-
-  const refreshing = sync.refreshing;
-  const onRefresh = sync.reload;
-
-  const togglePause = (item: Reminder) => {
-    const paused = !item.paused;
-    reminderActions.setPaused(item.id, paused);
+  const togglePaused = (item: Reminder) => {
+    reminderActions.setPaused(item.id, !item.paused);
     setToast({
-      text: paused ? 'Rappel mis en pause.' : 'Rappel réactivé.',
-      undo: () => reminderActions.setPaused(item.id, !paused),
+      text: item.paused ? 'Rappel réactivé.' : 'Rappel mis en pause.',
+      undo: () => reminderActions.setPaused(item.id, item.paused),
     });
-  };
-
-  const snooze = (item: Reminder) => {
-    reminderActions.snooze(item.id, 60);
-    setToast({
-      text: `Repoussé d’1 heure : ${formatTime(new Date(item.at.getTime() + 3600000))}.`,
-      undo: () => reminderActions.snooze(item.id, -60),
-    });
-  };
-
-  const resend = (item: Reminder) => {
-    reminderActions.resend(item.id);
-    setToast({ text: `« ${item.title} » renvoyé.` });
   };
 
   return (
-    <SafeAreaView style={kitStyles.safe} edges={['top']}>
+    <SafeAreaView style={kit.safe} edges={['top']}>
       <AppHeader />
 
       <ScrollView
         style={styles.flex}
-        contentContainerStyle={[kitStyles.content, styles.content]}
+        contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={Tint.primary}
-            colors={[Tint.primary]}
-          />
-        }>
+        keyboardShouldPersistTaps="handled"
+        refreshControl={<RefreshControl refreshing={sync.refreshing} onRefresh={sync.reload} tintColor={c.link} colors={[c.link]} />}>
         <View style={styles.titleRow}>
-          <View style={styles.flex}>
-            <Text style={styles.eyebrow}>Notifications</Text>
-            <Text style={styles.pageTitle}>Rappels</Text>
-          </View>
-          <Tag label={`${counts.upcoming} actifs`} />
-        </View>
-
-        <View style={styles.stats}>
-          <Stat value={counts.today} label="Aujourd’hui" />
-          <Stat value={counts.tomorrow} label="Demain" />
-          <Stat value={counts.paused} label="En pause" muted />
-        </View>
-
-        {!notificationsAllowed ? (
-          <View style={styles.permission}>
-            <View style={styles.permissionIcon}>
-              <Icon name="notifications_off" size={22} color="#b45309" />
-            </View>
-            <View style={styles.flexMin}>
-              <Text style={styles.cardTitle}>Autorisez les notifications</Text>
-              <Text style={kitStyles.muted}>
-                Pour recevoir vos rappels même lorsque l’application est fermée.
-              </Text>
-            </View>
+          <Text style={styles.pageTitle}>Rappels</Text>
+          <View style={styles.titleActions}>
+            <Pressable style={({ pressed }) => [styles.square, pressed && styles.pressed]} accessibilityRole="button" accessibilityLabel={`Affichage : ${viewInfo.label}`} onPress={() => setSheet('view')}>
+              <Icon name={viewInfo.icon} size={22} color={c.text} />
+            </Pressable>
             <Pressable
-              style={({ pressed }) => [styles.allow, pressed && styles.pressed]}
+              style={({ pressed }) => [styles.square, searching && styles.squareOn, pressed && styles.pressed]}
               accessibilityRole="button"
+              accessibilityLabel={searching ? 'Fermer la recherche' : 'Rechercher un rappel'}
               onPress={() => {
-                reminderActions.allowNotifications(true);
-                setToast({ text: 'Notifications activées sur ce téléphone.' });
+                setSearching((value) => !value);
+                setQuery('');
               }}>
-              <Text style={styles.allowText}>Autoriser</Text>
+              <Icon name={searching ? 'close' : 'search'} size={22} color={c.text} />
+            </Pressable>
+            <Pressable style={({ pressed }) => [styles.square, styles.addSquare, pressed && styles.pressed]} accessibilityRole="button" accessibilityLabel="Nouveau rappel" onPress={() => router.push('/reminders/add')}>
+              <Icon name="add" size={26} color={c.solidText} />
             </Pressable>
           </View>
-        ) : null}
+        </View>
 
-        <Pressable
-          style={({ pressed }) => [kitStyles.card, styles.quiet, pressed && kitStyles.cardPressed]}
-          accessibilityRole="button"
-          onPress={() => router.push('/notifications/settings')}>
-          <View style={styles.quietIcon}>
-            <Icon name="bedtime" size={22} color={Tint.navy} />
-          </View>
-          <View style={styles.flexMin}>
-            <Text style={styles.cardTitle}>Heures de silence</Text>
-            <Text style={kitStyles.muted}>
-              Aucune notification entre {QUIET_HOURS.from} et {QUIET_HOURS.to}
-            </Text>
-          </View>
-          <Text style={kitStyles.link}>Modifier</Text>
-        </Pressable>
-
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.chipsScroll}
-          contentContainerStyle={styles.chipsRow}>
-          {FILTERS.map((entry) => (
-            <Chip
-              key={entry.key}
-              label={entry.label}
-              selected={filter === entry.key}
-              count={
-                entry.key === 'past'
-                  ? counts.missed || undefined
-                  : entry.key === 'paused'
-                    ? counts.paused || undefined
-                    : undefined
-              }
-              onPress={() => setFilter(entry.key)}
+        {searching ? (
+          <View style={styles.search}>
+            <Icon name="search" size={20} color={c.muted} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Rechercher un rappel…"
+              placeholderTextColor={c.muted}
+              selectionColor={c.link}
+              value={query}
+              onChangeText={setQuery}
+              autoFocus
+              accessibilityLabel="Rechercher un rappel"
             />
-          ))}
-        </ScrollView>
-
-        {filter === 'past' && counts.missed > 0 ? (
-          <View style={styles.missedNote}>
-            <Icon name="error" size={20} color="#b91c1c" />
-            <Text style={styles.missedText}>
-              {counts.missed === 1 ? '1 rappel n’a pas pu être envoyé.' : `${counts.missed} rappels n’ont pas pu être envoyés.`}{' '}
-              Vous pouvez le renvoyer.
-            </Text>
           </View>
         ) : null}
 
-        <QueryView query={sync} empty={{ icon: 'notifications', title: 'Aucun rappel', text: 'Créez un rappel pour ne rien oublier : une démarche, un événement, un appel.', actionLabel: 'Nouveau rappel', onAction: () => router.push('/reminders/add') }}>
-        {sections.length === 0 ? (
-          <View style={[kitStyles.card, styles.empty]}>
-            <View style={styles.emptyIcon}>
-              <Icon name="notifications_paused" size={30} color={Tint.primary} />
+        {!notificationsAllowed ? (
+          <Pressable style={styles.permission} accessibilityRole="button" onPress={() => reminderActions.allowNotifications(true)}>
+            <Icon name="notifications_off" size={20} color={c.amberText} />
+            <Text style={styles.permissionText}>Notifications désactivées sur ce téléphone</Text>
+            <Text style={styles.permissionLink}>Autoriser</Text>
+          </Pressable>
+        ) : null}
+
+        <QueryView
+          query={sync}
+          empty={{
+            icon: 'notifications',
+            title: 'Aucun rappel',
+            text: 'Créez un rappel pour ne rien oublier : une démarche, un événement, un appel.',
+            actionLabel: 'Nouveau rappel',
+            onAction: () => router.push('/reminders/add'),
+          }}>
+          {sections.length === 0 ? (
+            <View style={styles.empty}>
+              <Icon name="search_off" size={32} color={c.link} />
+              <Text style={styles.emptyTitle}>Aucun rappel ne correspond</Text>
             </View>
-            <Text style={styles.emptyTitle}>
-              {filter === 'paused' ? 'Aucun rappel en pause' : 'Aucun rappel ici'}
-            </Text>
-            <Text style={styles.emptyText}>Créez un rappel pour ne rien oublier.</Text>
-          </View>
-        ) : (
-          sections.map((section) => (
-            <View key={section.key} style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>{sectionTitle(section.key, section.items[0])}</Text>
-                <View style={styles.countPill}>
-                  <Text style={styles.countText}>{section.items.length}</Text>
-                </View>
+          ) : (
+            sections.map((section) => (
+              <View key={section.group} style={styles.section}>
+                <Pressable
+                  style={styles.sectionHead}
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: !collapsed[section.group] }}
+                  accessibilityLabel={`${GROUP_LABELS[section.group]}, ${section.items.length} rappel${section.items.length > 1 ? 's' : ''}`}
+                  onPress={() => setCollapsed((value) => ({ ...value, [section.group]: !value[section.group] }))}>
+                  <Icon name={GROUP_ICONS[section.group]} size={20} color={section.group === 'past' || section.group === 'paused' ? c.muted : c.link} />
+                  <Text style={styles.sectionTitle}>{GROUP_LABELS[section.group]}</Text>
+                  <Text style={styles.sectionCount}>{section.items.length}</Text>
+                  <Icon name={collapsed[section.group] ? 'expand_more' : 'expand_less'} size={22} color={c.muted} />
+                </Pressable>
+                {collapsed[section.group] ? null : (
+                  <SectionItems view={view} items={section.items} onToggle={togglePaused} onMenu={setMenuItem} />
+                )}
               </View>
-              <View style={styles.stack}>
-                {section.items.map((item) => (
-                  <ReminderRow
-                    key={item.id}
-                    item={item}
-                    section={section.key}
-                    onTogglePause={() => togglePause(item)}
-                    onSnooze={() => snooze(item)}
-                    onResend={() => resend(item)}
-                  />
-                ))}
-              </View>
-            </View>
-          ))
-        )}
+            ))
+          )}
         </QueryView>
       </ScrollView>
 
-      <View style={styles.fabWrap} pointerEvents="box-none">
-        <PrimaryButton
-          label="Nouveau rappel"
-          icon="add_alert"
-          onPress={() => router.push('/reminders/add')}
-          style={styles.fab}
-        />
-      </View>
+      {toast ? <UndoToast key={toast.text} text={toast.text} onUndo={toast.undo} onHide={() => setToast(null)} bottom={84} /> : null}
 
-      {toast ? (
-        <UndoToast
-          key={toast.text}
-          text={toast.text}
-          onUndo={toast.undo}
-          onHide={() => setToast(null)}
-          bottom={84}
-        />
-      ) : null}
+      <BottomSheet visible={sheet === 'view'} title="Affichage" subtitle="Choisissez comment voir vos rappels." onClose={() => setSheet(null)}>
+        {REMINDER_VIEWS.map((entry) => (
+          <SheetOption
+            key={entry.key}
+            icon={view === entry.key ? 'check_circle' : entry.icon}
+            label={entry.label}
+            hint={entry.hint}
+            onPress={() => {
+              setReminderView(entry.key);
+              setSheet(null);
+            }}
+          />
+        ))}
+      </BottomSheet>
+
+      <BottomSheet visible={menuItem !== null} title={menuItem?.title ?? ''} onClose={() => setMenuItem(null)}>
+        {menuItem ? (
+          <>
+            <SheetOption
+              icon="edit"
+              label="Modifier"
+              onPress={() => {
+                setMenuItem(null);
+                router.push({ pathname: '/reminders/edit', params: { id: menuItem.id } });
+              }}
+            />
+            {!menuItem.delivery ? (
+              <SheetOption
+                icon="snooze"
+                label="Reporter de 15 minutes"
+                onPress={() => {
+                  setMenuItem(null);
+                  reminderActions.snooze(menuItem.id, 15);
+                  setToast({ text: 'Rappel reporté de 15 minutes.', undo: () => reminderActions.snooze(menuItem.id, -15) });
+                }}
+              />
+            ) : null}
+            {menuItem.delivery?.status === 'missed' ? (
+              <SheetOption
+                icon="send"
+                label="Renvoyer maintenant"
+                onPress={() => {
+                  setMenuItem(null);
+                  reminderActions.resend(menuItem.id);
+                  setToast({ text: 'Rappel renvoyé.' });
+                }}
+              />
+            ) : null}
+            {linkHref(menuItem.link) ? (
+              <SheetOption
+                icon="link"
+                label={`Voir ${linkLabel(menuItem.link).toLowerCase()}`}
+                onPress={() => {
+                  const href = linkHref(menuItem.link);
+                  setMenuItem(null);
+                  if (href) router.push(href);
+                }}
+              />
+            ) : null}
+            <SheetOption
+              icon="delete"
+              label="Supprimer"
+              danger
+              onPress={() => {
+                setMenuItem(null);
+                const undo = reminderActions.remove(menuItem.id);
+                setToast({ text: 'Rappel supprimé.', undo });
+              }}
+            />
+          </>
+        ) : null}
+      </BottomSheet>
     </SafeAreaView>
   );
 }
 
-function Stat({ value, label, muted }: { value: number; label: string; muted?: boolean }) {
+function SectionItems({
+  view,
+  items,
+  onToggle,
+  onMenu,
+}: {
+  view: ReminderView;
+  items: Reminder[];
+  onToggle: (item: Reminder) => void;
+  onMenu: (item: Reminder) => void;
+}) {
+  const { styles } = useLook();
+  if (view === 'grid') {
+    return (
+      <View style={styles.grid}>
+        {items.map((item) => (
+          <ReminderTile key={item.id} item={item} onToggle={() => onToggle(item)} onMenu={() => onMenu(item)} />
+        ))}
+      </View>
+    );
+  }
+  if (view === 'cards') {
+    return (
+      <View style={styles.cards}>
+        {items.map((item) => (
+          <ReminderCard key={item.id} item={item} onToggle={() => onToggle(item)} onMenu={() => onMenu(item)} />
+        ))}
+      </View>
+    );
+  }
   return (
-    <View style={[kitStyles.card, styles.stat]}>
-      <Text style={[styles.statValue, muted && styles.statValueMuted]}>{value}</Text>
-      <Text style={styles.statLabel} numberOfLines={1}>
-        {label}
-      </Text>
+    <View style={styles.listCard}>
+      {items.map((item, index) => (
+        <ReminderRow key={item.id} item={item} first={index === 0} onToggle={() => onToggle(item)} onMenu={() => onMenu(item)} />
+      ))}
     </View>
   );
 }
 
-function ReminderRow({
-  item,
-  section,
-  onTogglePause,
-  onSnooze,
-  onResend,
-}: {
-  item: Reminder;
-  section: SectionKey;
-  onTogglePause: () => void;
-  onSnooze: () => void;
-  onResend: () => void;
-}) {
-  const past = section === 'past';
-  const missed = item.delivery?.status === 'missed';
-  const showDay = section === 'week' || section === 'later' || past;
-  const iconTone =
-    item.link.kind === 'task'
-      ? { bg: Serene.secondaryContainer, fg: Serene.onSecondaryContainer }
-      : item.link.kind === 'event'
-        ? { bg: '#e2dfff', fg: '#3323cc' }
-        : { bg: Tint.soft, fg: Tint.navy };
-
-  const row = (
-    <Pressable
-      style={({ pressed }) => [
-        kitStyles.card,
-        styles.row,
-        item.paused && styles.rowPaused,
-        pressed && kitStyles.cardPressed,
-      ]}
-      // Sur le web, un rôle « button » produirait un <button> contenant l'interrupteur.
-      accessibilityRole={Platform.OS === 'web' ? undefined : 'button'}
-      accessibilityLabel={`${item.title}, ${formatTime(item.at)}`}
-      onPress={() => router.push({ pathname: '/reminders/edit', params: { id: item.id } })}>
-      <View style={styles.time}>
-        <Text style={[styles.timeText, item.paused && styles.muted]}>{formatTime(item.at)}</Text>
-        {showDay ? (
-          <Text style={styles.timeDay}>
-            {past
-              ? dayOffset(item.at) === 0
-                ? 'Auj.'
-                : dayOffset(item.at) === -1
-                  ? 'Hier'
-                  : formatDay(item.at)
-              : `${DAY_SHORT[item.at.getDay()]} ${item.at.getDate()}`}
-          </Text>
-        ) : null}
-      </View>
-
-      <View style={styles.rowBody}>
-        <Text style={[styles.rowTitle, item.paused && styles.muted]} numberOfLines={2}>
-          {item.title}
-        </Text>
-        <View style={styles.meta}>
-          <View style={[styles.linkTag, { backgroundColor: iconTone.bg }]}>
-            <Icon name={linkIcon(item.link)} size={13} color={iconTone.fg} />
-            <Text style={[styles.linkTagText, { color: iconTone.fg }]}>{linkLabel(item.link)}</Text>
-          </View>
-          <Text style={styles.metaText}>{repeatSummary(item)}</Text>
-          {item.shared ? <Icon name="group" size={15} color={Tint.primary} /> : null}
-          {item.channels.map((channel) => (
-            <Icon key={channel} name={CHANNEL_META[channel].icon} size={15} color={Serene.onSurfaceVariant} />
-          ))}
-        </View>
-        {past ? (
-          <Text style={[styles.delivery, missed ? styles.deliveryMissed : styles.deliverySent]}>
-            {missed ? 'Manqué' : 'Envoyé'} — {item.delivery?.detail}
-          </Text>
-        ) : null}
-        {missed ? (
-          <Pressable
-            style={({ pressed }) => [styles.resend, pressed && styles.pressed]}
-            accessibilityRole="button"
-            onPress={onResend}>
-            <Icon name="refresh" size={18} color={Serene.onPrimary} />
-            <Text style={styles.resendText}>Renvoyer maintenant</Text>
-          </Pressable>
-        ) : null}
-      </View>
-
-      {past ? (
-        missed ? (
-          <Icon name="error" size={22} color="#b91c1c" filled />
-        ) : (
-          <Icon name="check_circle" size={22} color={Serene.success} filled />
-        )
-      ) : (
-        <Switch
-          value={!item.paused}
-          onValueChange={onTogglePause}
-          trackColor={{ false: Tint.border, true: Tint.primary }}
-          thumbColor={Serene.surfaceContainerLowest}
-          {...(Platform.OS === 'web' ? { activeThumbColor: Serene.surfaceContainerLowest } : {})}
-          ios_backgroundColor={Tint.border}
-          accessibilityLabel={item.paused ? `Réactiver ${item.title}` : `Mettre en pause ${item.title}`}
-        />
-      )}
-    </Pressable>
-  );
-
-  if (past) return row;
-
+/** Interrupteur actif / en pause (rien pour un rappel passé). */
+function Toggle({ item, onToggle }: { item: Reminder; onToggle: () => void }) {
+  const { c } = useLook();
+  if (item.delivery) {
+    const missed = item.delivery.status === 'missed';
+    return <Icon name={missed ? 'error' : 'check_circle'} size={24} color={missed ? c.error : c.success} filled />;
+  }
   return (
-    <SwipeRow
-      onSwipeRight={onTogglePause}
-      onSwipeLeft={item.paused ? undefined : onSnooze}
-      rightLabel={item.paused ? 'Réactiver' : 'Pause'}
-      rightIcon={item.paused ? 'play_circle' : 'pause_circle'}
-      rightColor={Tint.navy}
-      leftLabel="+1 h"
-      leftIcon="snooze">
-      {row}
-    </SwipeRow>
+    <Switch
+      value={!item.paused}
+      onValueChange={onToggle}
+      trackColor={{ false: c.border, true: TURQUOISE }}
+      thumbColor="#FFFFFF"
+      {...(Platform.OS === 'web' ? { activeThumbColor: '#FFFFFF' } : {})}
+      ios_backgroundColor={c.border}
+      accessibilityLabel={item.paused ? `Réactiver ${item.title}` : `Mettre en pause ${item.title}`}
+    />
   );
 }
 
-const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-  },
-  flexMin: {
-    flex: 1,
-    minWidth: 0,
-  },
-  pressed: {
-    opacity: 0.75,
-  },
-  muted: {
-    color: Serene.onSurfaceVariant,
-  },
-  content: {
-    paddingBottom: 120,
-  },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 12,
-    paddingTop: 16,
-  },
-  eyebrow: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 13,
-    lineHeight: 18,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-    color: Tint.primary,
-  },
-  pageTitle: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 30,
-    lineHeight: 36,
-    letterSpacing: -0.6,
-    color: Tint.navy,
-  },
-  stats: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: Space.md,
-  },
-  stat: {
-    flex: 1,
-    paddingVertical: 14,
-    paddingHorizontal: 12,
-  },
-  statValue: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 26,
-    lineHeight: 32,
-    color: Tint.navy,
-  },
-  statValueMuted: {
-    color: Serene.onSurfaceVariant,
-  },
-  statLabel: {
-    fontFamily: FontFamily.body,
-    fontSize: 14,
-    lineHeight: 19,
-    color: Serene.onSurfaceVariant,
-  },
-  cardTitle: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 16,
-    lineHeight: 21,
-    color: Tint.navy,
-  },
-  permission: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginTop: 12,
-    padding: 16,
-    borderRadius: 20,
+function Meta({ item }: { item: Reminder }) {
+  const { c, styles } = useLook();
+  return (
+    <View style={styles.meta}>
+      <Text style={styles.metaText} numberOfLines={1}>
+        {item.delivery ? item.delivery.detail : `${dayText(item.at)} • ${repeatSummary(item)}`}
+      </Text>
+      {item.channels.map((channel) => (
+        <Icon key={channel} name={CHANNEL_META[channel].icon} size={15} color={c.muted} />
+      ))}
+      {item.shared ? <Icon name="group" size={15} color={c.link} /> : null}
+    </View>
+  );
+}
+
+/** Vue « Liste » : comme une alarme du téléphone. */
+function ReminderRow({ item, first, onToggle, onMenu }: { item: Reminder; first: boolean; onToggle: () => void; onMenu: () => void }) {
+  const { styles } = useLook();
+  const off = item.paused || !!item.delivery;
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.row, !first && styles.rowDivider, pressed && styles.rowPressed]}
+      accessibilityRole={Platform.OS === 'web' ? undefined : 'button'}
+      accessibilityLabel={`${item.title}, ${dayText(item.at)} à ${formatTime(item.at)}`}
+      onPress={() => router.push({ pathname: '/reminders/edit', params: { id: item.id } })}
+      onLongPress={onMenu}>
+      <View style={styles.rowMain}>
+        <Text style={[styles.bigTime, off && styles.off]}>{formatTime(item.at)}</Text>
+        <Text style={[styles.rowTitle, off && styles.off]} numberOfLines={1}>
+          {item.title}
+        </Text>
+        <Meta item={item} />
+      </View>
+      <Toggle item={item} onToggle={onToggle} />
+      <Pressable hitSlop={10} accessibilityRole="button" accessibilityLabel={`Actions pour ${item.title}`} onPress={onMenu}>
+        <Icon name="more_vert" size={22} color={styles.metaText.color as string} />
+      </Pressable>
+    </Pressable>
+  );
+}
+
+/** Vue « Cartes » : une carte par rappel, avec ce à quoi il est rattaché. */
+function ReminderCard({ item, onToggle, onMenu }: { item: Reminder; onToggle: () => void; onMenu: () => void }) {
+  const { c, styles } = useLook();
+  const off = item.paused || !!item.delivery;
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.card, pressed && styles.rowPressed]}
+      accessibilityRole={Platform.OS === 'web' ? undefined : 'button'}
+      accessibilityLabel={`${item.title}, ${dayText(item.at)} à ${formatTime(item.at)}`}
+      onPress={() => router.push({ pathname: '/reminders/edit', params: { id: item.id } })}>
+      <View style={styles.cardTop}>
+        <Text style={[styles.bigTime, off && styles.off]}>{formatTime(item.at)}</Text>
+        <Toggle item={item} onToggle={onToggle} />
+      </View>
+      <Text style={[styles.rowTitle, off && styles.off]} numberOfLines={2}>
+        {item.title}
+      </Text>
+      <Meta item={item} />
+      <View style={styles.cardFoot}>
+        <View style={styles.linkPill}>
+          <Icon name={item.link.kind === 'personal' ? 'person' : item.link.kind === 'task' ? 'task_alt' : item.link.kind === 'event' ? 'event' : 'description'} size={14} color={c.link} />
+          <Text style={styles.linkPillText} numberOfLines={1}>
+            {linkLabel(item.link)}
+          </Text>
+        </View>
+        <Pressable hitSlop={10} accessibilityRole="button" accessibilityLabel={`Actions pour ${item.title}`} onPress={onMenu}>
+          <Icon name="more_horiz" size={22} color={c.text} />
+        </Pressable>
+      </View>
+    </Pressable>
+  );
+}
+
+/** Vue « Grille » : deux rappels par ligne. */
+function ReminderTile({ item, onToggle, onMenu }: { item: Reminder; onToggle: () => void; onMenu: () => void }) {
+  const { c, styles } = useLook();
+  const off = item.paused || !!item.delivery;
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.tile, pressed && styles.rowPressed]}
+      accessibilityRole={Platform.OS === 'web' ? undefined : 'button'}
+      accessibilityLabel={`${item.title}, ${dayText(item.at)} à ${formatTime(item.at)}`}
+      onPress={() => router.push({ pathname: '/reminders/edit', params: { id: item.id } })}
+      onLongPress={onMenu}>
+      <Text style={[styles.tileTime, off && styles.off]}>{formatTime(item.at)}</Text>
+      <Text style={[styles.tileTitle, off && styles.off]} numberOfLines={2}>
+        {item.title}
+      </Text>
+      <Text style={styles.metaText} numberOfLines={1}>
+        {dayText(item.at)}
+      </Text>
+      <View style={styles.tileFoot}>
+        <Toggle item={item} onToggle={onToggle} />
+        <Pressable hitSlop={10} accessibilityRole="button" accessibilityLabel={`Actions pour ${item.title}`} onPress={onMenu}>
+          <Icon name="more_horiz" size={22} color={c.text} />
+        </Pressable>
+      </View>
+    </Pressable>
+  );
+}
+
+function makeStyles(c: AppColors) {
+  const surface = {
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#fde68a',
-    backgroundColor: '#fffbeb',
-  },
-  permissionIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: '#fef3c7',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  allow: {
-    height: 40,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    backgroundColor: Tint.black,
-    justifyContent: 'center',
-  },
-  allowText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 14,
-    lineHeight: 19,
-    color: Serene.onPrimary,
-  },
-  quiet: {
-    marginTop: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  quietIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: Tint.lavender,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  chipsScroll: {
-    marginTop: 18,
-    marginHorizontal: -Space.gutter,
-  },
-  chipsRow: {
-    gap: 8,
-    paddingHorizontal: Space.gutter,
-  },
-  missedNote: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginTop: 16,
-    padding: 14,
-    borderRadius: 16,
-    backgroundColor: '#fee2e2',
-  },
-  missedText: {
-    flex: 1,
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 14,
-    lineHeight: 20,
-    color: '#991b1b',
-  },
-  section: {
-    marginTop: 24,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    flexShrink: 1,
-    fontFamily: FontFamily.headingBold,
-    fontSize: 18,
-    lineHeight: 24,
-    color: Tint.navy,
-  },
-  countPill: {
-    minWidth: 26,
-    height: 24,
-    paddingHorizontal: 8,
-    borderRadius: Radius.full,
-    backgroundColor: Tint.soft,
-    borderWidth: 1,
-    borderColor: Tint.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  countText: {
-    fontFamily: FontFamily.bodyBold,
-    fontSize: 13,
-    lineHeight: 17,
-    color: Tint.navy,
-  },
-  stack: {
-    gap: 12,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  rowPaused: {
-    backgroundColor: Tint.softer,
-  },
-  time: {
-    width: 52,
-    alignItems: 'center',
-  },
-  timeText: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 16,
-    lineHeight: 21,
-    color: Tint.navy,
-    fontVariant: ['tabular-nums'],
-  },
-  timeDay: {
-    fontFamily: FontFamily.body,
-    fontSize: 13,
-    lineHeight: 17,
-    color: Serene.onSurfaceVariant,
-  },
-  rowBody: {
-    flex: 1,
-    minWidth: 0,
-    gap: 3,
-  },
-  rowTitle: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 16,
-    lineHeight: 21,
-    color: Tint.navy,
-  },
-  meta: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    columnGap: 6,
-    rowGap: 2,
-  },
-  linkTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 6,
-  },
-  linkTagText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  metaText: {
-    fontFamily: FontFamily.body,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurfaceVariant,
-  },
-  delivery: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  deliverySent: {
-    color: Serene.success,
-  },
-  deliveryMissed: {
-    color: '#b91c1c',
-  },
-  resend: {
-    alignSelf: 'flex-start',
-    marginTop: 6,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    height: 38,
-    paddingHorizontal: 10,
-    borderRadius: 12,
-    backgroundColor: Tint.black,
-  },
-  resendText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onPrimary,
-  },
-  empty: {
-    marginTop: 24,
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 28,
-  },
-  emptyIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 20,
-    backgroundColor: Serene.secondaryContainer,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyTitle: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 18,
-    lineHeight: 24,
-    color: Tint.navy,
-  },
-  emptyText: {
-    fontFamily: FontFamily.body,
-    fontSize: 15,
-    lineHeight: 21,
-    color: Serene.onSurfaceVariant,
-  },
-  fabWrap: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 12,
-    paddingHorizontal: Space.gutter,
-    alignItems: 'center',
-  },
-  fab: {
-    width: '100%',
-    maxWidth: 528,
-  },
-});
+    borderColor: c.border,
+    backgroundColor: c.card,
+    shadowColor: '#0C1A37',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: c.shadowOpacity,
+    shadowRadius: 10,
+    elevation: 1,
+  } as const;
+  return StyleSheet.create({
+    flex: { flex: 1 },
+    pressed: { opacity: 0.75 },
+    content: { width: '100%', maxWidth: 560, alignSelf: 'center', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 120, gap: 14 },
+    titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    pageTitle: { fontFamily: FontFamily.headingBold, fontSize: 28, lineHeight: 34, letterSpacing: -0.5, color: c.text },
+    titleActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    square: { width: 42, height: 42, borderRadius: 12, borderWidth: 1, borderColor: c.border, backgroundColor: c.card, alignItems: 'center', justifyContent: 'center' },
+    squareOn: { borderColor: c.link },
+    addSquare: { borderColor: c.solid, backgroundColor: c.solid },
+    search: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 48, paddingHorizontal: 14, borderRadius: 14, borderWidth: 1, borderColor: c.border, backgroundColor: c.card },
+    searchInput: { flex: 1, paddingVertical: 12, fontFamily: FontFamily.body, fontSize: 16, lineHeight: 22, color: c.text, outlineWidth: 0, outlineStyle: 'solid' },
+    permission: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      borderRadius: 14,
+      backgroundColor: c.tintAmber,
+    },
+    permissionText: { flex: 1, fontFamily: FontFamily.bodyMedium, fontSize: 13, lineHeight: 18, color: c.amberText },
+    permissionLink: { fontFamily: FontFamily.bodyBold, fontSize: 14, lineHeight: 19, color: c.amberText },
+    section: { gap: 8 },
+    sectionHead: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 36 },
+    sectionTitle: { flex: 1, fontFamily: FontFamily.headingBold, fontSize: 17, lineHeight: 22, color: c.text },
+    sectionCount: { fontFamily: FontFamily.bodySemiBold, fontSize: 14, lineHeight: 19, color: c.muted },
+    listCard: { ...surface, overflow: 'hidden' },
+    row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 14, paddingHorizontal: 16, backgroundColor: c.card },
+    rowDivider: { borderTopWidth: 1, borderTopColor: c.border },
+    rowPressed: { backgroundColor: c.soft },
+    rowMain: { flex: 1, gap: 2, minWidth: 0 },
+    bigTime: { fontFamily: FontFamily.heading, fontSize: 34, lineHeight: 40, letterSpacing: -0.5, color: c.text },
+    rowTitle: { fontFamily: FontFamily.bodySemiBold, fontSize: 15, lineHeight: 20, color: c.text },
+    off: { opacity: 0.45 },
+    meta: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    metaText: { flexShrink: 1, fontFamily: FontFamily.body, fontSize: 13, lineHeight: 18, color: c.muted },
+    cards: { gap: 10 },
+    card: { ...surface, padding: 16, gap: 6 },
+    cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    cardFoot: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
+    linkPill: { flexDirection: 'row', alignItems: 'center', gap: 4, maxWidth: '80%', paddingHorizontal: 9, paddingVertical: 4, borderRadius: Radius.full, backgroundColor: c.tintMint },
+    linkPillText: { fontFamily: FontFamily.bodySemiBold, fontSize: 13, lineHeight: 17, color: c.link },
+    grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+    tile: { ...surface, width: '48%', flexGrow: 1, padding: 14, gap: 4 },
+    tileTime: { fontFamily: FontFamily.heading, fontSize: 28, lineHeight: 34, color: c.text },
+    tileTitle: { minHeight: 38, fontFamily: FontFamily.bodySemiBold, fontSize: 14, lineHeight: 19, color: c.text },
+    tileFoot: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 },
+    empty: { alignItems: 'center', gap: 8, paddingVertical: 40 },
+    emptyTitle: { fontFamily: FontFamily.headingBold, fontSize: 17, lineHeight: 23, color: c.text },
+  });
+}
+
+const STYLES = { light: makeStyles(LIGHT), dark: makeStyles(DARK) };
+
+/** Couleurs et styles du mode actuel (sombre dans le module Rappels, converti). */
+function useLook() {
+  const c = useScopedColors();
+  return { c, styles: c.dark ? STYLES.dark : STYLES.light };
+}

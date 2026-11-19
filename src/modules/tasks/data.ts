@@ -1,5 +1,5 @@
 // Données de démonstration du module Tâches (les dates viennent de @/lib/demo-dates).
-import { DEMO_TODAY, addDays, atTime, dayOffset } from '@/lib/demo-dates';
+import { DEMO_TODAY, addDays, atTime, dayOffset, formatDay } from '@/lib/demo-dates';
 import type { Task, TaskCategory, TaskGroup, TaskPriority } from './types';
 
 export {
@@ -57,6 +57,36 @@ export const PRIORITY_LABELS: Record<TaskPriority, string> = {
 };
 
 /** Membres du foyer de démo (Claire est l'utilisatrice connectée). */
+const SHORT_DAYS = ['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.'];
+
+/** « Aujourd'hui », « Demain », sinon « Sam. 18 mai ». */
+export function dayLabel(day: Date): string {
+  const offset = dayOffset(day);
+  if (offset === 0) return 'Aujourd’hui';
+  if (offset === 1) return 'Demain';
+  const short = SHORT_DAYS[day.getDay()];
+  return `${short.charAt(0).toUpperCase()}${short.slice(1)} ${formatDay(day)}`;
+}
+
+const two = (value: number) => String(value).padStart(2, '0');
+
+/** « Demain à 16h00 ». */
+export function reminderText(at: Date): string {
+  return `${dayLabel(at)} à ${two(at.getHours())}h${two(at.getMinutes())}`;
+}
+
+/** Rappels d'une tâche (ancien champ « reminder » = 1 h avant l'échéance). */
+export function remindersOf(task: Pick<Task, 'reminder' | 'reminderAt' | 'dueAt'>): Date[] {
+  if (task.reminderAt) return task.reminderAt;
+  return task.reminder ? [new Date(task.dueAt.getTime() - 60 * 60000)] : [];
+}
+
+/** « Demain à 16h00 · Jeu. 16 mai à 09h00 », ou « Aucun ». */
+export function remindersSummary(task: Pick<Task, 'reminder' | 'reminderAt' | 'dueAt'>): string {
+  const list = remindersOf(task);
+  return list.length ? [...list].sort((a, b) => a.getTime() - b.getTime()).map(reminderText).join(' · ') : 'Aucun';
+}
+
 export const HOUSEHOLD = { name: 'Foyer Martin', members: ['Claire', 'Thomas'] } as const;
 
 const today = DEMO_TODAY;
@@ -178,6 +208,24 @@ export const DEMO_TASKS: Task[] = [
     reminder: false,
     createdAt: addDays(today, -3),
     subtasks: [],
+  },
+  {
+    id: 'reunion-parents',
+    title: 'Réunion parents d’élèves',
+    context: 'Repérée par Kora dans un e-mail de l’école',
+    description: 'Kora a repéré cette réunion dans un e-mail de l’École Jean Moulin. Vérifiez-la pour la garder dans vos tâches.',
+    priority: 2,
+    status: 'open',
+    dueAt: atTime(addDays(today, 6), 18),
+    hasTime: true,
+    category: 'Famille',
+    household: HOUSEHOLD.name,
+    sharedWith: ['Thomas'],
+    assignee: 'Claire',
+    reminder: true,
+    createdAt: today,
+    subtasks: [],
+    suggested: true,
   },
   {
     id: 'declaration',

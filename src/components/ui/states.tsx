@@ -6,13 +6,15 @@ import { AccessibilityInfo, Animated, StyleSheet, Text, View } from 'react-nativ
 
 import { Icon } from '@/components/icon';
 import { PrimaryButton, SecondaryButton, kitStyles } from '@/components/ui/kit';
-import { FontFamily, Radius, Serene, Tint } from '@/constants/design';
+import { DARK, LIGHT, useScopedColors, type AppColors } from '@/constants/app-colors';
+import { FontFamily, Radius } from '@/constants/design';
 import type { QueryState } from '@/hooks/use-query';
 import { isApiError, isNetworkError, userMessage } from '@/lib/api';
 import { useDemoState } from '@/lib/demo-state';
 
 /** Cartes grises qui pulsent pendant le chargement (respecte « réduire les animations »). */
 export function LoadingState({ rows = 4, label = 'Chargement…' }: { rows?: number; label?: string }) {
+  const { styles } = useLook();
   const [opacity] = useState(() => new Animated.Value(0.5));
   useEffect(() => {
     let loop: Animated.CompositeAnimation | undefined;
@@ -48,12 +50,13 @@ export function LoadingState({ rows = 4, label = 'Chargement…' }: { rows?: num
 
 /** Erreur avec « Réessayer » ; le titre et le message dépendent du type d'erreur. */
 export function ErrorState({ error, onRetry }: { error: unknown; onRetry: () => void }) {
+  const { c, styles } = useLook();
   const offline = isNetworkError(error);
   const requestId = isApiError(error) ? error.requestId : undefined;
   return (
     <View style={[kitStyles.card, styles.center]} accessibilityLiveRegion="polite">
       <View style={[styles.bigIcon, styles.bigIconError]}>
-        <Icon name={offline ? 'cloud_off' : 'error'} size={30} color={Serene.error} />
+        <Icon name={offline ? 'cloud_off' : 'error'} size={30} color={c.error} />
       </View>
       <Text style={styles.title}>{offline ? 'Pas de connexion' : 'Impossible de charger'}</Text>
       <Text style={styles.text}>{userMessage(error)}</Text>
@@ -77,10 +80,11 @@ export function EmptyState({
   actionLabel?: string;
   onAction?: () => void;
 }) {
+  const { c, styles } = useLook();
   return (
     <View style={[kitStyles.card, styles.center]}>
       <View style={styles.bigIcon}>
-        <Icon name={icon} size={30} color={Tint.primary} />
+        <Icon name={icon} size={30} color={c.link} />
       </View>
       <Text style={styles.title}>{title}</Text>
       <Text style={styles.text}>{text}</Text>
@@ -116,102 +120,113 @@ export function QueryView({
 
 /** Bandeau « hors ligne » global (réseau réel du téléphone, ou simulation de la démo). */
 export function OfflineBanner() {
+  const { c, styles } = useLook();
   const network = useNetworkState();
   const demoState = useDemoState();
   const offline = demoState === 'offline' || network.isInternetReachable === false || network.isConnected === false;
   if (!offline) return null;
   return (
     <View style={styles.banner} accessibilityRole="alert" accessibilityLiveRegion="polite">
-      <Icon name="cloud_off" size={18} color={Serene.onPrimary} />
+      <Icon name="cloud_off" size={18} color={c.solidText} />
       <Text style={styles.bannerText}>Hors ligne : vous voyez les dernières données enregistrées.</Text>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-  },
-  stack: {
-    gap: 10,
-  },
-  skeleton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  skeletonIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: Tint.lavender,
-  },
-  skeletonLine: {
-    height: 12,
-    borderRadius: Radius.full,
-    backgroundColor: Tint.lavender,
-  },
-  skeletonWide: {
-    width: '80%',
-    marginBottom: 8,
-  },
-  skeletonShort: {
-    width: '50%',
-  },
-  center: {
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 26,
-  },
-  bigIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: 20,
-    backgroundColor: Serene.secondaryContainer,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
-  },
-  bigIconError: {
-    backgroundColor: '#fee2e2',
-  },
-  title: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 18,
-    lineHeight: 24,
-    color: Tint.navy,
-    textAlign: 'center',
-  },
-  text: {
-    fontFamily: FontFamily.body,
-    fontSize: 14,
-    lineHeight: 20,
-    color: Serene.onSurfaceVariant,
-    textAlign: 'center',
-  },
-  button: {
-    alignSelf: 'stretch',
-    marginTop: 8,
-  },
-  reference: {
-    fontFamily: FontFamily.body,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurfaceVariant,
-  },
-  banner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: Tint.navy,
-  },
-  bannerText: {
-    flex: 1,
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onPrimary,
-  },
-});
+function makeStyles(c: AppColors) {
+  return StyleSheet.create({
+    flex: {
+      flex: 1,
+    },
+    stack: {
+      gap: 10,
+    },
+    skeleton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    skeletonIcon: {
+      width: 40,
+      height: 40,
+      borderRadius: 12,
+      backgroundColor: c.soft,
+    },
+    skeletonLine: {
+      height: 12,
+      borderRadius: Radius.full,
+      backgroundColor: c.soft,
+    },
+    skeletonWide: {
+      width: '80%',
+      marginBottom: 8,
+    },
+    skeletonShort: {
+      width: '50%',
+    },
+    center: {
+      alignItems: 'center',
+      gap: 8,
+      paddingVertical: 26,
+    },
+    bigIcon: {
+      width: 60,
+      height: 60,
+      borderRadius: 20,
+      backgroundColor: c.tintMint,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 4,
+    },
+    bigIconError: {
+      backgroundColor: '#fee2e2',
+    },
+    title: {
+      fontFamily: FontFamily.headingBold,
+      fontSize: 18,
+      lineHeight: 24,
+      color: c.text,
+      textAlign: 'center',
+    },
+    text: {
+      fontFamily: FontFamily.body,
+      fontSize: 14,
+      lineHeight: 20,
+      color: c.muted,
+      textAlign: 'center',
+    },
+    button: {
+      alignSelf: 'stretch',
+      marginTop: 8,
+    },
+    reference: {
+      fontFamily: FontFamily.body,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.muted,
+    },
+    banner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      backgroundColor: c.text,
+    },
+    bannerText: {
+      flex: 1,
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.solidText,
+    },
+  });
+}
+
+const STYLES = { light: makeStyles(LIGHT), dark: makeStyles(DARK) };
+
+/** Couleurs et styles du mode actuel (sombre seulement dans un module converti). */
+function useLook() {
+  const c = useScopedColors();
+  return { c, styles: c.dark ? STYLES.dark : STYLES.light };
+}

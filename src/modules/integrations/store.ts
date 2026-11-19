@@ -13,6 +13,8 @@ type Snapshot = {
   lastSync: Date;
   permissions: Record<PermissionKey, boolean>;
   senders: string[];
+  /** Tous les expéditeurs affichés en puces (autorisés ou non). */
+  known: string[];
   calendars: Record<CalendarKey, boolean>;
   twoWay: boolean;
   emails: ImportedEmail[];
@@ -28,6 +30,7 @@ let state: Snapshot = {
   lastSync: new Date(DEMO_TODAY.getTime() - 12 * 60000),
   permissions: { read: true, extract: true, attachments: true },
   senders: SENDERS,
+  known: SENDERS,
   calendars: { personal: true, work: false, family: true },
   twoWay: false,
   emails: DEMO_EMAILS,
@@ -75,6 +78,16 @@ export const integrationActions = {
   },
   markDone(id: string) {
     emit({ emails: state.emails.map((email) => (email.id === id ? { ...email, status: 'done' } : email)) });
+  },
+  /** Autorise ou non la lecture d'un expéditeur (puce touchée dans les réglages Gmail). */
+  toggleSender(name: string) {
+    emit({ senders: state.senders.includes(name) ? state.senders.filter((sender) => sender !== name) : [...state.senders, name] });
+  },
+  /** Ajoute un expéditeur autorisé (démo : en mémoire). */
+  addSender(name: string) {
+    const clean = name.trim();
+    if (!clean) return;
+    emit({ known: state.known.includes(clean) ? state.known : [...state.known, clean], senders: state.senders.includes(clean) ? state.senders : [...state.senders, clean] });
   },
   /** Arrête d'importer un expéditeur ; ses e-mails disparaissent de la liste. */
   blockSender(from: string): () => void {

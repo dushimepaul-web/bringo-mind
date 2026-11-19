@@ -5,13 +5,28 @@ import type { DocCategory, DocItem } from './types';
 
 const today = DEMO_TODAY;
 
-export const CATEGORIES: Record<DocCategory, { label: string; icon: string; bg: string; fg: string }> = {
-  identity: { label: 'Identité', icon: 'badge', bg: '#e2dfff', fg: '#3323cc' },
-  housing: { label: 'Logement', icon: 'home', bg: '#dce9ff', fg: '#1e3a8a' },
-  health: { label: 'Santé', icon: 'medical_services', bg: '#ccfbf1', fg: '#0f766e' },
-  taxes: { label: 'Impôts', icon: 'account_balance', bg: '#fef3c7', fg: '#92400e' },
-  bills: { label: 'Factures', icon: 'receipt_long', bg: '#fce7f3', fg: '#9d174d' },
+type CategoryStyle = { label: string; icon: string; bg: string; fg: string };
+
+/** Catégories (couleurs de l'app, mode clair). */
+export const CATEGORIES: Record<DocCategory, CategoryStyle> = {
+  identity: { label: 'Identité', icon: 'badge', bg: '#E4E3FB', fg: '#4338CA' },
+  housing: { label: 'Logement', icon: 'home', bg: '#DDE9FB', fg: '#1D5ED0' },
+  health: { label: 'Santé', icon: 'medical_services', bg: '#D3F5EE', fg: '#0B7A6E' },
+  taxes: { label: 'Impôts', icon: 'account_balance', bg: '#FCEFC4', fg: '#8A6100' },
+  bills: { label: 'Factures', icon: 'receipt_long', bg: '#FBDDE8', fg: '#B0306A' },
 };
+
+/** Mêmes catégories en mode sombre. */
+export const CATEGORIES_DARK: Record<DocCategory, CategoryStyle> = {
+  identity: { ...CATEGORIES.identity, bg: '#262A55', fg: '#A5B4FC' },
+  housing: { ...CATEGORIES.housing, bg: '#1B3058', fg: '#8DBBFF' },
+  health: { ...CATEGORIES.health, bg: '#0F3B3B', fg: '#5EEAD4' },
+  taxes: { ...CATEGORIES.taxes, bg: '#3D3216', fg: '#F5C84B' },
+  bills: { ...CATEGORIES.bills, bg: '#4A2233', fg: '#F9A8D4' },
+};
+
+/** Stockage du coffre (démo). */
+export const STORAGE = { used: 86, total: 10240, unit: 'Mo' } as const;
 
 export const HOUSEHOLD_NAME = 'Foyer Martin';
 

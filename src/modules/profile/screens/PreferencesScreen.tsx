@@ -6,9 +6,10 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icon';
-import { BottomSheet, Chip, PrimaryButton, TopBar, kitStyles } from '@/components/ui/kit';
+import { BottomSheet, Chip, PrimaryButton, TopBar, useKitStyles } from '@/components/ui/kit';
 import { FieldLabel, RadioRow, SettingsRow, SettingsSection, ToggleSwitch, settingsStyles } from '@/components/ui/settings';
-import { FontFamily, Serene, Tint } from '@/constants/design';
+import { DARK, LIGHT, useScopedColors, type AppColors } from '@/constants/app-colors';
+import { FontFamily } from '@/constants/design';
 
 import {
   CALENDAR_VIEWS,
@@ -24,6 +25,8 @@ import {
 import { profileActions, useProfileState, type Preferences } from '../store';
 
 export default function PreferencesScreen() {
+  const { c, styles } = useLook();
+  const kitStyles = useKitStyles();
   const saved = useProfileState().preferences;
   const [draft, setDraft] = useState<Preferences>(saved);
   const [zoneSheet, setZoneSheet] = useState(false);
@@ -45,7 +48,7 @@ export default function PreferencesScreen() {
       <ScrollView contentContainerStyle={[kitStyles.content, styles.content]} showsVerticalScrollIndicator={false}>
         {/* Aperçu en direct : la personne voit l'effet avant d'enregistrer */}
         <View style={styles.preview}>
-          <Icon name="visibility" size={20} color={Tint.primary} />
+          <Icon name="visibility" size={20} color={c.link} />
           <View style={styles.flex}>
             <Text style={styles.previewLabel}>Aperçu</Text>
             <Text style={styles.previewText}>{sample}</Text>
@@ -131,14 +134,16 @@ export default function PreferencesScreen() {
         </SettingsSection>
 
         <View style={styles.sync}>
-          <Icon name="sync" size={18} color={Serene.onSurfaceVariant} />
+          <Icon name="sync" size={18} color={c.muted} />
           <Text style={styles.syncText}>Vos préférences sont synchronisées sur tous vos appareils.</Text>
         </View>
       </ScrollView>
 
+      {/* « Enregistrer » apparaît seulement quand quelque chose a changé */}
+      {dirty ? (
       <View style={styles.footer}>
         <PrimaryButton
-          label={dirty ? 'Enregistrer les préférences' : 'Aucune modification'}
+          label="Enregistrer les préférences"
           icon="check"
           disabled={!dirty}
           onPress={() => {
@@ -149,6 +154,7 @@ export default function PreferencesScreen() {
           }}
         />
       </View>
+      ) : null}
 
       <BottomSheet visible={zoneSheet} title="Fuseau horaire" subtitle="Choisissez où vous vivez" onClose={() => setZoneSheet(false)}>
         <View style={styles.zoneList}>
@@ -183,65 +189,75 @@ function ChipGroup({ label, children, first }: { label: string; children: React.
   );
 }
 
-const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-  },
-  content: {
-    paddingTop: 4,
-    paddingBottom: 24,
-  },
-  preview: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    padding: 14,
-    borderRadius: 16,
-    backgroundColor: '#f0fdfa',
-    borderWidth: 1,
-    borderColor: '#99f6e4',
-  },
-  previewLabel: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Tint.primary,
-  },
-  previewText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 16,
-    lineHeight: 22,
-    color: Tint.navy,
-  },
-  sync: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 18,
-    paddingHorizontal: 4,
-  },
-  syncText: {
-    flex: 1,
-    fontFamily: FontFamily.body,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurfaceVariant,
-  },
-  zoneList: {
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: Tint.border,
-    overflow: 'hidden',
-  },
-  footer: {
-    width: '100%',
-    maxWidth: 560,
-    alignSelf: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Tint.border,
-    backgroundColor: Tint.softer,
-  },
-});
+function makeStyles(c: AppColors) {
+  return StyleSheet.create({
+    flex: {
+      flex: 1,
+    },
+    content: {
+      paddingTop: 4,
+      paddingBottom: 24,
+    },
+    preview: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      padding: 14,
+      borderRadius: 16,
+      backgroundColor: c.tintMint,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    previewLabel: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.link,
+    },
+    previewText: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 16,
+      lineHeight: 22,
+      color: c.text,
+    },
+    sync: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginTop: 18,
+      paddingHorizontal: 4,
+    },
+    syncText: {
+      flex: 1,
+      fontFamily: FontFamily.body,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.muted,
+    },
+    zoneList: {
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: c.border,
+      overflow: 'hidden',
+    },
+    footer: {
+      width: '100%',
+      maxWidth: 560,
+      alignSelf: 'center',
+      paddingHorizontal: 20,
+      paddingTop: 10,
+      paddingBottom: 12,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: c.border,
+      backgroundColor: c.page,
+    },
+  });
+}
+
+const STYLES = { light: makeStyles(LIGHT), dark: makeStyles(DARK) };
+
+/** Couleurs et styles du mode actuel (sombre seulement dans un module converti). */
+function useLook() {
+  const c = useScopedColors();
+  return { c, styles: c.dark ? STYLES.dark : STYLES.light };
+}

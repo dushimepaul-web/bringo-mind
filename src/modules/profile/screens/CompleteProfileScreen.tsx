@@ -6,9 +6,10 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icon';
-import { BottomSheet, PrimaryButton, SecondaryButton, SheetOption, Tag, TopBar, UndoToast, kitStyles } from '@/components/ui/kit';
+import { BottomSheet, PrimaryButton, SecondaryButton, SheetOption, Tag, TopBar, UndoToast, useKitStyles } from '@/components/ui/kit';
 import { DatePickerSheet } from '@/components/ui/date-picker';
-import { FontFamily, Radius, Serene, Tint } from '@/constants/design';
+import { DARK, LIGHT, useScopedColors, type AppColors } from '@/constants/app-colors';
+import { FontFamily, Radius } from '@/constants/design';
 import { DEMO_TODAY } from '@/lib/demo-dates';
 
 import { USER } from '../data';
@@ -20,6 +21,8 @@ const MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet'
 const longDate = (date: Date) => `${date.getDate()} ${MONTHS[date.getMonth()]} ${date.getFullYear()}`;
 
 export default function CompleteProfileScreen() {
+  const { c, styles } = useLook();
+  const kitStyles = useKitStyles();
   const saved = useProfileState().user;
   const [draft, setDraft] = useState<PersonalInfo>(saved);
   const [focus, setFocus] = useState<FieldKey | null>(null);
@@ -47,12 +50,12 @@ export default function CompleteProfileScreen() {
         onBlur={() => setFocus(null)}
         keyboardType={options.keyboard ?? 'default'}
         autoCapitalize={options.capitalize ?? 'sentences'}
-        selectionColor={Tint.primary}
+        selectionColor={c.link}
         accessibilityLabel={label}
       />
       {options.error ? (
         <View style={styles.errorRow}>
-          <Icon name="error" size={16} color={Serene.error} />
+          <Icon name="error" size={16} color={c.error} />
           <Text style={styles.errorText}>{options.error}</Text>
         </View>
       ) : null}
@@ -68,7 +71,7 @@ export default function CompleteProfileScreen() {
           <View style={styles.photoZone}>
             <View style={styles.avatar}>
               {draft.hasPhoto ? (
-                <Icon name="face" size={52} color={Serene.onPrimary} />
+                <Icon name="face" size={52} color={c.solidText} />
               ) : (
                 <Text style={styles.avatarText}>{initialsOf(draft)}</Text>
               )}
@@ -77,7 +80,7 @@ export default function CompleteProfileScreen() {
               style={({ pressed }) => [styles.photoButton, pressed && styles.pressed]}
               accessibilityRole="button"
               onPress={() => setSheet('photo')}>
-              <Icon name="photo_camera" size={18} color={Tint.primary} />
+              <Icon name="photo_camera" size={18} color={c.link} />
               <Text style={styles.photoText}>{draft.hasPhoto ? 'Changer la photo' : 'Ajouter une photo'}</Text>
             </Pressable>
           </View>
@@ -91,7 +94,7 @@ export default function CompleteProfileScreen() {
           <View style={styles.field}>
             <Text style={styles.label}>Adresse e-mail</Text>
             <View style={styles.readonly}>
-              <Icon name="mail" size={20} color={Serene.onSurfaceVariant} />
+              <Icon name="mail" size={20} color={c.muted} />
               <Text style={styles.readonlyText} numberOfLines={1}>
                 {USER.email}
               </Text>
@@ -111,9 +114,9 @@ export default function CompleteProfileScreen() {
               accessibilityRole="button"
               accessibilityLabel={`Date de naissance : ${longDate(draft.birthdate)}, changer`}
               onPress={() => setSheet('birthdate')}>
-              <Icon name="cake" size={20} color={Tint.navy} />
+              <Icon name="cake" size={20} color={c.text} />
               <Text style={styles.dateText}>{longDate(draft.birthdate)}</Text>
-              <Icon name="calendar_month" size={20} color={Serene.onSurfaceVariant} />
+              <Icon name="calendar_month" size={20} color={c.muted} />
             </Pressable>
           </View>
 
@@ -121,14 +124,16 @@ export default function CompleteProfileScreen() {
           {input('city', 'Code postal et ville', { capitalize: 'words' })}
 
           <View style={styles.note}>
-            <Icon name="lock" size={18} color={Tint.primary} />
+            <Icon name="lock" size={18} color={c.link} />
             <Text style={styles.noteText}>Ces informations restent privées. Elles servent seulement à préremplir vos démarches.</Text>
           </View>
         </ScrollView>
 
+        {/* « Enregistrer » apparaît seulement quand quelque chose a changé */}
+        {dirty ? (
         <View style={styles.footer}>
           <PrimaryButton
-            label={dirty ? 'Enregistrer' : 'Aucune modification'}
+            label="Enregistrer"
             icon="check"
             disabled={!canSave}
             onPress={() => {
@@ -139,6 +144,7 @@ export default function CompleteProfileScreen() {
             }}
           />
         </View>
+        ) : null}
       </KeyboardAvoidingView>
 
       <BottomSheet visible={sheet === 'photo'} title="Photo de profil" onClose={() => setSheet(null)}>
@@ -202,136 +208,146 @@ export default function CompleteProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-  },
-  pressed: {
-    opacity: 0.8,
-  },
-  content: {
-    paddingTop: 4,
-    paddingBottom: 24,
-  },
-  photoZone: {
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 10,
-  },
-  avatar: {
-    width: 96,
-    height: 96,
-    borderRadius: Radius.full,
-    backgroundColor: Tint.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 34,
-    lineHeight: 42,
-    color: Serene.onPrimary,
-  },
-  photoButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: Radius.full,
-    backgroundColor: '#e6f6f3',
-  },
-  photoText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 14,
-    lineHeight: 19,
-    color: Tint.primary,
-  },
-  row: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  field: {
-    marginTop: 16,
-    gap: 6,
-  },
-  label: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 15,
-    lineHeight: 20,
-    color: Tint.navy,
-  },
-  errorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  errorText: {
-    flex: 1,
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.error,
-  },
-  readonly: {
-    minHeight: 54,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: Tint.border,
-    backgroundColor: Serene.surfaceContainerLowest,
-  },
-  readonlyText: {
-    flex: 1,
-    fontFamily: FontFamily.body,
-    fontSize: 16,
-    lineHeight: 22,
-    color: Serene.onSurfaceVariant,
-  },
-  dateField: {
-    backgroundColor: Tint.soft,
-  },
-  dateText: {
-    flex: 1,
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 16,
-    lineHeight: 22,
-    color: Tint.navy,
-  },
-  link: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 14,
-    lineHeight: 19,
-    color: Tint.primary,
-  },
-  note: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    marginTop: 20,
-    padding: 14,
-    borderRadius: 16,
-    backgroundColor: Tint.soft,
-  },
-  noteText: {
-    flex: 1,
-    fontFamily: FontFamily.body,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Tint.navy,
-  },
-  footer: {
-    width: '100%',
-    maxWidth: 560,
-    alignSelf: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Tint.border,
-    backgroundColor: Tint.softer,
-  },
-});
+function makeStyles(c: AppColors) {
+  return StyleSheet.create({
+    flex: {
+      flex: 1,
+    },
+    pressed: {
+      opacity: 0.8,
+    },
+    content: {
+      paddingTop: 4,
+      paddingBottom: 24,
+    },
+    photoZone: {
+      alignItems: 'center',
+      gap: 10,
+      paddingVertical: 10,
+    },
+    avatar: {
+      width: 96,
+      height: 96,
+      borderRadius: Radius.full,
+      backgroundColor: c.link,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    avatarText: {
+      fontFamily: FontFamily.headingBold,
+      fontSize: 34,
+      lineHeight: 42,
+      color: c.solidText,
+    },
+    photoButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: Radius.full,
+      backgroundColor: c.tintMint,
+    },
+    photoText: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 14,
+      lineHeight: 19,
+      color: c.link,
+    },
+    row: {
+      flexDirection: 'row',
+      gap: 10,
+    },
+    field: {
+      marginTop: 16,
+      gap: 6,
+    },
+    label: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 15,
+      lineHeight: 20,
+      color: c.text,
+    },
+    errorRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+    },
+    errorText: {
+      flex: 1,
+      fontFamily: FontFamily.bodyMedium,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.error,
+    },
+    readonly: {
+      minHeight: 54,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      paddingHorizontal: 14,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.card,
+    },
+    readonlyText: {
+      flex: 1,
+      fontFamily: FontFamily.body,
+      fontSize: 16,
+      lineHeight: 22,
+      color: c.muted,
+    },
+    dateField: {
+      backgroundColor: c.soft,
+    },
+    dateText: {
+      flex: 1,
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 16,
+      lineHeight: 22,
+      color: c.text,
+    },
+    link: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 14,
+      lineHeight: 19,
+      color: c.link,
+    },
+    note: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 8,
+      marginTop: 20,
+      padding: 14,
+      borderRadius: 16,
+      backgroundColor: c.soft,
+    },
+    noteText: {
+      flex: 1,
+      fontFamily: FontFamily.body,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.text,
+    },
+    footer: {
+      width: '100%',
+      maxWidth: 560,
+      alignSelf: 'center',
+      paddingHorizontal: 20,
+      paddingTop: 10,
+      paddingBottom: 12,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: c.border,
+      backgroundColor: c.page,
+    },
+  });
+}
+
+const STYLES = { light: makeStyles(LIGHT), dark: makeStyles(DARK) };
+
+/** Couleurs et styles du mode actuel (sombre seulement dans un module converti). */
+function useLook() {
+  const c = useScopedColors();
+  return { c, styles: c.dark ? STYLES.dark : STYLES.light };
+}

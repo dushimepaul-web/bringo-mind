@@ -6,11 +6,12 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icon';
-import { Chip, TopBar, kitStyles } from '@/components/ui/kit';
-import { FontFamily, Serene, Tint } from '@/constants/design';
+import { Chip, TopBar, useKitStyles } from '@/components/ui/kit';
+import { DARK, LIGHT, useScopedColors, type AppColors } from '@/constants/app-colors';
+import { FontFamily } from '@/constants/design';
 import { dayOffset, formatDay, formatLongDay, formatTime } from '@/lib/demo-dates';
 
-import { Avatar, householdStyles } from '../components/household-ui';
+import { Avatar, useHouseholdStyles } from '../components/household-ui';
 import { KIND_LABELS, firstName } from '../data';
 import { useHouseholdState } from '../store';
 import type { Activity, ActivityKind } from '../types';
@@ -32,6 +33,9 @@ function groupLabel(date: Date): string {
 }
 
 export default function HouseholdActivityScreen() {
+  const { c, styles } = useLook();
+  const kitStyles = useKitStyles();
+  const householdStyles = useHouseholdStyles();
   const { name, members, activity } = useHouseholdState();
   const [filter, setFilter] = useState<ActivityKind | 'all'>('all');
 
@@ -48,7 +52,7 @@ export default function HouseholdActivityScreen() {
   }, [activity, filter]);
 
   const person = (who: string): { label: string; avatar: string; color: string; kora: boolean } => {
-    if (who === 'kora') return { label: 'Kora', avatar: 'Kora', color: Tint.black, kora: true };
+    if (who === 'kora') return { label: 'Kora', avatar: 'Kora', color: c.solid, kora: true };
     const member = members.find((entry) => entry.id === who);
     return {
       label: member ? (member.you ? 'Vous' : firstName(member.name)) : 'Un ancien membre',
@@ -73,7 +77,7 @@ export default function HouseholdActivityScreen() {
 
         {groups.length === 0 ? (
           <View style={[kitStyles.card, styles.empty]}>
-            <Icon name="history" size={28} color={Tint.primary} />
+            <Icon name="history" size={28} color={c.link} />
             <Text style={kitStyles.title}>Rien pour l’instant</Text>
             <Text style={[kitStyles.muted, styles.center]}>Les actions des membres sur ce type d’élément s’afficheront ici.</Text>
           </View>
@@ -111,14 +115,14 @@ export default function HouseholdActivityScreen() {
                           <Text style={styles.target}>{item.target}</Text>
                         </Text>
                         <View style={styles.metaRow}>
-                          <Icon name={kind.icon} size={14} color={Serene.onSurfaceVariant} />
+                          <Icon name={kind.icon} size={14} color={c.muted} />
                           <Text style={styles.meta}>
                             {kind.label} • {dayOffset(item.at) < -6 ? `${formatDay(item.at)} • ` : ''}
                             {formatTime(item.at)}
                           </Text>
                         </View>
                       </View>
-                      {item.href ? <Icon name="chevron_right" size={20} color={Serene.onSurfaceVariant} /> : null}
+                      {item.href ? <Icon name="chevron_right" size={20} color={c.muted} /> : null}
                     </Pressable>
                   );
                 })}
@@ -128,7 +132,7 @@ export default function HouseholdActivityScreen() {
         )}
 
         <View style={[householdStyles.note, styles.note]}>
-          <Icon name="visibility_off" size={20} color={Tint.primary} />
+          <Icon name="visibility_off" size={20} color={c.link} />
           <Text style={householdStyles.noteText}>
             L’historique ne montre que les actions sur les éléments partagés. Ce que chacun fait dans son espace
             personnel reste invisible.
@@ -139,101 +143,111 @@ export default function HouseholdActivityScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-  },
-  center: {
-    textAlign: 'center',
-  },
-  content: {
-    paddingTop: 4,
-    paddingBottom: 40,
-  },
-  filtersScroll: {
-    marginTop: 12,
-  },
-  filters: {
-    gap: 8,
-  },
-  groupHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 22,
-    marginBottom: 8,
-  },
-  groupTitle: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 18,
-    lineHeight: 24,
-    color: Tint.navy,
-  },
-  countPill: {
-    minWidth: 24,
-    height: 24,
-    paddingHorizontal: 7,
-    borderRadius: 12,
-    backgroundColor: Tint.lavender,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  countText: {
-    fontFamily: FontFamily.bodyBold,
-    fontSize: 13,
-    lineHeight: 17,
-    color: Tint.navy,
-  },
-  list: {
-    paddingVertical: 4,
-    paddingHorizontal: 0,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  rowBorder: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Tint.border,
-  },
-  rowPressed: {
-    backgroundColor: Tint.soft,
-  },
-  sentence: {
-    fontFamily: FontFamily.body,
-    fontSize: 15,
-    lineHeight: 21,
-    color: Tint.navy,
-  },
-  who: {
-    fontFamily: FontFamily.bodySemiBold,
-  },
-  target: {
-    fontFamily: FontFamily.bodySemiBold,
-    color: Tint.primary,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 4,
-  },
-  meta: {
-    fontFamily: FontFamily.body,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurfaceVariant,
-  },
-  empty: {
-    marginTop: 22,
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 24,
-  },
-  note: {
-    marginTop: 22,
-  },
-});
+function makeStyles(c: AppColors) {
+  return StyleSheet.create({
+    flex: {
+      flex: 1,
+    },
+    center: {
+      textAlign: 'center',
+    },
+    content: {
+      paddingTop: 4,
+      paddingBottom: 40,
+    },
+    filtersScroll: {
+      marginTop: 12,
+    },
+    filters: {
+      gap: 8,
+    },
+    groupHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginTop: 22,
+      marginBottom: 8,
+    },
+    groupTitle: {
+      fontFamily: FontFamily.headingBold,
+      fontSize: 18,
+      lineHeight: 24,
+      color: c.text,
+    },
+    countPill: {
+      minWidth: 24,
+      height: 24,
+      paddingHorizontal: 7,
+      borderRadius: 12,
+      backgroundColor: c.soft,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    countText: {
+      fontFamily: FontFamily.bodyBold,
+      fontSize: 13,
+      lineHeight: 17,
+      color: c.text,
+    },
+    list: {
+      paddingVertical: 4,
+      paddingHorizontal: 0,
+    },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+    },
+    rowBorder: {
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: c.border,
+    },
+    rowPressed: {
+      backgroundColor: c.soft,
+    },
+    sentence: {
+      fontFamily: FontFamily.body,
+      fontSize: 15,
+      lineHeight: 21,
+      color: c.text,
+    },
+    who: {
+      fontFamily: FontFamily.bodySemiBold,
+    },
+    target: {
+      fontFamily: FontFamily.bodySemiBold,
+      color: c.link,
+    },
+    metaRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      marginTop: 4,
+    },
+    meta: {
+      fontFamily: FontFamily.body,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.muted,
+    },
+    empty: {
+      marginTop: 22,
+      alignItems: 'center',
+      gap: 8,
+      paddingVertical: 24,
+    },
+    note: {
+      marginTop: 22,
+    },
+  });
+}
+
+const STYLES = { light: makeStyles(LIGHT), dark: makeStyles(DARK) };
+
+/** Couleurs et styles du mode actuel (sombre seulement dans un module converti). */
+function useLook() {
+  const c = useScopedColors();
+  return { c, styles: c.dark ? STYLES.dark : STYLES.light };
+}

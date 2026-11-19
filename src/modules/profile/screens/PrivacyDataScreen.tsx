@@ -6,18 +6,10 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icon';
-import {
-  BottomSheet,
-  CheckCircle,
-  PrimaryButton,
-  SecondaryButton,
-  Tag,
-  TopBar,
-  UndoToast,
-  kitStyles,
-} from '@/components/ui/kit';
+import { BottomSheet, CheckCircle, PrimaryButton, SecondaryButton, Tag, TopBar, UndoToast, useKitStyles } from '@/components/ui/kit';
 import { SettingsRow, SettingsSection, ToggleSwitch } from '@/components/ui/settings';
-import { FontFamily, Serene, Tint } from '@/constants/design';
+import { DARK, LIGHT, useScopedColors, type AppColors } from '@/constants/app-colors';
+import { FontFamily } from '@/constants/design';
 import { formatLongDay } from '@/lib/demo-dates';
 
 import { CONSENTS, DELETION_GRACE_DAYS, EXPORT_ITEMS, LOGIN_HISTORY, USER, deletionDate } from '../data';
@@ -27,6 +19,8 @@ type Sheet = 'export' | 'history' | 'delete' | null;
 const CONFIRM_WORD = 'SUPPRIMER';
 
 export default function PrivacyDataScreen() {
+  const { c, styles } = useLook();
+  const kitStyles = useKitStyles();
   const { consents, deletionAt } = useProfileState();
   const [sheet, setSheet] = useState<Sheet>(null);
   const [toast, setToast] = useState<{ text: string; undo?: () => void } | null>(null);
@@ -45,7 +39,7 @@ export default function PrivacyDataScreen() {
       <ScrollView contentContainerStyle={[kitStyles.content, styles.content]} showsVerticalScrollIndicator={false}>
         <View style={[kitStyles.card, styles.hero]}>
           <View style={styles.heroIcon}>
-            <Icon name="shield" size={28} color={Serene.onPrimary} />
+            <Icon name="shield" size={28} color={c.solidText} />
           </View>
           <Text style={styles.heroTitle}>Vos données vous appartiennent</Text>
           <Text style={[kitStyles.muted, styles.center]}>
@@ -102,14 +96,14 @@ export default function PrivacyDataScreen() {
             title="Politique de confidentialité"
             subtitle="Version 2.1 • mise à jour le 1er mai 2024"
             onPress={() => setToast({ text: 'Démo : ouverture de la politique de confidentialité' })}
-            right={<Icon name="open_in_new" size={20} color={Serene.onSurfaceVariant} />}
+            right={<Icon name="open_in_new" size={20} color={c.muted} />}
           />
         </SettingsSection>
 
         <SettingsSection title="Supprimer le compte" icon="delete_forever">
           {deletionAt ? (
             <View style={styles.pending}>
-              <Icon name="schedule" size={22} color={Serene.error} />
+              <Icon name="schedule" size={22} color={c.error} />
               <View style={styles.flex}>
                 <Text style={styles.pendingTitle}>Suppression prévue le {formatLongDay(deletionAt).toLowerCase()}</Text>
                 <Text style={styles.meta}>Jusque-là, votre compte reste utilisable et vous pouvez annuler.</Text>
@@ -155,7 +149,7 @@ export default function PrivacyDataScreen() {
                 accessibilityRole="checkbox"
                 accessibilityState={{ checked }}
                 onPress={() => toggleExport(item.key)}>
-                <Icon name={item.icon} size={20} color={Tint.navy} />
+                <Icon name={item.icon} size={20} color={c.text} />
                 <Text style={styles.exportLabel}>{item.label}</Text>
                 <CheckCircle square checked={checked} label={item.label} onPress={() => toggleExport(item.key)} />
               </Pressable>
@@ -182,7 +176,7 @@ export default function PrivacyDataScreen() {
         <View style={styles.list}>
           {LOGIN_HISTORY.map((entry, index) => (
             <View key={entry.id} style={[styles.exportRow, index > 0 && styles.exportBorder]}>
-              <Icon name={entry.icon} size={20} color={Tint.navy} />
+              <Icon name={entry.icon} size={20} color={c.text} />
               <View style={styles.flex}>
                 <Text style={styles.exportLabel}>{entry.device}</Text>
                 <Text style={styles.meta}>{entry.detail}</Text>
@@ -231,8 +225,8 @@ export default function PrivacyDataScreen() {
           autoCapitalize="characters"
           autoCorrect={false}
           placeholder={CONFIRM_WORD}
-          placeholderTextColor={Serene.onSurfaceVariant}
-          selectionColor={Tint.primary}
+          placeholderTextColor={c.muted}
+          selectionColor={c.link}
           accessibilityLabel={`Saisissez ${CONFIRM_WORD} pour confirmer`}
         />
         <SecondaryButton
@@ -256,127 +250,137 @@ export default function PrivacyDataScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-  },
-  center: {
-    textAlign: 'center',
-  },
-  content: {
-    paddingTop: 4,
-    paddingBottom: 40,
-  },
-  hero: {
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 22,
-  },
-  heroIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: 20,
-    backgroundColor: Tint.black,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  heroTitle: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 20,
-    lineHeight: 26,
-    color: Tint.navy,
-    textAlign: 'center',
-  },
-  tags: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: 6,
-    marginTop: 4,
-  },
-  meta: {
-    fontFamily: FontFamily.body,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurfaceVariant,
-  },
-  pending: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    padding: 14,
-    backgroundColor: '#fff5f5',
-  },
-  pendingTitle: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 15,
-    lineHeight: 20,
-    color: Serene.error,
-  },
-  cancel: {
-    fontFamily: FontFamily.bodyBold,
-    fontSize: 15,
-    lineHeight: 20,
-    color: Tint.primary,
-  },
-  legal: {
-    marginTop: 20,
-    textAlign: 'center',
-    fontFamily: FontFamily.body,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurfaceVariant,
-  },
-  list: {
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: Tint.border,
-    overflow: 'hidden',
-  },
-  exportRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    minHeight: 52,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-  },
-  exportBorder: {
-    borderTopWidth: 1,
-    borderTopColor: Tint.border,
-  },
-  exportLabel: {
-    flex: 1,
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 15,
-    lineHeight: 20,
-    color: Tint.navy,
-  },
-  warning: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    padding: 12,
-    borderRadius: 14,
-    backgroundColor: '#fffbeb',
-    borderWidth: 1,
-    borderColor: '#fde68a',
-  },
-  warningText: {
-    flex: 1,
-    fontFamily: FontFamily.body,
-    fontSize: 14,
-    lineHeight: 20,
-    color: Tint.navy,
-  },
-  confirmLabel: {
-    marginTop: 4,
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 14,
-    lineHeight: 19,
-    color: Tint.navy,
-  },
-  disabled: {
-    opacity: 0.4,
-  },
-});
+function makeStyles(c: AppColors) {
+  return StyleSheet.create({
+    flex: {
+      flex: 1,
+    },
+    center: {
+      textAlign: 'center',
+    },
+    content: {
+      paddingTop: 4,
+      paddingBottom: 40,
+    },
+    hero: {
+      alignItems: 'center',
+      gap: 8,
+      paddingVertical: 22,
+    },
+    heroIcon: {
+      width: 60,
+      height: 60,
+      borderRadius: 20,
+      backgroundColor: c.solid,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    heroTitle: {
+      fontFamily: FontFamily.headingBold,
+      fontSize: 20,
+      lineHeight: 26,
+      color: c.text,
+      textAlign: 'center',
+    },
+    tags: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'center',
+      gap: 6,
+      marginTop: 4,
+    },
+    meta: {
+      fontFamily: FontFamily.body,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.muted,
+    },
+    pending: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      padding: 14,
+      backgroundColor: c.dark ? '#3B1D24' : '#fff5f5',
+    },
+    pendingTitle: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 15,
+      lineHeight: 20,
+      color: c.error,
+    },
+    cancel: {
+      fontFamily: FontFamily.bodyBold,
+      fontSize: 15,
+      lineHeight: 20,
+      color: c.link,
+    },
+    legal: {
+      marginTop: 20,
+      textAlign: 'center',
+      fontFamily: FontFamily.body,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.muted,
+    },
+    list: {
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: c.border,
+      overflow: 'hidden',
+    },
+    exportRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      minHeight: 52,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+    },
+    exportBorder: {
+      borderTopWidth: 1,
+      borderTopColor: c.border,
+    },
+    exportLabel: {
+      flex: 1,
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 15,
+      lineHeight: 20,
+      color: c.text,
+    },
+    warning: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 10,
+      padding: 12,
+      borderRadius: 14,
+      backgroundColor: c.tintAmber,
+      borderWidth: 1,
+      borderColor: c.dark ? '#5A4A1E' : '#fde68a',
+    },
+    warningText: {
+      flex: 1,
+      fontFamily: FontFamily.body,
+      fontSize: 14,
+      lineHeight: 20,
+      color: c.text,
+    },
+    confirmLabel: {
+      marginTop: 4,
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 14,
+      lineHeight: 19,
+      color: c.text,
+    },
+    disabled: {
+      opacity: 0.4,
+    },
+  });
+}
+
+const STYLES = { light: makeStyles(LIGHT), dark: makeStyles(DARK) };
+
+/** Couleurs et styles du mode actuel (sombre seulement dans un module converti). */
+function useLook() {
+  const c = useScopedColors();
+  return { c, styles: c.dark ? STYLES.dark : STYLES.light };
+}

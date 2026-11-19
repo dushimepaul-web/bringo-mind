@@ -6,15 +6,19 @@ import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icon';
-import { BottomSheet, PrimaryButton, SecondaryButton, TopBar, UndoToast, kitStyles } from '@/components/ui/kit';
-import { FontFamily, Serene, Tint } from '@/constants/design';
+import { BottomSheet, PrimaryButton, SecondaryButton, TopBar, UndoToast, useKitStyles } from '@/components/ui/kit';
+import { DARK, LIGHT, useScopedColors, type AppColors } from '@/constants/app-colors';
+import { FontFamily } from '@/constants/design';
 
-import { ChoiceCard, SmallButton, householdStyles } from '../components/household-ui';
+import { ChoiceCard, SmallButton, useHouseholdStyles } from '../components/household-ui';
 import { ROLE_HINTS, ROLE_LABELS, isValidEmail } from '../data';
 import { householdActions, useHouseholdState } from '../store';
 import type { Invitation } from '../types';
 
 export default function InviteMemberScreen() {
+  const { c, styles } = useLook();
+  const kitStyles = useKitStyles();
+  const householdStyles = useHouseholdStyles();
   const { name, members, invitations } = useHouseholdState();
   const [email, setEmail] = useState('sophie.martin@email.fr');
   const [role, setRole] = useState<Invitation['role']>('member');
@@ -63,13 +67,13 @@ export default function InviteMemberScreen() {
             autoCapitalize="none"
             autoCorrect={false}
             placeholder="prenom.nom@email.fr"
-            placeholderTextColor={Serene.onSurfaceVariant}
-            selectionColor={Tint.primary}
+            placeholderTextColor={c.muted}
+            selectionColor={c.link}
             accessibilityLabel="Adresse e-mail de la personne invitée"
           />
           {showError ? (
             <View style={styles.errorRow} accessibilityLiveRegion="polite">
-              <Icon name="error" size={16} color={Serene.error} />
+              <Icon name="error" size={16} color={c.error} />
               <Text style={styles.errorText}>{error}</Text>
             </View>
           ) : null}
@@ -97,13 +101,13 @@ export default function InviteMemberScreen() {
             onBlur={() => setFocus(null)}
             multiline
             textAlignVertical="top"
-            placeholderTextColor={Serene.onSurfaceVariant}
-            selectionColor={Tint.primary}
+            placeholderTextColor={c.muted}
+            selectionColor={c.link}
             accessibilityLabel="Message personnel"
           />
 
           <View style={[householdStyles.note, styles.note]}>
-            <Icon name="shield" size={20} color={Tint.primary} />
+            <Icon name="shield" size={20} color={c.link} />
             <Text style={householdStyles.noteText}>
               Le lien d’invitation est personnel et valable 7 jours. Vous pouvez l’annuler à tout moment depuis la liste
               des membres.
@@ -151,52 +155,62 @@ export default function InviteMemberScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-  },
-  content: {
-    paddingTop: 4,
-    paddingBottom: 24,
-  },
-  label: {
-    marginTop: 20,
-    marginBottom: 8,
-  },
-  stack: {
-    gap: 10,
-  },
-  message: {
-    minHeight: 110,
-  },
-  errorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 6,
-  },
-  errorText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.error,
-  },
-  note: {
-    marginTop: 18,
-  },
-  shareRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  footer: {
-    width: '100%',
-    maxWidth: 560,
-    alignSelf: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Tint.border,
-    backgroundColor: Tint.softer,
-  },
-});
+function makeStyles(c: AppColors) {
+  return StyleSheet.create({
+    flex: {
+      flex: 1,
+    },
+    content: {
+      paddingTop: 4,
+      paddingBottom: 24,
+    },
+    label: {
+      marginTop: 20,
+      marginBottom: 8,
+    },
+    stack: {
+      gap: 10,
+    },
+    message: {
+      minHeight: 110,
+    },
+    errorRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginTop: 6,
+    },
+    errorText: {
+      fontFamily: FontFamily.bodyMedium,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.error,
+    },
+    note: {
+      marginTop: 18,
+    },
+    shareRow: {
+      flexDirection: 'row',
+      gap: 8,
+    },
+    footer: {
+      width: '100%',
+      maxWidth: 560,
+      alignSelf: 'center',
+      paddingHorizontal: 20,
+      paddingTop: 10,
+      paddingBottom: 12,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: c.border,
+      backgroundColor: c.page,
+    },
+  });
+}
+
+const STYLES = { light: makeStyles(LIGHT), dark: makeStyles(DARK) };
+
+/** Couleurs et styles du mode actuel (sombre seulement dans un module converti). */
+function useLook() {
+  const c = useScopedColors();
+  return { c, styles: c.dark ? STYLES.dark : STYLES.light };
+}

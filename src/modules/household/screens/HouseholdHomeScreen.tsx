@@ -5,29 +5,14 @@ import { useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AppHeader } from '@/components/app-header';
 import { Icon } from '@/components/icon';
-import {
-  BottomSheet,
-  Chip,
-  IconButton,
-  PrimaryButton,
-  SecondaryButton,
-  SheetOption,
-  Tag,
-  TopBar,
-  UndoToast,
-  kitStyles,
-} from '@/components/ui/kit';
-import { FontFamily, Radius, Serene, Tint } from '@/constants/design';
+import { BottomSheet, Chip, PrimaryButton, SecondaryButton, SheetOption, Tag, TopBar, UndoToast, useKitStyles } from '@/components/ui/kit';
+import { DARK, LIGHT, useScopedColors, type AppColors } from '@/constants/app-colors';
+import { FontFamily, Radius } from '@/constants/design';
 import { dayOffset, formatDay, formatTime } from '@/lib/demo-dates';
 
-import {
-  Avatar,
-  SectionHeader,
-  SmallButton,
-  householdStyles,
-  useFlashToast,
-} from '../components/household-ui';
+import { Avatar, SectionHeader, useFlashToast, useHouseholdStyles } from '../components/household-ui';
 import { ROLE_LABELS, SHARED_DOCS, SHARED_EVENTS, SHARED_TASKS, WEEKDAY_SHORT, firstName } from '../data';
 import { QueryView } from '@/components/ui/states';
 import { useQuery } from '@/hooks/use-query';
@@ -35,8 +20,8 @@ import { useQuery } from '@/hooks/use-query';
 import { householdActions, syncHousehold, useHouseholdState } from '../store';
 import type { SharedTask } from '../types';
 
-
 export default function HouseholdHomeScreen() {
+  const kitStyles = useKitStyles();
   const { hasHousehold } = useHouseholdState();
   const [toast, setToast] = useFlashToast();
 
@@ -52,13 +37,15 @@ export default function HouseholdHomeScreen() {
 
 /** Mode personnel : le foyer est présenté comme une option, jamais une obligation. */
 function NoHousehold() {
+  const { c, styles } = useLook();
+  const kitStyles = useKitStyles();
   return (
     <>
       <TopBar title="Foyer" />
       <ScrollView contentContainerStyle={[kitStyles.content, styles.content]} showsVerticalScrollIndicator={false}>
         <View style={[kitStyles.card, styles.emptyCard]}>
           <View style={styles.emptyIcon}>
-            <Icon name="family_restroom" size={34} color={Tint.primary} />
+            <Icon name="family_restroom" size={34} color={c.link} />
           </View>
           <Text style={styles.emptyTitle}>Le foyer est optionnel</Text>
           <Text style={styles.emptyText}>
@@ -72,7 +59,7 @@ function NoHousehold() {
               { icon: 'logout', text: 'Vous pouvez quitter le foyer à tout moment' },
             ].map((item) => (
               <View key={item.text} style={styles.benefit}>
-                <Icon name={item.icon} size={20} color={Tint.primary} />
+                <Icon name={item.icon} size={20} color={c.link} />
                 <Text style={styles.benefitText}>{item.text}</Text>
               </View>
             ))}
@@ -92,7 +79,10 @@ function NoHousehold() {
 }
 
 function HouseholdHome() {
-  const { name, members, invitations, koraDismissed, createdAt: created, demoContent } = useHouseholdState();
+  const { c, styles } = useLook();
+  const kitStyles = useKitStyles();
+  const householdStyles = useHouseholdStyles();
+  const { name, members, invitations, koraDismissed, createdAt: created, demoContent, activity } = useHouseholdState();
   const sync = useQuery('household', syncHousehold);
   // Un seul filtre par personne, pour les tâches ET les événements.
   const [person, setPerson] = useState<string>('all');
@@ -113,20 +103,30 @@ function HouseholdHome() {
 
   return (
     <>
-      <TopBar
-        title="Foyer"
-        right={<IconButton icon="more_horiz" label="Options du foyer" onPress={() => setMenu(true)} />}
-      />
+      <AppHeader />
       <ScrollView
         contentContainerStyle={[kitStyles.content, styles.content]}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={sync.refreshing} onRefresh={sync.reload} tintColor={Tint.primary} colors={[Tint.primary]} />}>
+        refreshControl={<RefreshControl refreshing={sync.refreshing} onRefresh={sync.reload} tintColor={c.link} colors={[c.link]} />}>
+        <View style={styles.titleRow}>
+          <Text style={styles.pageTitle}>Famille</Text>
+          <View style={styles.titleActions}>
+            {canManage ? (
+              <Pressable style={({ pressed }) => [styles.square, styles.addSquare, pressed && styles.pressed]} accessibilityRole="button" accessibilityLabel="Inviter un membre" onPress={() => router.push('/household/invite')}>
+                <Icon name="person_add" size={22} color={c.solidText} />
+              </Pressable>
+            ) : null}
+            <Pressable style={({ pressed }) => [styles.square, pressed && styles.pressed]} accessibilityRole="button" accessibilityLabel="Options du foyer" onPress={() => setMenu(true)}>
+              <Icon name="more_vert" size={22} color={c.text} />
+            </Pressable>
+          </View>
+        </View>
         <QueryView query={sync} loadingRows={5}>
-        {/* Carte du foyer : qui en fait partie et les trois raccourcis */}
+        {/* Carte du foyer : les membres, comme les favoris des Contacts */}
         <View style={[kitStyles.card, styles.hero]}>
           <View style={styles.heroTop}>
             <View style={styles.heroIcon}>
-              <Icon name="family_restroom" size={26} color={Tint.primary} />
+              <Icon name="family_restroom" size={26} color={c.link} />
             </View>
             <View style={styles.flex}>
               <Text style={styles.heroName} numberOfLines={1}>
@@ -163,7 +163,7 @@ function HouseholdHome() {
                 accessibilityLabel={`${invitations.length} invitation en attente`}
                 onPress={() => router.push('/household/members')}>
                 <View style={styles.pendingAvatar}>
-                  <Icon name="schedule_send" size={22} color={Serene.onSurfaceVariant} />
+                  <Icon name="schedule_send" size={22} color={c.muted} />
                 </View>
                 <Text style={styles.personName}>Invitée</Text>
                 <Text style={styles.personRole}>En attente</Text>
@@ -171,37 +171,24 @@ function HouseholdHome() {
             ) : null}
           </ScrollView>
 
-          <View style={styles.shortcuts}>
-            {canManage ? (
-              <Shortcut icon="person_add" label="Inviter" onPress={() => router.push('/household/invite')} />
-            ) : null}
-            <Shortcut icon="group" label="Membres" onPress={() => router.push('/household/members')} />
-            <Shortcut icon="history" label="Activité" onPress={() => router.push('/household/activity')} />
-          </View>
         </View>
 
         {/* Kora propose, la personne décide */}
         {!koraDismissed ? (
-          <View style={styles.kora}>
-            <View style={styles.koraHead}>
-              <Avatar name="Kora" color={Tint.black} size={30} kora />
-              <Text style={styles.koraLabel}>Kora • Suggestion pour le foyer</Text>
-            </View>
-            <Text style={styles.koraText}>
-              L’inscription scolaire de Léo est à rendre le 25 mai. L’attestation d’assurance habitation est déjà
-              dans les documents partagés : Thomas peut la joindre au dossier.
+          <Pressable
+            style={({ pressed }) => [styles.koraLine, pressed && styles.pressed]}
+            accessibilityRole="button"
+            accessibilityLabel="Suggestion de Kora : l’inscription scolaire de Léo est à rendre le 25 mai"
+            onPress={() => router.push({ pathname: '/tasks/detail', params: { id: 'inscription' } })}>
+            <Icon name="auto_awesome" size={20} color={c.link} />
+            <Text style={styles.koraLineText} numberOfLines={2}>
+              Kora : l’inscription de Léo est à rendre le 25 mai
             </Text>
-            <View style={styles.koraActions}>
-              <SmallButton
-                label="Voir la tâche"
-                icon="arrow_forward"
-                onPress={() => router.push({ pathname: '/tasks/detail', params: { id: 'inscription' } })}
-              />
-              <Pressable hitSlop={8} accessibilityRole="button" onPress={() => householdActions.dismissKora()}>
-                <Text style={styles.koraLater}>Plus tard</Text>
-              </Pressable>
-            </View>
-          </View>
+            <Text style={styles.koraLineLink}>Voir</Text>
+            <Pressable hitSlop={10} accessibilityRole="button" accessibilityLabel="Masquer la suggestion" onPress={() => householdActions.dismissKora()}>
+              <Icon name="close" size={18} color={c.muted} />
+            </Pressable>
+          </Pressable>
         ) : null}
 
         {demoContent ? (
@@ -222,24 +209,24 @@ function HouseholdHome() {
         </ScrollView>
 
         <SectionHeader title="Tâches partagées" count={tasks.filter((task) => !task.done).length} action="Tout voir" href="/tasks" />
-        <View style={styles.stack}>
+        <View style={styles.groupCard}>
           {tasks.length === 0 ? (
             <Text style={[kitStyles.muted, styles.none]}>Aucune tâche partagée pour {forWhom}.</Text>
           ) : (
-            tasks.map((task) => <TaskRow key={task.id} task={task} />)
+            tasks.map((task, index) => <TaskRow key={task.id} task={task} first={index === 0} />)
           )}
         </View>
 
         {/* Prochains événements partagés */}
         <SectionHeader title="Événements partagés" count={events.length} action="Calendrier" href="/calendar" />
-        <View style={styles.stack}>
+        <View style={styles.groupCard}>
           {events.length === 0 ? (
             <Text style={[kitStyles.muted, styles.none]}>Aucun événement partagé à venir pour {forWhom}.</Text>
           ) : null}
-          {events.map((event) => (
+          {events.map((event, index) => (
             <Pressable
               key={event.id}
-              style={({ pressed }) => [kitStyles.card, styles.event, pressed && kitStyles.cardPressed]}
+              style={({ pressed }) => [styles.event, index > 0 && styles.groupDivider, pressed && kitStyles.cardPressed]}
               accessibilityRole="button"
               accessibilityLabel={`${event.title}, ${formatDay(event.start)} à ${formatTime(event.start)}`}
               onPress={() => router.push({ pathname: '/calendar/detail', params: { id: event.id } })}>
@@ -260,11 +247,11 @@ function HouseholdHome() {
                   {event.location}
                 </Text>
                 <View style={styles.whoRow}>
-                  <Icon name="group" size={16} color={Tint.primary} />
+                  <Icon name="group" size={16} color={c.link} />
                   <Text style={styles.who}>{event.who}</Text>
                 </View>
               </View>
-              <Icon name="chevron_right" size={22} color={Serene.onSurfaceVariant} />
+              <Icon name="chevron_right" size={22} color={c.muted} />
             </Pressable>
           ))}
         </View>
@@ -280,7 +267,7 @@ function HouseholdHome() {
               accessibilityLabel={doc.title}
               onPress={() => router.push({ pathname: '/documents/detail', params: { id: doc.id } })}>
               <View style={styles.docIcon}>
-                <Icon name={doc.icon} size={22} color={Tint.primary} />
+                <Icon name={doc.icon} size={22} color={c.link} />
               </View>
               <Text style={styles.docTitle} numberOfLines={2}>
                 {doc.title}
@@ -292,10 +279,32 @@ function HouseholdHome() {
           ))}
         </View>
 
+        {/* Activité récente */}
+        <SectionHeader title="Activité récente" count={activity.length} action="Voir tout" href="/household/activity" />
+        <View style={styles.groupCard}>
+          {activity.slice(0, 3).map((item, index) => {
+            const member = members.find((entry) => entry.id === item.who);
+            const who = item.who === 'kora' ? 'Kora' : member?.you ? 'Vous' : member ? firstName(member.name) : item.who;
+            return (
+              <Pressable
+                key={item.id}
+                style={({ pressed }) => [styles.activity, index > 0 && styles.groupDivider, pressed && kitStyles.cardPressed]}
+                accessibilityRole="button"
+                onPress={() => (item.href ? router.push(item.href) : router.push('/household/activity'))}>
+                <Avatar name={item.who === 'kora' ? 'Kora' : member?.name ?? who} color={item.who === 'kora' ? c.solid : member?.color ?? c.text} size={34} kora={item.who === 'kora'} />
+                <Text style={styles.activityText} numberOfLines={2}>
+                  <Text style={styles.activityWho}>{who}</Text> {item.verb} <Text style={styles.activityTarget}>{item.target}</Text>
+                </Text>
+                <Text style={styles.activityTime}>{formatTime(item.at)}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
           </>
         ) : (
           <View style={[kitStyles.card, styles.nothing]}>
-            <Icon name="share" size={28} color={Tint.primary} />
+            <Icon name="share" size={28} color={c.link} />
             <Text style={kitStyles.title}>Rien n’est encore partagé</Text>
             <Text style={[kitStyles.muted, styles.center]}>
               Depuis une tâche, un événement ou un document, choisissez « Foyer » pour le partager ici.
@@ -304,7 +313,7 @@ function HouseholdHome() {
         )}
 
         <View style={[householdStyles.note, styles.privacy]}>
-          <Icon name="lock" size={20} color={Tint.primary} />
+          <Icon name="lock" size={20} color={c.link} />
           <Text style={householdStyles.noteText}>
             Vos éléments personnels (santé, impôts, fiches de paie) restent privés. Seul ce que vous choisissez de
             partager apparaît ici.
@@ -347,19 +356,9 @@ function HouseholdHome() {
   );
 }
 
-function Shortcut({ icon, label, onPress }: { icon: string; label: string; onPress: () => void }) {
-  return (
-    <Pressable
-      style={({ pressed }) => [styles.shortcut, pressed && styles.shortcutPressed]}
-      accessibilityRole="button"
-      onPress={onPress}>
-      <Icon name={icon} size={22} color={Tint.navy} />
-      <Text style={styles.shortcutText}>{label}</Text>
-    </Pressable>
-  );
-}
-
-function TaskRow({ task }: { task: SharedTask }) {
+function TaskRow({ task, first }: { task: SharedTask; first: boolean }) {
+  const { c, styles } = useLook();
+  const kitStyles = useKitStyles();
   const offset = dayOffset(task.due);
   const late = !task.done && offset < 0;
   const status = task.done
@@ -372,12 +371,12 @@ function TaskRow({ task }: { task: SharedTask }) {
   const who = task.assignee === 'claire' ? 'Vous' : 'Thomas';
   return (
     <Pressable
-      style={({ pressed }) => [kitStyles.card, styles.task, pressed && kitStyles.cardPressed]}
+      style={({ pressed }) => [styles.task, !first && styles.groupDivider, pressed && kitStyles.cardPressed]}
       accessibilityRole="button"
       accessibilityLabel={`${task.title}, ${status}, assignée à ${who}`}
       onPress={() => router.push({ pathname: '/tasks/detail', params: { id: task.id } })}>
       <View style={[styles.taskState, task.done && styles.taskStateDone]}>
-        {task.done ? <Icon name="check" size={16} color={Serene.onPrimary} /> : null}
+        {task.done ? <Icon name="check" size={16} color={c.solidText} /> : null}
       </View>
       <View style={styles.flex}>
         <Text style={[styles.taskTitle, task.done && styles.taskTitleDone]} numberOfLines={2}>
@@ -395,341 +394,448 @@ function TaskRow({ task }: { task: SharedTask }) {
           <Text style={styles.meta}>• {who}</Text>
         </View>
       </View>
-      <Icon name="chevron_right" size={22} color={Serene.onSurfaceVariant} />
+      <Icon name="chevron_right" size={22} color={c.muted} />
     </Pressable>
   );
 }
 
-const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-  },
-  pressed: {
-    opacity: 0.8,
-  },
-  content: {
-    paddingTop: 4,
-    paddingBottom: 40,
-  },
-  hero: {
-    gap: 16,
-  },
-  heroTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  heroIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    backgroundColor: Serene.secondaryContainer,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  heroName: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 22,
-    lineHeight: 28,
-    letterSpacing: -0.3,
-    color: Tint.navy,
-  },
-  people: {
-    gap: 8,
-  },
-  person: {
-    width: 82,
-    alignItems: 'center',
-    gap: 4,
-  },
-  personName: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 14,
-    lineHeight: 19,
-    color: Tint.navy,
-  },
-  personRole: {
-    fontFamily: FontFamily.body,
-    fontSize: 13,
-    lineHeight: 17,
-    color: Serene.onSurfaceVariant,
-  },
-  pendingAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: Radius.full,
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    borderColor: '#b9c4d6',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  shortcuts: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  shortcut: {
-    flex: 1,
-    height: 64,
-    borderRadius: 16,
-    backgroundColor: Tint.soft,
-    borderWidth: 1,
-    borderColor: Tint.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 2,
-  },
-  shortcutPressed: {
-    backgroundColor: Tint.lavender,
-  },
-  shortcutText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 14,
-    lineHeight: 19,
-    color: Tint.navy,
-  },
-  kora: {
-    marginTop: 16,
-    padding: 16,
-    gap: 10,
-    borderRadius: 20,
-    backgroundColor: '#f0fdfa',
-    borderWidth: 1,
-    borderColor: '#99f6e4',
-  },
-  koraHead: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  koraLabel: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Tint.primary,
-  },
-  koraText: {
-    fontFamily: FontFamily.body,
-    fontSize: 15,
-    lineHeight: 22,
-    color: Tint.navy,
-  },
-  koraActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 18,
-  },
-  koraLater: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 15,
-    lineHeight: 20,
-    color: Serene.onSurfaceVariant,
-  },
-  filterLabel: {
-    marginTop: 24,
-    marginBottom: 8,
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 13,
-    lineHeight: 18,
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
-    color: Serene.onSurfaceVariant,
-  },
-  chips: {
-    gap: 8,
-  },
-  none: {
-    paddingVertical: 8,
-  },
-  stack: {
-    gap: 10,
-  },
-  task: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 14,
-  },
-  taskState: {
-    width: 24,
-    height: 24,
-    borderRadius: Radius.full,
-    borderWidth: 2,
-    borderColor: '#b9c4d6',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  taskStateDone: {
-    backgroundColor: Tint.primary,
-    borderColor: Tint.primary,
-  },
-  taskTitle: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 16,
-    lineHeight: 21,
-    color: Tint.navy,
-  },
-  taskTitleDone: {
-    color: Serene.onSurfaceVariant,
-    textDecorationLine: 'line-through',
-  },
-  taskMeta: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 4,
-    marginTop: 2,
-  },
-  taskStatus: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Tint.navy,
-  },
-  taskStatusUrgent: {
-    color: Serene.error,
-  },
-  taskStatusDone: {
-    color: Tint.primary,
-  },
-  meta: {
-    fontFamily: FontFamily.body,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurfaceVariant,
-  },
-  event: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  dateBlock: {
-    width: 54,
-    paddingVertical: 8,
-    borderRadius: 14,
-    backgroundColor: Tint.soft,
-    alignItems: 'center',
-  },
-  dateBlockToday: {
-    backgroundColor: Tint.primary,
-  },
-  dateDay: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 13,
-    lineHeight: 17,
-    color: Serene.onSurfaceVariant,
-  },
-  dateNumber: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 22,
-    lineHeight: 28,
-    color: Tint.navy,
-  },
-  dateTodayText: {
-    color: Serene.onPrimary,
-  },
-  whoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 4,
-  },
-  who: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Tint.primary,
-  },
-  docs: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  doc: {
-    flexBasis: '47%',
-    flexGrow: 1,
-    gap: 6,
-  },
-  docIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: Serene.secondaryContainer,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  docTitle: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 15,
-    lineHeight: 20,
-    color: Tint.navy,
-  },
-  docMeta: {
-    fontFamily: FontFamily.body,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurfaceVariant,
-  },
-  nothing: {
-    marginTop: 22,
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 24,
-  },
-  center: {
-    textAlign: 'center',
-  },
-  privacy: {
-    marginTop: 22,
-  },
-  emptyCard: {
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 26,
-  },
-  emptyIcon: {
-    width: 72,
-    height: 72,
-    borderRadius: 24,
-    backgroundColor: Serene.secondaryContainer,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyTitle: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 22,
-    lineHeight: 28,
-    color: Tint.navy,
-    textAlign: 'center',
-  },
-  emptyText: {
-    fontFamily: FontFamily.body,
-    fontSize: 15,
-    lineHeight: 22,
-    color: Serene.onSurfaceVariant,
-    textAlign: 'center',
-  },
-  benefits: {
-    alignSelf: 'stretch',
-    gap: 10,
-    marginTop: 6,
-  },
-  benefit: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    padding: 12,
-    borderRadius: 14,
-    backgroundColor: Tint.soft,
-  },
-  benefitText: {
-    flex: 1,
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 15,
-    lineHeight: 20,
-    color: Tint.navy,
-  },
-  emptyActions: {
-    gap: 10,
-    marginTop: 18,
-  },
-});
+function makeStyles(c: AppColors) {
+  return StyleSheet.create({
+    titleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginTop: 8,
+      marginBottom: 12,
+    },
+    pageTitle: {
+      fontFamily: FontFamily.headingBold,
+      fontSize: 28,
+      lineHeight: 34,
+      letterSpacing: -0.5,
+      color: c.text,
+    },
+    titleActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    square: {
+      width: 42,
+      height: 42,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.card,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    addSquare: {
+      borderColor: c.solid,
+      backgroundColor: c.solid,
+    },
+    koraLine: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      minHeight: 48,
+      marginTop: 14,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderRadius: 14,
+      backgroundColor: c.tintMint,
+    },
+    koraLineText: {
+      flex: 1,
+      fontFamily: FontFamily.bodyMedium,
+      fontSize: 14,
+      lineHeight: 19,
+      color: c.text,
+    },
+    koraLineLink: {
+      fontFamily: FontFamily.bodyBold,
+      fontSize: 14,
+      lineHeight: 19,
+      color: c.link,
+    },
+    groupCard: {
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.card,
+      overflow: 'hidden',
+    },
+    groupDivider: {
+      borderTopWidth: 1,
+      borderTopColor: c.border,
+    },
+    activity: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      paddingVertical: 12,
+      paddingHorizontal: 14,
+    },
+    activityText: {
+      flex: 1,
+      fontFamily: FontFamily.body,
+      fontSize: 14,
+      lineHeight: 19,
+      color: c.text,
+    },
+    activityWho: {
+      fontFamily: FontFamily.bodySemiBold,
+    },
+    activityTarget: {
+      fontFamily: FontFamily.bodySemiBold,
+      color: c.link,
+    },
+    activityTime: {
+      fontFamily: FontFamily.body,
+      fontSize: 13,
+      lineHeight: 17,
+      color: c.muted,
+    },
+    flex: {
+      flex: 1,
+    },
+    pressed: {
+      opacity: 0.8,
+    },
+    content: {
+      paddingTop: 4,
+      paddingBottom: 40,
+    },
+    hero: {
+      gap: 16,
+    },
+    heroTop: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    heroIcon: {
+      width: 48,
+      height: 48,
+      borderRadius: 16,
+      backgroundColor: c.tintMint,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    heroName: {
+      fontFamily: FontFamily.headingBold,
+      fontSize: 22,
+      lineHeight: 28,
+      letterSpacing: -0.3,
+      color: c.text,
+    },
+    people: {
+      gap: 8,
+    },
+    person: {
+      width: 82,
+      alignItems: 'center',
+      gap: 4,
+    },
+    personName: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 14,
+      lineHeight: 19,
+      color: c.text,
+    },
+    personRole: {
+      fontFamily: FontFamily.body,
+      fontSize: 13,
+      lineHeight: 17,
+      color: c.muted,
+    },
+    pendingAvatar: {
+      width: 48,
+      height: 48,
+      borderRadius: Radius.full,
+      borderWidth: 1.5,
+      borderStyle: 'dashed',
+      borderColor: c.dark ? '#3B5079' : '#b9c4d6',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    shortcuts: {
+      flexDirection: 'row',
+      gap: 10,
+    },
+    shortcut: {
+      flex: 1,
+      height: 64,
+      borderRadius: 16,
+      backgroundColor: c.soft,
+      borderWidth: 1,
+      borderColor: c.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 2,
+    },
+    shortcutPressed: {
+      backgroundColor: c.soft,
+    },
+    shortcutText: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 14,
+      lineHeight: 19,
+      color: c.text,
+    },
+    kora: {
+      marginTop: 16,
+      padding: 16,
+      gap: 10,
+      borderRadius: 20,
+      backgroundColor: c.tintMint,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    koraHead: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    koraLabel: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.link,
+    },
+    koraText: {
+      fontFamily: FontFamily.body,
+      fontSize: 15,
+      lineHeight: 22,
+      color: c.text,
+    },
+    koraActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 18,
+    },
+    koraLater: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 15,
+      lineHeight: 20,
+      color: c.muted,
+    },
+    filterLabel: {
+      marginTop: 24,
+      marginBottom: 8,
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 13,
+      lineHeight: 18,
+      letterSpacing: 0.4,
+      textTransform: 'uppercase',
+      color: c.muted,
+    },
+    chips: {
+      gap: 8,
+    },
+    none: {
+      paddingVertical: 8,
+    },
+    stack: {
+      gap: 10,
+    },
+    task: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      paddingVertical: 14,
+      paddingHorizontal: 14,
+    },
+    taskState: {
+      width: 24,
+      height: 24,
+      borderRadius: Radius.full,
+      borderWidth: 2,
+      borderColor: c.dark ? '#3B5079' : '#b9c4d6',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    taskStateDone: {
+      backgroundColor: c.link,
+      borderColor: c.link,
+    },
+    taskTitle: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 16,
+      lineHeight: 21,
+      color: c.text,
+    },
+    taskTitleDone: {
+      color: c.muted,
+      textDecorationLine: 'line-through',
+    },
+    taskMeta: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 4,
+      marginTop: 2,
+    },
+    taskStatus: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.text,
+    },
+    taskStatusUrgent: {
+      color: c.error,
+    },
+    taskStatusDone: {
+      color: c.link,
+    },
+    meta: {
+      fontFamily: FontFamily.body,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.muted,
+    },
+    event: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      padding: 14,
+    },
+    dateBlock: {
+      width: 54,
+      paddingVertical: 8,
+      borderRadius: 14,
+      backgroundColor: c.soft,
+      alignItems: 'center',
+    },
+    dateBlockToday: {
+      backgroundColor: c.link,
+    },
+    dateDay: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 13,
+      lineHeight: 17,
+      color: c.muted,
+    },
+    dateNumber: {
+      fontFamily: FontFamily.headingBold,
+      fontSize: 22,
+      lineHeight: 28,
+      color: c.text,
+    },
+    dateTodayText: {
+      color: c.solidText,
+    },
+    whoRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      marginTop: 4,
+    },
+    who: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.link,
+    },
+    docs: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 10,
+    },
+    doc: {
+      flexBasis: '47%',
+      flexGrow: 1,
+      gap: 6,
+    },
+    docIcon: {
+      width: 40,
+      height: 40,
+      borderRadius: 12,
+      backgroundColor: c.tintMint,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    docTitle: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 15,
+      lineHeight: 20,
+      color: c.text,
+    },
+    docMeta: {
+      fontFamily: FontFamily.body,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.muted,
+    },
+    nothing: {
+      marginTop: 22,
+      alignItems: 'center',
+      gap: 8,
+      paddingVertical: 24,
+    },
+    center: {
+      textAlign: 'center',
+    },
+    privacy: {
+      marginTop: 22,
+    },
+    emptyCard: {
+      alignItems: 'center',
+      gap: 12,
+      paddingVertical: 26,
+    },
+    emptyIcon: {
+      width: 72,
+      height: 72,
+      borderRadius: 24,
+      backgroundColor: c.tintMint,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    emptyTitle: {
+      fontFamily: FontFamily.headingBold,
+      fontSize: 22,
+      lineHeight: 28,
+      color: c.text,
+      textAlign: 'center',
+    },
+    emptyText: {
+      fontFamily: FontFamily.body,
+      fontSize: 15,
+      lineHeight: 22,
+      color: c.muted,
+      textAlign: 'center',
+    },
+    benefits: {
+      alignSelf: 'stretch',
+      gap: 10,
+      marginTop: 6,
+    },
+    benefit: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      padding: 12,
+      borderRadius: 14,
+      backgroundColor: c.soft,
+    },
+    benefitText: {
+      flex: 1,
+      fontFamily: FontFamily.bodyMedium,
+      fontSize: 15,
+      lineHeight: 20,
+      color: c.text,
+    },
+    emptyActions: {
+      gap: 10,
+      marginTop: 18,
+    },
+  });
+}
+
+const STYLES = { light: makeStyles(LIGHT), dark: makeStyles(DARK) };
+
+/** Couleurs et styles du mode actuel (sombre seulement dans un module converti). */
+function useLook() {
+  const c = useScopedColors();
+  return { c, styles: c.dark ? STYLES.dark : STYLES.light };
+}

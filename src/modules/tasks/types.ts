@@ -35,10 +35,14 @@ export type Task = {
   sharedWith: string[];
   assignee: string;
   reminder: boolean;
+  /** Rappels : date et heure exactes de chaque notification. Vide : aucun rappel. */
+  reminderAt?: Date[];
   createdAt: Date;
   completedAt?: Date;
   subtasks: Subtask[];
   document?: { name: string; meta: string };
+  /** Proposée par Kora (repérée dans un e-mail, un document…) : à vérifier avant de la garder. */
+  suggested?: boolean;
   /** Version de la ligne côté serveur (verrouillage optimiste, mode « api »). */
   version?: number;
 };
@@ -54,4 +58,10 @@ export type TaskDraft = Pick<
   | 'household'
   | 'sharedWith'
   | 'reminder'
->;
+  | 'reminderAt'
+> & {
+  /** Personne qui s'en charge (tâche partagée avec le foyer). Défaut : Claire. */
+  assignee?: string;
+  /** Étapes saisies à la création. */
+  steps?: string[];
+};

@@ -7,9 +7,10 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icon';
-import { BottomSheet, Chip, IconButton, SecondaryButton, SheetOption, TopBar, UndoToast, kitStyles } from '@/components/ui/kit';
+import { BottomSheet, Chip, IconButton, SecondaryButton, SheetOption, TopBar, UndoToast, useKitStyles } from '@/components/ui/kit';
 import { SettingsRow, SettingsSection } from '@/components/ui/settings';
-import { FontFamily, Radius, Serene, Tint } from '@/constants/design';
+import { DARK, LIGHT, useScopedColors, type AppColors } from '@/constants/app-colors';
+import { FontFamily, Radius } from '@/constants/design';
 import { atTime, addDays, formatDay } from '@/lib/demo-dates';
 
 import { LINK_META, receivedLabel } from '../data';
@@ -22,6 +23,7 @@ export default function EmailViewerScreen() {
 }
 
 function Avatar({ name }: { name: string }) {
+  const { styles } = useLook();
   return (
     <View style={styles.avatar}>
       <Text style={styles.avatarText}>{name[0]}</Text>
@@ -30,6 +32,8 @@ function Avatar({ name }: { name: string }) {
 }
 
 function EmailList() {
+  const { c, styles } = useLook();
+  const kitStyles = useKitStyles();
   const { emails, flash } = useIntegrationsState();
   const [filter, setFilter] = useState<'all' | 'review' | 'done'>('all');
   const [toast, setToast] = useState<{ text: string; undo?: () => void } | null>(null);
@@ -61,7 +65,7 @@ function EmailList() {
 
         {list.length === 0 ? (
           <View style={[kitStyles.card, styles.empty]}>
-            <Icon name="mark_email_read" size={28} color={Tint.primary} />
+            <Icon name="mark_email_read" size={28} color={c.link} />
             <Text style={kitStyles.title}>Tout est traité</Text>
             <Text style={[kitStyles.muted, styles.center]}>Aucun e-mail ne demande votre attention.</Text>
           </View>
@@ -95,11 +99,11 @@ function EmailList() {
                       </View>
                     ) : (
                       <View style={styles.doneTag}>
-                        <Icon name="check" size={13} color={Tint.primary} />
+                        <Icon name="check" size={13} color={c.link} />
                         <Text style={styles.doneTagText}>Traité</Text>
                       </View>
                     )}
-                    {email.attachment ? <Icon name="attach_file" size={16} color={Serene.onSurfaceVariant} /> : null}
+                    {email.attachment ? <Icon name="attach_file" size={16} color={c.muted} /> : null}
                   </View>
                 </View>
               </Pressable>
@@ -121,6 +125,8 @@ function linkHref(link: ImportedEmail['links'][number]) {
 }
 
 function EmailDetail({ id }: { id: string }) {
+  const { c, styles } = useLook();
+  const kitStyles = useKitStyles();
   const { emails } = useIntegrationsState();
   const email = emails.find((entry) => entry.id === id);
   const [sheet, setSheet] = useState<'menu' | 'block' | null>(null);
@@ -132,7 +138,7 @@ function EmailDetail({ id }: { id: string }) {
         <TopBar title="E-mail importé" fallback="/integrations/email" />
         <View style={[kitStyles.content, styles.content]}>
           <View style={[kitStyles.card, styles.empty]}>
-            <Icon name="unsubscribe" size={28} color={Tint.primary} />
+            <Icon name="unsubscribe" size={28} color={c.link} />
             <Text style={kitStyles.title}>E-mail introuvable</Text>
             <SecondaryButton label="Voir les e-mails importés" onPress={() => router.replace('/integrations/email')} />
           </View>
@@ -146,6 +152,7 @@ function EmailDetail({ id }: { id: string }) {
   const suggestion = email.suggestion;
   const reminderAt = suggestion?.due ? atTime(addDays(suggestion.due, -1), 9) : undefined;
   const nothingToCreate = !suggestion || (hasTask && hasEvent);
+  const documentLink = email.links.find((link) => link.kind === 'document');
 
   return (
     <SafeAreaView style={kitStyles.safe} edges={['top']}>
@@ -165,27 +172,56 @@ function EmailDetail({ id }: { id: string }) {
             <Text style={styles.time}>{receivedLabel(email.receivedAt)}</Text>
           </View>
           <Text style={styles.mailSubject}>{email.subject}</Text>
+          {email.status === 'review' ? (
+            <View style={[styles.statusPill, styles.reviewTag]}>
+              <Icon name="schedule" size={14} color={c.muted} />
+              <Text style={styles.reviewTagText}>À vérifier</Text>
+            </View>
+          ) : (
+            <View style={[styles.statusPill, styles.doneTag]}>
+              <Icon name="check_circle" size={14} color={c.link} filled />
+              <Text style={styles.doneTagText}>Traité</Text>
+            </View>
+          )}
           {email.body.map((paragraph) => (
             <Text key={paragraph} style={styles.body}>
               {paragraph}
             </Text>
           ))}
           {email.attachment ? (
-            <View style={styles.attachment}>
-              <Icon name="picture_as_pdf" size={22} color={Serene.error} />
-              <View style={styles.flex}>
-                <Text style={styles.attachmentName}>{email.attachment.name}</Text>
-                <Text style={styles.preview}>{email.attachment.size} • enregistré dans Documents</Text>
+            <Pressable
+              style={({ pressed }) => [styles.attachment, pressed && styles.rowPressed]}
+              accessibilityRole="button"
+              accessibilityLabel={`Ouvrir ${email.attachment.name}`}
+              disabled={!documentLink}
+              onPress={() => documentLink && router.push(linkHref(documentLink))}>
+              <View style={styles.fileIcon}>
+                <Text style={styles.fileExt}>PDF</Text>
               </View>
-            </View>
+              <View style={styles.flex}>
+                <Text style={styles.attachmentName} numberOfLines={1}>
+                  {email.attachment.name}
+                </Text>
+                <Text style={styles.preview}>{email.attachment.size} • dans Documents</Text>
+              </View>
+              {documentLink ? <Icon name="chevron_right" size={22} color={c.muted} /> : null}
+            </Pressable>
           ) : null}
         </View>
 
-        <SettingsSection title="Repéré par Kora" icon="auto_awesome" footer="Kora propose, vous décidez. Rien n’est créé sans votre accord.">
-          {email.extracted.map((field, index) => (
-            <SettingsRow key={field.label} first={index === 0} icon={field.icon} title={field.value} subtitle={field.label} />
+        <View style={[kitStyles.card, styles.kora]}>
+          <View style={styles.koraHead}>
+            <Icon name="auto_awesome" size={18} color={c.link} filled />
+            <Text style={styles.koraTitle}>Kora a repéré</Text>
+          </View>
+          {email.extracted.map((field) => (
+            <View key={field.label} style={styles.koraLine}>
+              <Text style={styles.koraLabel}>{field.label}</Text>
+              <Text style={styles.koraValue}>{field.value}</Text>
+            </View>
           ))}
-        </SettingsSection>
+          <Text style={styles.preview}>Kora propose, vous décidez : rien n’est créé sans votre accord.</Text>
+        </View>
 
         {email.links.length > 0 ? (
           <SettingsSection title="Déjà dans Bringo Mind" icon="link">
@@ -274,12 +310,7 @@ function EmailDetail({ id }: { id: string }) {
               setToast({ text: 'E-mail marqué comme traité' });
             }}
           />
-        ) : (
-          <View style={styles.doneInfo}>
-            <Icon name="check_circle" size={20} color={Tint.primary} filled />
-            <Text style={styles.doneInfoText}>Cet e-mail est traité.</Text>
-          </View>
-        )}
+        ) : null}
       </ScrollView>
 
       <BottomSheet visible={sheet === 'menu'} title={email.from} subtitle={email.address} onClose={() => setSheet(null)}>
@@ -322,176 +353,226 @@ function EmailDetail({ id }: { id: string }) {
   );
 }
 
-const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-    minWidth: 0,
-  },
-  center: {
-    textAlign: 'center',
-  },
-  content: {
-    paddingTop: 4,
-    paddingBottom: 40,
-  },
-  chipsScroll: {
-    marginTop: 12,
-    marginBottom: 14,
-  },
-  chips: {
-    gap: 8,
-  },
-  empty: {
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 24,
-  },
-  list: {
-    paddingVertical: 4,
-    paddingHorizontal: 0,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  rowBorder: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Tint.border,
-  },
-  rowPressed: {
-    backgroundColor: Tint.soft,
-  },
-  rowTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.full,
-    backgroundColor: Tint.lavender,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 17,
-    lineHeight: 22,
-    color: Tint.navy,
-  },
-  from: {
-    flex: 1,
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 16,
-    lineHeight: 21,
-    color: Tint.navy,
-  },
-  time: {
-    fontFamily: FontFamily.body,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurfaceVariant,
-  },
-  subject: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 14,
-    lineHeight: 19,
-    color: Tint.navy,
-  },
-  preview: {
-    fontFamily: FontFamily.body,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurfaceVariant,
-  },
-  rowTags: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 6,
-  },
-  reviewTag: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: Radius.full,
-    backgroundColor: '#fef3c7',
-  },
-  reviewTagText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 13,
-    lineHeight: 17,
-    color: '#92400e',
-  },
-  doneTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: Radius.full,
-    backgroundColor: '#e6f6f3',
-  },
-  doneTagText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 13,
-    lineHeight: 17,
-    color: Tint.primary,
-  },
-  mail: {
-    gap: 10,
-  },
-  mailHead: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  mailSubject: {
-    marginTop: 4,
-    fontFamily: FontFamily.headingBold,
-    fontSize: 19,
-    lineHeight: 25,
-    color: Tint.navy,
-  },
-  body: {
-    fontFamily: FontFamily.body,
-    fontSize: 15,
-    lineHeight: 22,
-    color: Tint.navy,
-  },
-  attachment: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    padding: 12,
-    borderRadius: 14,
-    backgroundColor: Tint.soft,
-    borderWidth: 1,
-    borderColor: Tint.border,
-  },
-  attachmentName: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 14,
-    lineHeight: 19,
-    color: Tint.navy,
-  },
-  done: {
-    marginTop: 22,
-  },
-  doneInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    marginTop: 22,
-  },
-  doneInfoText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 15,
-    lineHeight: 20,
-    color: Tint.primary,
-  },
-});
+function makeStyles(c: AppColors) {
+  return StyleSheet.create({
+    flex: {
+      flex: 1,
+      minWidth: 0,
+    },
+    center: {
+      textAlign: 'center',
+    },
+    content: {
+      paddingTop: 4,
+      paddingBottom: 40,
+    },
+    chipsScroll: {
+      marginTop: 12,
+      marginBottom: 14,
+    },
+    chips: {
+      gap: 8,
+    },
+    empty: {
+      alignItems: 'center',
+      gap: 8,
+      paddingVertical: 24,
+    },
+    list: {
+      paddingVertical: 4,
+      paddingHorizontal: 0,
+    },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+    },
+    rowBorder: {
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: c.border,
+    },
+    rowPressed: {
+      backgroundColor: c.soft,
+    },
+    rowTop: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    avatar: {
+      width: 40,
+      height: 40,
+      borderRadius: Radius.full,
+      backgroundColor: '#0C1A37',
+      borderWidth: c.dark ? 1.5 : 0,
+      borderColor: '#3B5079',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    avatarText: {
+      fontFamily: FontFamily.headingBold,
+      fontSize: 17,
+      lineHeight: 22,
+      color: '#FFFFFF',
+    },
+    from: {
+      flex: 1,
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 16,
+      lineHeight: 21,
+      color: c.text,
+    },
+    time: {
+      fontFamily: FontFamily.body,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.muted,
+    },
+    subject: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 14,
+      lineHeight: 19,
+      color: c.text,
+    },
+    preview: {
+      fontFamily: FontFamily.body,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.muted,
+    },
+    rowTags: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginTop: 6,
+    },
+    reviewTag: {
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: Radius.full,
+      backgroundColor: c.tintAmber,
+    },
+    reviewTagText: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 13,
+      lineHeight: 17,
+      color: c.amberText,
+    },
+    doneTag: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 3,
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: Radius.full,
+      backgroundColor: c.tintMint,
+    },
+    doneTagText: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 13,
+      lineHeight: 17,
+      color: c.link,
+    },
+    mail: {
+      gap: 10,
+    },
+    mailHead: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    mailSubject: {
+      marginTop: 4,
+      fontFamily: FontFamily.headingBold,
+      fontSize: 19,
+      lineHeight: 25,
+      color: c.text,
+    },
+    body: {
+      fontFamily: FontFamily.body,
+      fontSize: 15,
+      lineHeight: 22,
+      color: c.text,
+    },
+    attachment: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      padding: 12,
+      borderRadius: 14,
+      backgroundColor: c.soft,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    attachmentName: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 14,
+      lineHeight: 19,
+      color: c.text,
+    },
+    done: {
+      marginTop: 22,
+    },
+    statusPill: {
+      alignSelf: 'flex-start',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      marginTop: -4,
+    },
+    fileIcon: {
+      width: 40,
+      height: 44,
+      borderRadius: 8,
+      backgroundColor: '#E5484D',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    fileExt: {
+      fontFamily: FontFamily.bodyBold,
+      fontSize: 13,
+      lineHeight: 16,
+      color: '#FFFFFF',
+    },
+    kora: {
+      marginTop: 18,
+      gap: 10,
+    },
+    koraHead: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    koraTitle: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 15,
+      lineHeight: 20,
+      color: c.text,
+    },
+    koraLine: {
+      gap: 1,
+    },
+    koraLabel: {
+      fontFamily: FontFamily.body,
+      fontSize: 13,
+      lineHeight: 17,
+      color: c.muted,
+    },
+    koraValue: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 15,
+      lineHeight: 20,
+      color: c.text,
+    },
+  });
+}
+
+const STYLES = { light: makeStyles(LIGHT), dark: makeStyles(DARK) };
+
+/** Couleurs et styles du mode actuel (sombre seulement dans un module converti). */
+function useLook() {
+  const c = useScopedColors();
+  return { c, styles: c.dark ? STYLES.dark : STYLES.light };
+}

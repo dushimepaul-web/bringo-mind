@@ -16,7 +16,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icon';
-import { FontFamily, Radius, Serene, Space, Tint } from '@/constants/design';
+import { DARK, LIGHT, useScopedColors, type AppColors } from '@/constants/app-colors';
+import { FontFamily, Radius, Serene, Space } from '@/constants/design';
 
 
 /** Petite pastille neutre (statut, partage…). */
@@ -29,10 +30,11 @@ export function Tag({
   label: string;
   tone?: 'neutral' | 'teal' | 'success' | 'danger';
 }) {
+  const { c, styles } = useLook();
   const palette = {
-    neutral: { bg: Tint.soft, fg: Tint.navy, border: Tint.border },
-    teal: { bg: Serene.secondaryContainer, fg: Serene.onSecondaryContainer, border: 'transparent' },
-    success: { bg: Serene.successContainer, fg: Serene.success, border: '#bbf7d0' },
+    neutral: { bg: c.soft, fg: c.text, border: c.border },
+    teal: { bg: c.tintMint, fg: c.link, border: 'transparent' },
+    success: { bg: Serene.successContainer, fg: c.success, border: '#bbf7d0' },
     danger: { bg: '#fee2e2', fg: '#b91c1c', border: 'transparent' },
   }[tone];
   return (
@@ -56,6 +58,7 @@ export function TopBar({
   /** Écran ouvert si l'historique est vide (lien direct). */
   fallback?: Href;
 }) {
+  const { c, styles } = useLook();
   return (
     <View style={styles.topBar}>
       <Pressable
@@ -64,7 +67,7 @@ export function TopBar({
         accessibilityRole="button"
         accessibilityLabel={close ? 'Fermer' : 'Retour'}
         onPress={() => (router.canGoBack() ? router.back() : router.replace(fallback))}>
-        <Icon name={close ? 'close' : 'arrow_back'} size={26} color={Tint.navy} />
+        <Icon name={close ? 'close' : 'arrow_back'} size={26} color={c.text} />
       </Pressable>
       {title ? (
         <Text style={styles.topBarTitle} numberOfLines={1}>
@@ -87,6 +90,7 @@ export function IconButton({
   label: string;
   onPress: () => void;
 }) {
+  const { c, styles } = useLook();
   return (
     <Pressable
       style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
@@ -94,7 +98,7 @@ export function IconButton({
       accessibilityRole="button"
       accessibilityLabel={label}
       onPress={onPress}>
-      <Icon name={icon} size={24} color={Tint.navy} />
+      <Icon name={icon} size={24} color={c.text} />
     </Pressable>
   );
 }
@@ -109,6 +113,7 @@ type ButtonProps = {
 
 /** Bouton principal noir (estompé quand il est désactivé). */
 export function PrimaryButton({ label, onPress, icon, disabled, style }: ButtonProps) {
+  const { c, styles } = useLook();
   return (
     <Pressable
       style={({ pressed }) => [
@@ -121,7 +126,7 @@ export function PrimaryButton({ label, onPress, icon, disabled, style }: ButtonP
       accessibilityState={{ disabled: !!disabled }}
       disabled={disabled}
       onPress={onPress}>
-      {icon ? <Icon name={icon} size={22} color={Serene.onPrimary} /> : null}
+      {icon ? <Icon name={icon} size={22} color={c.solidText} /> : null}
       <Text style={styles.primaryText}>{label}</Text>
     </Pressable>
   );
@@ -129,12 +134,13 @@ export function PrimaryButton({ label, onPress, icon, disabled, style }: ButtonP
 
 /** Bouton de validation turquoise (réservé aux actions d'achèvement). */
 export function ConfirmButton({ label, onPress, icon, style }: ButtonProps) {
+  const { c, styles } = useLook();
   return (
     <Pressable
       style={({ pressed }) => [styles.confirm, pressed && styles.confirmPressed, style]}
       accessibilityRole="button"
       onPress={onPress}>
-      {icon ? <Icon name={icon} size={22} color={Serene.onPrimary} /> : null}
+      {icon ? <Icon name={icon} size={22} color={c.solidText} /> : null}
       <Text style={styles.primaryText}>{label}</Text>
     </Pressable>
   );
@@ -148,7 +154,8 @@ export function SecondaryButton({
   danger,
   style,
 }: ButtonProps & { danger?: boolean }) {
-  const color = danger ? Serene.error : Tint.navy;
+  const { c, styles } = useLook();
+  const color = danger ? c.error : c.text;
   return (
     <Pressable
       style={({ pressed }) => [
@@ -179,6 +186,7 @@ export function Chip({
   icon?: string;
   count?: number;
 }) {
+  const { c, styles } = useLook();
   return (
     <Pressable
       style={({ pressed }) => [
@@ -189,7 +197,7 @@ export function Chip({
       accessibilityRole="button"
       accessibilityState={{ selected: !!selected }}
       onPress={onPress}>
-      {icon ? <Icon name={icon} size={18} color={selected ? Serene.onPrimary : Tint.navy} /> : null}
+      {icon ? <Icon name={icon} size={18} color={selected ? c.solidText : c.text} /> : null}
       <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text>
       {count != null ? (
         <View style={[styles.chipCount, selected && styles.chipCountSelected]}>
@@ -214,6 +222,7 @@ export function CheckCircle({
   label: string;
   square?: boolean;
 }) {
+  const { c, styles } = useLook();
   return (
     <Pressable
       hitSlop={10}
@@ -222,7 +231,7 @@ export function CheckCircle({
       accessibilityLabel={label}
       onPress={onPress}
       style={[styles.check, square && styles.checkSquare, checked && styles.checkOn]}>
-      {checked ? <Icon name="check" size={16} color={Serene.onPrimary} /> : null}
+      {checked ? <Icon name="check" size={16} color={c.solidText} /> : null}
     </Pressable>
   );
 }
@@ -239,6 +248,7 @@ export function UndoToast({
   onHide: () => void;
   bottom?: number;
 }) {
+  const { styles } = useLook();
   const [opacity] = useState(() => new Animated.Value(0));
   const hideRef = useRef(onHide);
 
@@ -294,6 +304,7 @@ export function BottomSheet({
   onClose: () => void;
   children: ReactNode;
 }) {
+  const { styles } = useLook();
   const insets = useSafeAreaInsets();
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -327,7 +338,8 @@ export function SheetOption({
   danger?: boolean;
   onPress: () => void;
 }) {
-  const color = danger ? Serene.error : Tint.navy;
+  const { c, styles } = useLook();
+  const color = danger ? c.error : c.text;
   return (
     <Pressable
       style={({ pressed }) => [styles.option, pressed && styles.secondaryPressed]}
@@ -340,7 +352,7 @@ export function SheetOption({
         <Text style={[styles.optionLabel, { color }]}>{label}</Text>
         {hint ? <Text style={styles.optionHint}>{hint}</Text> : null}
       </View>
-      <Icon name="chevron_right" size={20} color={Serene.onSurfaceVariant} />
+      <Icon name="chevron_right" size={20} color={c.muted} />
     </Pressable>
   );
 }
@@ -357,7 +369,7 @@ export function SwipeRow({
   leftLabel,
   rightIcon = 'check_circle',
   leftIcon = 'schedule',
-  rightColor = Tint.primary,
+  rightColor,
   leftColor = '#ea580c',
 }: {
   children: ReactNode;
@@ -370,6 +382,8 @@ export function SwipeRow({
   rightColor?: string;
   leftColor?: string;
 }) {
+  const { c, styles } = useLook();
+  const rightTint = rightColor ?? c.link;
   const [offset] = useState(() => new Animated.Value(0));
   const start = useRef<{ x: number; y: number } | null>(null);
   const horizontal = useRef(false);
@@ -390,12 +404,12 @@ export function SwipeRow({
       <View
         style={[
           styles.swipeBg,
-          { backgroundColor: direction === 'left' ? leftColor : rightColor },
+          { backgroundColor: direction === 'left' ? leftColor : rightTint },
           direction === null && styles.hidden,
         ]}>
         {direction === 'right' ? (
           <View style={styles.swipeHint}>
-            <Icon name={rightIcon} size={22} color={Serene.onPrimary} filled />
+            <Icon name={rightIcon} size={22} color={c.solidText} filled />
             <Text style={styles.swipeHintText}>{rightLabel}</Text>
           </View>
         ) : null}
@@ -403,7 +417,7 @@ export function SwipeRow({
         {direction === 'left' ? (
           <View style={styles.swipeHint}>
             <Text style={styles.swipeHintText}>{leftLabel}</Text>
-            <Icon name={leftIcon} size={22} color={Serene.onPrimary} />
+            <Icon name={leftIcon} size={22} color={c.solidText} />
           </View>
         ) : null}
       </View>
@@ -448,416 +462,438 @@ export function SwipeRow({
   );
 }
 
-export const kitStyles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: Tint.softer,
-  },
-  content: {
-    width: '100%',
-    maxWidth: 560,
-    alignSelf: 'center',
-    paddingHorizontal: Space.gutter,
-  },
-  card: {
-    padding: 16,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: Tint.border,
-    backgroundColor: Serene.surfaceContainerLowest,
-    shadowColor: Tint.navy,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.05,
-    shadowRadius: 16,
-    elevation: 2,
-  },
-  cardPressed: {
-    backgroundColor: Tint.soft,
-  },
-  sectionTitle: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 20,
-    lineHeight: 26,
-    letterSpacing: -0.3,
-    color: Tint.navy,
-  },
-  title: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 17,
-    lineHeight: 23,
-    color: Tint.navy,
-  },
-  muted: {
-    fontFamily: FontFamily.body,
-    fontSize: 14,
-    lineHeight: 20,
-    color: Serene.onSurfaceVariant,
-  },
-  label: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 15,
-    lineHeight: 20,
-    color: Tint.navy,
-  },
-  input: {
-    minHeight: 54,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: Tint.border,
-    backgroundColor: Tint.soft,
-    fontFamily: FontFamily.body,
-    fontSize: 16,
-    lineHeight: 22,
-    color: Tint.navy,
-    outlineWidth: 0,
-    outlineStyle: 'solid',
-  },
-  inputFocused: {
-    borderColor: Tint.primary,
-    backgroundColor: Serene.surfaceContainerLowest,
-  },
-  inputError: {
-    borderColor: Serene.error,
-    backgroundColor: Serene.surfaceContainerLowest,
-  },
-  link: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 15,
-    lineHeight: 20,
-    color: Tint.primary,
-  },
-});
+function makeKitStyles(c: AppColors) {
+  return StyleSheet.create({
+    safe: {
+      flex: 1,
+      backgroundColor: c.page,
+    },
+    content: {
+      width: '100%',
+      maxWidth: 560,
+      alignSelf: 'center',
+      paddingHorizontal: Space.gutter,
+    },
+    card: {
+      padding: 16,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.card,
+      shadowColor: c.text,
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.05,
+      shadowRadius: 16,
+      elevation: 2,
+    },
+    cardPressed: {
+      backgroundColor: c.soft,
+    },
+    sectionTitle: {
+      fontFamily: FontFamily.headingBold,
+      fontSize: 20,
+      lineHeight: 26,
+      letterSpacing: -0.3,
+      color: c.text,
+    },
+    title: {
+      fontFamily: FontFamily.headingBold,
+      fontSize: 17,
+      lineHeight: 23,
+      color: c.text,
+    },
+    muted: {
+      fontFamily: FontFamily.body,
+      fontSize: 14,
+      lineHeight: 20,
+      color: c.muted,
+    },
+    label: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 15,
+      lineHeight: 20,
+      color: c.text,
+    },
+    input: {
+      minHeight: 54,
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: c.border,
+      // Champs blancs (couleur des cartes) pour bien ressortir sur le fond de page.
+      backgroundColor: c.card,
+      fontFamily: FontFamily.body,
+      fontSize: 16,
+      lineHeight: 22,
+      color: c.text,
+      outlineWidth: 0,
+      outlineStyle: 'solid',
+    },
+    inputFocused: {
+      borderColor: c.link,
+      backgroundColor: c.card,
+    },
+    inputError: {
+      borderColor: c.error,
+      backgroundColor: c.card,
+    },
+    link: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 15,
+      lineHeight: 20,
+      color: c.link,
+    },
+  });
+}
 
-const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-  },
-  hidden: {
-    opacity: 0,
-  },
-  pressed: {
-    opacity: 0.55,
-  },
-  badge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-  },
-  badgeDot: {
-    width: 7,
-    height: 7,
-    borderRadius: Radius.full,
-  },
-  badgeText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 13,
-    lineHeight: 17,
-  },
-  tag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  tagText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 13,
-    lineHeight: 17,
-  },
-  topBar: {
-    height: 56,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 6,
-  },
-  topBarTitle: {
-    flex: 1,
-    fontFamily: FontFamily.headingBold,
-    fontSize: 18,
-    lineHeight: 24,
-    color: Tint.navy,
-  },
-  topBarRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  iconButton: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  primary: {
-    height: 56,
-    borderRadius: 18,
-    backgroundColor: Tint.black,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    paddingHorizontal: 18,
-    shadowColor: Tint.black,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.2,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  primaryDisabled: {
-    opacity: 0.3,
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  primaryPressed: {
-    backgroundColor: Tint.blackPressed,
-    transform: [{ scale: 0.99 }],
-  },
-  primaryText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 17,
-    lineHeight: 22,
-    color: Serene.onPrimary,
-  },
-  confirm: {
-    height: 56,
-    borderRadius: 18,
-    backgroundColor: Tint.primary,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    paddingHorizontal: 18,
-  },
-  confirmPressed: {
-    opacity: 0.88,
-    transform: [{ scale: 0.99 }],
-  },
-  secondary: {
-    height: 50,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: Tint.border,
-    backgroundColor: Serene.surfaceContainerLowest,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingHorizontal: 14,
-  },
-  secondaryDanger: {
-    borderColor: '#fecaca',
-    backgroundColor: '#fff5f5',
-  },
-  secondaryPressed: {
-    backgroundColor: Tint.soft,
-  },
-  secondaryText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 15,
-    lineHeight: 20,
-  },
-  chip: {
-    height: 40,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-    borderColor: Tint.border,
-    backgroundColor: Serene.surfaceContainerLowest,
-  },
-  chipSelected: {
-    backgroundColor: Tint.black,
-    borderColor: Tint.black,
-  },
-  chipText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 14,
-    lineHeight: 19,
-    color: Tint.navy,
-  },
-  chipTextSelected: {
-    color: Serene.onPrimary,
-  },
-  chipCount: {
-    minWidth: 20,
-    height: 20,
-    paddingHorizontal: 5,
-    borderRadius: Radius.full,
-    backgroundColor: Tint.soft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  chipCountSelected: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  chipCountText: {
-    fontFamily: FontFamily.bodyBold,
-    fontSize: 12,
-    lineHeight: 15,
-    color: Tint.navy,
-  },
-  chipCountTextSelected: {
-    color: Serene.onPrimary,
-  },
-  check: {
-    width: 26,
-    height: 26,
-    borderRadius: Radius.full,
-    borderWidth: 2,
-    borderColor: '#b9c4d6',
-    backgroundColor: Serene.surfaceContainerLowest,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checkSquare: {
-    borderRadius: 7,
-  },
-  checkOn: {
-    backgroundColor: Tint.primary,
-    borderColor: Tint.primary,
-  },
-  toast: {
-    position: 'absolute',
-    left: Space.gutter,
-    right: Space.gutter,
-    alignSelf: 'center',
-    maxWidth: 528,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderRadius: 16,
-    backgroundColor: Tint.navy,
-    shadowColor: Tint.navy,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 20,
-    elevation: 12,
-  },
-  toastText: {
-    flex: 1,
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 15,
-    lineHeight: 20,
-    color: Serene.onPrimary,
-  },
-  toastAction: {
-    fontFamily: FontFamily.bodyBold,
-    fontSize: 15,
-    lineHeight: 20,
-    color: Serene.secondaryFixed,
-  },
-  backdrop: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(15, 23, 42, 0.4)',
-  },
-  sheet: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    alignSelf: 'center',
-    width: '100%',
-    maxWidth: 560,
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    backgroundColor: Serene.surfaceContainerLowest,
-    shadowColor: Tint.navy,
-    shadowOffset: { width: 0, height: -8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 24,
-    elevation: 16,
-  },
-  handle: {
-    alignSelf: 'center',
-    width: 40,
-    height: 5,
-    borderRadius: Radius.full,
-    backgroundColor: Tint.border,
-    marginBottom: 14,
-  },
-  sheetTitle: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 20,
-    lineHeight: 26,
-    color: Tint.navy,
-  },
-  sheetSubtitle: {
-    fontFamily: FontFamily.body,
-    fontSize: 15,
-    lineHeight: 21,
-    color: Serene.onSurfaceVariant,
-    marginTop: 4,
-  },
-  sheetBody: {
-    marginTop: 14,
-    gap: 10,
-  },
-  option: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    minHeight: 56,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: Tint.border,
-  },
-  optionIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: Tint.soft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  optionIconDanger: {
-    backgroundColor: '#fee2e2',
-  },
-  optionLabel: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 16,
-    lineHeight: 21,
-  },
-  optionHint: {
-    fontFamily: FontFamily.body,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurfaceVariant,
-  },
-  swipeWrap: {
-    position: 'relative',
-  },
-  swipeBg: {
-    ...StyleSheet.absoluteFill,
-    borderRadius: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-  },
-  swipeHint: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  swipeHintText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 15,
-    lineHeight: 20,
-    color: Serene.onPrimary,
-  },
-});
+const KITSTYLES_SHEETS = { light: makeKitStyles(LIGHT), dark: makeKitStyles(DARK) };
+/** Version claire (écrans pas encore convertis au mode sombre). */
+export const kitStyles = KITSTYLES_SHEETS.light;
+
+/** kitStyles du mode actuel. */
+export function useKitStyles() {
+  return useScopedColors().dark ? KITSTYLES_SHEETS.dark : KITSTYLES_SHEETS.light;
+}
+
+function makeStyles(c: AppColors) {
+  return StyleSheet.create({
+    flex: {
+      flex: 1,
+    },
+    hidden: {
+      opacity: 0,
+    },
+    pressed: {
+      opacity: 0.55,
+    },
+    badge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 8,
+    },
+    badgeDot: {
+      width: 7,
+      height: 7,
+      borderRadius: Radius.full,
+    },
+    badgeText: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 13,
+      lineHeight: 17,
+    },
+    tag: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 8,
+      borderWidth: 1,
+    },
+    tagText: {
+      fontFamily: FontFamily.bodyMedium,
+      fontSize: 13,
+      lineHeight: 17,
+    },
+    topBar: {
+      height: 56,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingHorizontal: 6,
+    },
+    topBarTitle: {
+      flex: 1,
+      fontFamily: FontFamily.headingBold,
+      fontSize: 18,
+      lineHeight: 24,
+      color: c.text,
+    },
+    topBarRight: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    iconButton: {
+      width: 44,
+      height: 44,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    primary: {
+      height: 56,
+      borderRadius: 18,
+      backgroundColor: c.solid,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 10,
+      paddingHorizontal: 18,
+      shadowColor: c.solid,
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.2,
+      shadowRadius: 16,
+      elevation: 8,
+    },
+    primaryDisabled: {
+      opacity: 0.3,
+      shadowOpacity: 0,
+      elevation: 0,
+    },
+    primaryPressed: {
+      backgroundColor: c.solidPressed,
+      transform: [{ scale: 0.99 }],
+    },
+    primaryText: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 17,
+      lineHeight: 22,
+      color: c.solidText,
+    },
+    confirm: {
+      height: 56,
+      borderRadius: 18,
+      backgroundColor: c.link,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 10,
+      paddingHorizontal: 18,
+    },
+    confirmPressed: {
+      opacity: 0.88,
+      transform: [{ scale: 0.99 }],
+    },
+    secondary: {
+      height: 50,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.card,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      paddingHorizontal: 14,
+    },
+    secondaryDanger: {
+      borderColor: '#fecaca',
+      backgroundColor: '#fff5f5',
+    },
+    secondaryPressed: {
+      backgroundColor: c.soft,
+    },
+    secondaryText: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 15,
+      lineHeight: 20,
+    },
+    chip: {
+      height: 40,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 14,
+      borderRadius: Radius.full,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.card,
+    },
+    chipSelected: {
+      backgroundColor: c.solid,
+      borderColor: c.solid,
+    },
+    chipText: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 14,
+      lineHeight: 19,
+      color: c.text,
+    },
+    chipTextSelected: {
+      color: c.solidText,
+    },
+    chipCount: {
+      minWidth: 20,
+      height: 20,
+      paddingHorizontal: 5,
+      borderRadius: Radius.full,
+      backgroundColor: c.soft,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    chipCountSelected: {
+      backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    },
+    chipCountText: {
+      fontFamily: FontFamily.bodyBold,
+      fontSize: 12,
+      lineHeight: 15,
+      color: c.text,
+    },
+    chipCountTextSelected: {
+      color: c.solidText,
+    },
+    check: {
+      width: 26,
+      height: 26,
+      borderRadius: Radius.full,
+      borderWidth: 2,
+      borderColor: '#b9c4d6',
+      backgroundColor: c.card,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    checkSquare: {
+      borderRadius: 7,
+    },
+    checkOn: {
+      backgroundColor: c.link,
+      borderColor: c.link,
+    },
+    toast: {
+      position: 'absolute',
+      left: Space.gutter,
+      right: Space.gutter,
+      alignSelf: 'center',
+      maxWidth: 528,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      borderRadius: 16,
+      backgroundColor: c.text,
+      shadowColor: c.text,
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.25,
+      shadowRadius: 20,
+      elevation: 12,
+    },
+    toastText: {
+      flex: 1,
+      fontFamily: FontFamily.bodyMedium,
+      fontSize: 15,
+      lineHeight: 20,
+      color: c.solidText,
+    },
+    toastAction: {
+      fontFamily: FontFamily.bodyBold,
+      fontSize: 15,
+      lineHeight: 20,
+      color: Serene.secondaryFixed,
+    },
+    backdrop: {
+      ...StyleSheet.absoluteFill,
+      backgroundColor: 'rgba(15, 23, 42, 0.4)',
+    },
+    sheet: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      bottom: 0,
+      alignSelf: 'center',
+      width: '100%',
+      maxWidth: 560,
+      paddingHorizontal: 20,
+      paddingTop: 10,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      backgroundColor: c.card,
+      shadowColor: c.text,
+      shadowOffset: { width: 0, height: -8 },
+      shadowOpacity: 0.12,
+      shadowRadius: 24,
+      elevation: 16,
+    },
+    handle: {
+      alignSelf: 'center',
+      width: 40,
+      height: 5,
+      borderRadius: Radius.full,
+      backgroundColor: c.border,
+      marginBottom: 14,
+    },
+    sheetTitle: {
+      fontFamily: FontFamily.headingBold,
+      fontSize: 20,
+      lineHeight: 26,
+      color: c.text,
+    },
+    sheetSubtitle: {
+      fontFamily: FontFamily.body,
+      fontSize: 15,
+      lineHeight: 21,
+      color: c.muted,
+      marginTop: 4,
+    },
+    sheetBody: {
+      marginTop: 14,
+      gap: 10,
+    },
+    option: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      minHeight: 56,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    optionIcon: {
+      width: 38,
+      height: 38,
+      borderRadius: 12,
+      backgroundColor: c.soft,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    optionIconDanger: {
+      backgroundColor: '#fee2e2',
+    },
+    optionLabel: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 16,
+      lineHeight: 21,
+    },
+    optionHint: {
+      fontFamily: FontFamily.body,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.muted,
+    },
+    swipeWrap: {
+      position: 'relative',
+    },
+    swipeBg: {
+      ...StyleSheet.absoluteFill,
+      borderRadius: 20,
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 20,
+    },
+    swipeHint: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    swipeHintText: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 15,
+      lineHeight: 20,
+      color: c.solidText,
+    },
+  });
+}
+
+const STYLES = { light: makeStyles(LIGHT), dark: makeStyles(DARK) };
+
+/** Couleurs et styles du mode actuel (sombre seulement dans un module converti). */
+function useLook() {
+  const c = useScopedColors();
+  return { c, styles: c.dark ? STYLES.dark : STYLES.light };
+}

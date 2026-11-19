@@ -15,10 +15,11 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icon';
-import { Chip, PrimaryButton, TopBar, kitStyles } from '@/components/ui/kit';
+import { Chip, PrimaryButton, TopBar, useKitStyles } from '@/components/ui/kit';
 import { DatePickerSheet } from '@/components/ui/date-picker';
 import { TimeWheelSheet } from '@/components/ui/wheel-picker';
-import { FontFamily, Radius, Serene, Space, Tint } from '@/constants/design';
+import { DARK, LIGHT, useScopedColors, type AppColors } from '@/constants/app-colors';
+import { FontFamily, Radius, Serene, Space } from '@/constants/design';
 import {
   DEMO_TODAY,
   addDays,
@@ -71,6 +72,8 @@ function draftOf(event: CalendarEvent): EventDraft {
 }
 
 export default function EventFormScreen() {
+  const { c, styles } = useLook();
+  const kitStyles = useKitStyles();
   const pathname = usePathname();
   const params = useLocalSearchParams<{
     id?: string;
@@ -206,14 +209,14 @@ export default function EventFormScreen() {
               setTitleTouched(true);
             }}
             placeholder="Ex. Rendez-vous chez le médecin"
-            placeholderTextColor={Serene.onSurfaceVariant}
-            selectionColor={Tint.primary}
+            placeholderTextColor={c.muted}
+            selectionColor={c.link}
             accessibilityLabel="Titre de l’événement"
             aria-invalid={titleError}
           />
           {titleError ? (
             <View style={styles.errorRow}>
-              <Icon name="error" size={16} color={Serene.error} />
+              <Icon name="error" size={16} color={c.error} />
               <Text style={styles.errorText}>Donnez un titre à l’événement.</Text>
             </View>
           ) : null}
@@ -222,7 +225,7 @@ export default function EventFormScreen() {
           <Text style={[kitStyles.label, styles.spaced, styles.gap]}>Quand</Text>
           <View style={[kitStyles.card, styles.cardGap]}>
             <View style={styles.allDayRow}>
-              <Icon name="wb_sunny" size={20} color={Tint.navy} />
+              <Icon name="wb_sunny" size={20} color={c.text} />
               <Text style={styles.allDayText}>Toute la journée</Text>
               <DemoSwitch value={draft.allDay} onValueChange={(value) => set('allDay', value)} label="Toute la journée" />
             </View>
@@ -236,7 +239,7 @@ export default function EventFormScreen() {
                 onPressTime={() => setPicker('startTime')}
               />
               <View style={styles.rangeArrow}>
-                <Icon name="arrow_forward" size={20} color={Serene.onSurfaceVariant} />
+                <Icon name="arrow_forward" size={20} color={c.muted} />
               </View>
               <WhenColumn
                 label="Fin"
@@ -250,7 +253,7 @@ export default function EventFormScreen() {
 
             {endError ? (
               <View style={styles.errorRow} accessibilityLiveRegion="polite">
-                <Icon name="error" size={16} color={Serene.error} />
+                <Icon name="error" size={16} color={c.error} />
                 <Text style={styles.errorText}>La fin doit être après le début.</Text>
               </View>
             ) : null}
@@ -258,12 +261,12 @@ export default function EventFormScreen() {
             <View style={styles.rangeFooter}>
               {!draft.allDay && !endError ? (
                 <View style={styles.footerItem}>
-                  <Icon name="timer" size={16} color={Serene.onSurfaceVariant} />
+                  <Icon name="timer" size={16} color={c.muted} />
                   <Text style={kitStyles.muted}>Durée : {formatDuration(duration)}</Text>
                 </View>
               ) : null}
               <View style={styles.footerItem}>
-                <Icon name="public" size={16} color={Serene.onSurfaceVariant} />
+                <Icon name="public" size={16} color={c.muted} />
                 <Text style={kitStyles.muted}>
                   {USER_TIMEZONE.label} ({USER_TIMEZONE.offset})
                 </Text>
@@ -292,7 +295,7 @@ export default function EventFormScreen() {
                           accessibilityRole="button"
                           accessibilityLabel={`Choisir ${formatTime(start)}`}
                           onPress={() => setStart(start)}>
-                          <Icon name="event_available" size={16} color={Tint.primary} />
+                          <Icon name="event_available" size={16} color={c.link} />
                           <Text style={styles.slotText}>
                             {formatTime(start)} – {formatTime(new Date(start.getTime() + duration * 60000))}
                           </Text>
@@ -305,7 +308,7 @@ export default function EventFormScreen() {
               </View>
             ) : (
               <View style={styles.free}>
-                <Icon name="event_available" size={20} color={Serene.success} />
+                <Icon name="event_available" size={20} color={c.success} />
                 <Text style={styles.freeText}>Aucun conflit sur ce créneau.</Text>
               </View>
             )
@@ -314,7 +317,7 @@ export default function EventFormScreen() {
           {/* Lieu */}
           <Text style={[kitStyles.label, styles.spaced, styles.gap]}>Lieu</Text>
           <View style={[styles.inputRow, focused === 'location' && kitStyles.inputFocused]}>
-            <Icon name="location_on" size={20} color={focused === 'location' ? Tint.primary : Serene.onSurfaceVariant} />
+            <Icon name="location_on" size={20} color={focused === 'location' ? c.link : c.muted} />
             <TextInput
               style={styles.inputInline}
               value={draft.location}
@@ -322,8 +325,8 @@ export default function EventFormScreen() {
               onFocus={() => setFocused('location')}
               onBlur={() => setFocused(null)}
               placeholder="Adresse ou visioconférence"
-              placeholderTextColor={Serene.onSurfaceVariant}
-              selectionColor={Tint.primary}
+              placeholderTextColor={c.muted}
+              selectionColor={c.link}
               accessibilityLabel="Lieu"
             />
           </View>
@@ -337,8 +340,8 @@ export default function EventFormScreen() {
             onFocus={() => setFocused('description')}
             onBlur={() => setFocused(null)}
             placeholder="Informations utiles…"
-            placeholderTextColor={Serene.onSurfaceVariant}
-            selectionColor={Tint.primary}
+            placeholderTextColor={c.muted}
+            selectionColor={c.link}
             multiline
             textAlignVertical="top"
             accessibilityLabel="Description"
@@ -386,7 +389,7 @@ export default function EventFormScreen() {
                 <Icon
                   name={draft.shared ? 'group' : 'lock'}
                   size={22}
-                  color={draft.shared ? Serene.onSecondaryContainer : Tint.navy}
+                  color={draft.shared ? c.link : c.text}
                 />
               </View>
               <View style={styles.flexMin}>
@@ -489,6 +492,7 @@ function WhenColumn({
   onPressDate: () => void;
   onPressTime: () => void;
 }) {
+  const { styles } = useLook();
   return (
     <View style={styles.when}>
       <Text style={styles.whenLabel}>{label}</Text>
@@ -524,334 +528,345 @@ function DemoSwitch({
   onValueChange: (value: boolean) => void;
   label: string;
 }) {
+  const { c } = useLook();
   return (
     <Switch
       value={value}
       onValueChange={onValueChange}
-      trackColor={{ false: '#c3cfe0', true: Tint.primary }}
-      thumbColor={Serene.surfaceContainerLowest}
-      {...(Platform.OS === 'web' ? { activeThumbColor: Serene.surfaceContainerLowest } : {})}
+      trackColor={{ false: '#c3cfe0', true: c.link }}
+      thumbColor={c.card}
+      {...(Platform.OS === 'web' ? { activeThumbColor: c.card } : {})}
       ios_backgroundColor="#c3cfe0"
       accessibilityLabel={label}
     />
   );
 }
 
-const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-  },
-  flexMin: {
-    flex: 1,
-    minWidth: 0,
-  },
-  pressed: {
-    opacity: 0.75,
-  },
-  content: {
-    paddingTop: 8,
-    paddingBottom: 32,
-  },
-  gap: {
-    marginBottom: 10,
-  },
-  spaced: {
-    marginTop: 22,
-  },
-  required: {
-    color: Serene.error,
-  },
-  typesScroll: {
-    marginHorizontal: -Space.gutter,
-  },
-  types: {
-    gap: 8,
-    paddingHorizontal: Space.gutter,
-  },
-  errorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 8,
-  },
-  errorText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.error,
-  },
-  cardGap: {
-    gap: 14,
-  },
-  wrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  allDayRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingBottom: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Tint.border,
-  },
-  range: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 6,
-  },
-  rangeArrow: {
-    paddingTop: 34,
-  },
-  when: {
-    flex: 1,
-    minWidth: 0,
-    gap: 6,
-  },
-  whenLabel: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 13,
-    lineHeight: 18,
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
-    color: Serene.onSurfaceVariant,
-  },
-  whenDate: {
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    marginHorizontal: -10,
-    borderRadius: 12,
-  },
-  whenDay: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 18,
-    lineHeight: 24,
-    color: Tint.navy,
-  },
-  whenYear: {
-    fontFamily: FontFamily.body,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurfaceVariant,
-  },
-  whenTime: {
-    alignSelf: 'flex-start',
-    height: 48,
-    minWidth: 96,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: Tint.border,
-    backgroundColor: Tint.soft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  whenTimeError: {
-    borderColor: Serene.error,
-    backgroundColor: '#fff5f5',
-  },
-  whenTimeText: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 22,
-    lineHeight: 28,
-    color: Tint.navy,
-    fontVariant: ['tabular-nums'],
-  },
-  whenError: {
-    color: Serene.error,
-    textDecorationLine: 'line-through',
-  },
-  rangeFooter: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 14,
-    paddingTop: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Tint.border,
-  },
-  footerItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  allDayText: {
-    flex: 1,
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 15,
-    lineHeight: 20,
-    color: Tint.navy,
-  },
-  subLabel: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 14,
-    lineHeight: 19,
-    color: Serene.onSurfaceVariant,
-  },
-  conflict: {
-    marginTop: 12,
-    gap: 10,
-    padding: 14,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#fecaca',
-    backgroundColor: '#fff5f5',
-  },
-  conflictHead: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-  },
-  conflictTitle: {
-    flex: 1,
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 15,
-    lineHeight: 21,
-    color: '#991b1b',
-  },
-  conflictText: {
-    fontFamily: FontFamily.body,
-    fontSize: 14,
-    lineHeight: 19,
-    color: Tint.navy,
-  },
-  conflictHelp: {
-    fontFamily: FontFamily.body,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurfaceVariant,
-  },
-  slot: {
-    height: 40,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-    borderColor: '#99f6e4',
-    backgroundColor: '#f0fdfa',
-  },
-  slotText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 14,
-    lineHeight: 19,
-    color: Tint.primary,
-  },
-  free: {
-    marginTop: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    padding: 14,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#bbf7d0',
-    backgroundColor: Serene.successContainer,
-  },
-  freeText: {
-    flex: 1,
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 14,
-    lineHeight: 20,
-    color: Serene.success,
-  },
-  inputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    height: 54,
-    paddingHorizontal: 16,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: Tint.border,
-    backgroundColor: Tint.soft,
-  },
-  inputInline: {
-    flex: 1,
-    minWidth: 0,
-    outlineWidth: 0,
-    outlineStyle: 'solid',
-    fontFamily: FontFamily.body,
-    fontSize: 16,
-    color: Tint.navy,
-    paddingVertical: 0,
-  },
-  textarea: {
-    minHeight: 96,
-  },
-  share: {
-    marginTop: 22,
-  },
-  shareRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  shareIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: Tint.soft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  shareIconOn: {
-    backgroundColor: Serene.secondaryContainer,
-  },
-  shareTitle: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 16,
-    lineHeight: 21,
-    color: Tint.navy,
-  },
-  members: {
-    marginTop: 14,
-    paddingTop: 14,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Tint.border,
-    gap: 10,
-  },
-  me: {
-    height: 40,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingLeft: 6,
-    paddingRight: 14,
-    borderRadius: Radius.full,
-    backgroundColor: Tint.soft,
-  },
-  avatar: {
-    width: 28,
-    height: 28,
-    borderRadius: Radius.full,
-    backgroundColor: Tint.black,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: {
-    fontFamily: FontFamily.bodyBold,
-    fontSize: 13,
-    lineHeight: 17,
-    color: Serene.onPrimary,
-  },
-  meText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 14,
-    lineHeight: 19,
-    color: Tint.navy,
-  },
-  footer: {
-    paddingTop: 12,
-    paddingHorizontal: Space.gutter,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Tint.border,
-    backgroundColor: Tint.softer,
-    alignItems: 'center',
-  },
-  footerButton: {
-    width: '100%',
-    maxWidth: 528,
-  },
-});
+function makeStyles(c: AppColors) {
+  return StyleSheet.create({
+    flex: {
+      flex: 1,
+    },
+    flexMin: {
+      flex: 1,
+      minWidth: 0,
+    },
+    pressed: {
+      opacity: 0.75,
+    },
+    content: {
+      paddingTop: 8,
+      paddingBottom: 32,
+    },
+    gap: {
+      marginBottom: 10,
+    },
+    spaced: {
+      marginTop: 22,
+    },
+    required: {
+      color: c.error,
+    },
+    typesScroll: {
+      marginHorizontal: -Space.gutter,
+    },
+    types: {
+      gap: 8,
+      paddingHorizontal: Space.gutter,
+    },
+    errorRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginTop: 8,
+    },
+    errorText: {
+      fontFamily: FontFamily.bodyMedium,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.error,
+    },
+    cardGap: {
+      gap: 14,
+    },
+    wrap: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    allDayRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      paddingBottom: 12,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: c.border,
+    },
+    range: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 6,
+    },
+    rangeArrow: {
+      paddingTop: 34,
+    },
+    when: {
+      flex: 1,
+      minWidth: 0,
+      gap: 6,
+    },
+    whenLabel: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 13,
+      lineHeight: 18,
+      letterSpacing: 0.4,
+      textTransform: 'uppercase',
+      color: c.muted,
+    },
+    whenDate: {
+      paddingVertical: 6,
+      paddingHorizontal: 10,
+      marginHorizontal: -10,
+      borderRadius: 12,
+    },
+    whenDay: {
+      fontFamily: FontFamily.headingBold,
+      fontSize: 18,
+      lineHeight: 24,
+      color: c.text,
+    },
+    whenYear: {
+      fontFamily: FontFamily.body,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.muted,
+    },
+    whenTime: {
+      alignSelf: 'flex-start',
+      height: 48,
+      minWidth: 96,
+      paddingHorizontal: 14,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.soft,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    whenTimeError: {
+      borderColor: c.error,
+      backgroundColor: '#fff5f5',
+    },
+    whenTimeText: {
+      fontFamily: FontFamily.headingBold,
+      fontSize: 22,
+      lineHeight: 28,
+      color: c.text,
+      fontVariant: ['tabular-nums'],
+    },
+    whenError: {
+      color: c.error,
+      textDecorationLine: 'line-through',
+    },
+    rangeFooter: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 14,
+      paddingTop: 12,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: c.border,
+    },
+    footerItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+    },
+    allDayText: {
+      flex: 1,
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 15,
+      lineHeight: 20,
+      color: c.text,
+    },
+    subLabel: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 14,
+      lineHeight: 19,
+      color: c.muted,
+    },
+    conflict: {
+      marginTop: 12,
+      gap: 10,
+      padding: 14,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: '#fecaca',
+      backgroundColor: '#fff5f5',
+    },
+    conflictHead: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 8,
+    },
+    conflictTitle: {
+      flex: 1,
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 15,
+      lineHeight: 21,
+      color: '#991b1b',
+    },
+    conflictText: {
+      fontFamily: FontFamily.body,
+      fontSize: 14,
+      lineHeight: 19,
+      color: c.text,
+    },
+    conflictHelp: {
+      fontFamily: FontFamily.body,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.muted,
+    },
+    slot: {
+      height: 40,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 12,
+      borderRadius: Radius.full,
+      borderWidth: 1,
+      borderColor: '#99f6e4',
+      backgroundColor: '#f0fdfa',
+    },
+    slotText: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 14,
+      lineHeight: 19,
+      color: c.link,
+    },
+    free: {
+      marginTop: 12,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      padding: 14,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: '#bbf7d0',
+      backgroundColor: Serene.successContainer,
+    },
+    freeText: {
+      flex: 1,
+      fontFamily: FontFamily.bodyMedium,
+      fontSize: 14,
+      lineHeight: 20,
+      color: c.success,
+    },
+    inputRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      height: 54,
+      paddingHorizontal: 16,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.soft,
+    },
+    inputInline: {
+      flex: 1,
+      minWidth: 0,
+      outlineWidth: 0,
+      outlineStyle: 'solid',
+      fontFamily: FontFamily.body,
+      fontSize: 16,
+      color: c.text,
+      paddingVertical: 0,
+    },
+    textarea: {
+      minHeight: 96,
+    },
+    share: {
+      marginTop: 22,
+    },
+    shareRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    shareIcon: {
+      width: 44,
+      height: 44,
+      borderRadius: 14,
+      backgroundColor: c.soft,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    shareIconOn: {
+      backgroundColor: c.tintMint,
+    },
+    shareTitle: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 16,
+      lineHeight: 21,
+      color: c.text,
+    },
+    members: {
+      marginTop: 14,
+      paddingTop: 14,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: c.border,
+      gap: 10,
+    },
+    me: {
+      height: 40,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingLeft: 6,
+      paddingRight: 14,
+      borderRadius: Radius.full,
+      backgroundColor: c.soft,
+    },
+    avatar: {
+      width: 28,
+      height: 28,
+      borderRadius: Radius.full,
+      backgroundColor: c.solid,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    avatarText: {
+      fontFamily: FontFamily.bodyBold,
+      fontSize: 13,
+      lineHeight: 17,
+      color: c.solidText,
+    },
+    meText: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 14,
+      lineHeight: 19,
+      color: c.text,
+    },
+    footer: {
+      paddingTop: 12,
+      paddingHorizontal: Space.gutter,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: c.border,
+      backgroundColor: c.page,
+      alignItems: 'center',
+    },
+    footerButton: {
+      width: '100%',
+      maxWidth: 528,
+    },
+  });
+}
+
+const STYLES = { light: makeStyles(LIGHT), dark: makeStyles(DARK) };
+
+/** Couleurs et styles du mode actuel (sombre seulement dans un module converti). */
+function useLook() {
+  const c = useScopedColors();
+  return { c, styles: c.dark ? STYLES.dark : STYLES.light };
+}

@@ -6,28 +6,12 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icon';
-import {
-  BottomSheet,
-  IconButton,
-  PrimaryButton,
-  SecondaryButton,
-  SheetOption,
-  TopBar,
-  UndoToast,
-  kitStyles,
-} from '@/components/ui/kit';
-import { FontFamily, Serene, Tint } from '@/constants/design';
+import { BottomSheet, IconButton, PrimaryButton, SecondaryButton, SheetOption, TopBar, UndoToast, useKitStyles } from '@/components/ui/kit';
+import { DARK, LIGHT, useScopedColors, type AppColors } from '@/constants/app-colors';
+import { FontFamily } from '@/constants/design';
 import { dayOffset, formatDay } from '@/lib/demo-dates';
 
-import {
-  Avatar,
-  ChoiceCard,
-  RoleTag,
-  SectionHeader,
-  SmallButton,
-  householdStyles,
-  useFlashToast,
-} from '../components/household-ui';
+import { Avatar, ChoiceCard, RoleTag, SectionHeader, SmallButton, useFlashToast, useHouseholdStyles } from '../components/household-ui';
 import { ROLE_HINTS, ROLE_LABELS, firstName } from '../data';
 import { householdActions, useHouseholdState } from '../store';
 import type { HouseholdRole, Invitation, Member } from '../types';
@@ -46,8 +30,12 @@ function sentLabel(invitation: Invitation): string {
 }
 
 export default function MembersInvitationsScreen() {
+  const { c, styles } = useLook();
+  const kitStyles = useKitStyles();
+  const householdStyles = useHouseholdStyles();
   const { name, members, invitations } = useHouseholdState();
   const [step, setStep] = useState<Step>(null);
+  const [showRoles, setShowRoles] = useState(false);
   const [toast, setToast] = useFlashToast();
 
   const me = members.find((member) => member.you);
@@ -100,7 +88,7 @@ export default function MembersInvitationsScreen() {
                     <RoleTag role={member.role} />
                   </View>
                 </View>
-                {editable ? <Icon name="more_vert" size={22} color={Serene.onSurfaceVariant} /> : null}
+                {editable ? <Icon name="more_vert" size={22} color={c.muted} /> : null}
               </Pressable>
             );
           })}
@@ -109,7 +97,7 @@ export default function MembersInvitationsScreen() {
         <SectionHeader title="Invitations en attente" count={invitations.length} />
         {invitations.length === 0 ? (
           <View style={[kitStyles.card, styles.empty]}>
-            <Icon name="mark_email_read" size={28} color={Tint.primary} />
+            <Icon name="mark_email_read" size={28} color={c.link} />
             <Text style={kitStyles.title}>Aucune invitation en attente</Text>
             <Text style={[kitStyles.muted, styles.center]}>Invitez un proche pour partager certains éléments.</Text>
             {canManage ? (
@@ -122,7 +110,7 @@ export default function MembersInvitationsScreen() {
               <View key={invitation.id} style={[kitStyles.card, styles.invite]}>
                 <View style={styles.inviteTop}>
                   <View style={styles.inviteIcon}>
-                    <Icon name="schedule_send" size={22} color={Serene.onSurfaceVariant} />
+                    <Icon name="schedule_send" size={22} color={c.muted} />
                   </View>
                   <View style={styles.flex}>
                     <Text style={kitStyles.title} numberOfLines={1}>
@@ -160,18 +148,29 @@ export default function MembersInvitationsScreen() {
           </View>
         )}
 
-        <SectionHeader title="Qui peut faire quoi" />
-        <View style={[kitStyles.card, styles.roles]}>
-          {(['owner', 'admin', 'member', 'child'] as HouseholdRole[]).map((role) => (
-            <View key={role} style={styles.roleLine}>
-              <RoleTag role={role} />
-              <Text style={styles.roleHint}>{ROLE_HINTS[role]}</Text>
-            </View>
-          ))}
-        </View>
+        {/* Rôles : repliés par défaut */}
+        <Pressable
+          style={({ pressed }) => [styles.rolesToggle, pressed && styles.rolesTogglePressed]}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: showRoles }}
+          onPress={() => setShowRoles((value) => !value)}>
+          <Icon name="info" size={20} color={c.link} />
+          <Text style={styles.rolesToggleText}>Qui peut faire quoi ?</Text>
+          <Icon name={showRoles ? 'expand_less' : 'expand_more'} size={22} color={c.text} />
+        </Pressable>
+        {showRoles ? (
+          <View style={[kitStyles.card, styles.roles]}>
+            {(['owner', 'admin', 'member', 'child'] as HouseholdRole[]).map((role) => (
+              <View key={role} style={styles.roleLine}>
+                <RoleTag role={role} />
+                <Text style={styles.roleHint}>{ROLE_HINTS[role]}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
 
         <View style={[householdStyles.note, styles.note]}>
-          <Icon name="lock" size={20} color={Tint.primary} />
+          <Icon name="lock" size={20} color={c.link} />
           <Text style={householdStyles.noteText}>
             Aucun membre ne voit vos éléments personnels. Retirer quelqu’un du foyer ne supprime pas ses propres données.
           </Text>
@@ -288,88 +287,120 @@ export default function MembersInvitationsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-  },
-  center: {
-    textAlign: 'center',
-  },
-  content: {
-    paddingTop: 4,
-    paddingBottom: 40,
-  },
-  stack: {
-    gap: 10,
-  },
-  member: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  nameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  you: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Tint.primary,
-  },
-  meta: {
-    fontFamily: FontFamily.body,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurfaceVariant,
-  },
-  tagRow: {
-    flexDirection: 'row',
-    marginTop: 6,
-  },
-  invite: {
-    gap: 12,
-  },
-  inviteTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  inviteIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    borderColor: '#b9c4d6',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  inviteActions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  empty: {
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 22,
-  },
-  roles: {
-    gap: 12,
-  },
-  roleLine: {
-    gap: 4,
-    alignItems: 'flex-start',
-  },
-  roleHint: {
-    fontFamily: FontFamily.body,
-    fontSize: 14,
-    lineHeight: 20,
-    color: Tint.navy,
-  },
-  note: {
-    marginTop: 18,
-  },
-});
+function makeStyles(c: AppColors) {
+  return StyleSheet.create({
+    rolesToggle: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      minHeight: 48,
+      marginTop: 20,
+      paddingHorizontal: 14,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.card,
+    },
+    rolesTogglePressed: {
+      opacity: 0.8,
+    },
+    rolesToggleText: {
+      flex: 1,
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 15,
+      lineHeight: 20,
+      color: c.text,
+    },
+    flex: {
+      flex: 1,
+    },
+    center: {
+      textAlign: 'center',
+    },
+    content: {
+      paddingTop: 4,
+      paddingBottom: 40,
+    },
+    stack: {
+      gap: 10,
+    },
+    member: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    nameRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    you: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.link,
+    },
+    meta: {
+      fontFamily: FontFamily.body,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.muted,
+    },
+    tagRow: {
+      flexDirection: 'row',
+      marginTop: 6,
+    },
+    invite: {
+      gap: 12,
+    },
+    inviteTop: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    inviteIcon: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      borderWidth: 1.5,
+      borderStyle: 'dashed',
+      borderColor: c.dark ? '#3B5079' : '#b9c4d6',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    inviteActions: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    empty: {
+      alignItems: 'center',
+      gap: 8,
+      paddingVertical: 22,
+    },
+    roles: {
+      gap: 12,
+    },
+    roleLine: {
+      gap: 4,
+      alignItems: 'flex-start',
+    },
+    roleHint: {
+      fontFamily: FontFamily.body,
+      fontSize: 14,
+      lineHeight: 20,
+      color: c.text,
+    },
+    note: {
+      marginTop: 18,
+    },
+  });
+}
+
+const STYLES = { light: makeStyles(LIGHT), dark: makeStyles(DARK) };
+
+/** Couleurs et styles du mode actuel (sombre seulement dans un module converti). */
+function useLook() {
+  const c = useScopedColors();
+  return { c, styles: c.dark ? STYLES.dark : STYLES.light };
+}

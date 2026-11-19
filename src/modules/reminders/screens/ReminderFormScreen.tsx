@@ -15,24 +15,17 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icon';
-import {
-  BottomSheet,
-  Chip,
-  PrimaryButton,
-  SecondaryButton,
-  SheetOption,
-  TopBar,
-  kitStyles,
-} from '@/components/ui/kit';
-import { TimePicker } from '@/components/ui/time-picker';
-import { FontFamily, Radius, Serene, Space, Tint } from '@/constants/design';
+import { WheelList, WheelSeparator } from '@/components/ui/wheel-list';
+import { BottomSheet, Chip, PrimaryButton, SecondaryButton, SheetOption, TopBar, useKitStyles } from '@/components/ui/kit';
+import { DARK, LIGHT, useScopedColors, type AppColors } from '@/constants/app-colors';
+import { FontFamily, Radius, Space } from '@/constants/design';
 import {
   DEMO_TODAY,
   addDays,
+  formatDay,
   atTime,
   dayOffset,
   formatDueLong,
-  formatTime,
   startOfDay,
 } from '@/lib/demo-dates';
 
@@ -56,8 +49,6 @@ import type { Reminder, ReminderChannel, ReminderDraft, ReminderRepeat } from '.
 const TITLE_MAX = 255;
 const REPEATS: ReminderRepeat[] = ['once', 'daily', 'weekly', 'monthly', 'custom'];
 const CHANNELS: ReminderChannel[] = ['app', 'push', 'email'];
-const TIMES = [8, 12, 18, 20];
-const DAY_SHORT = ['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.'];
 
 /** Démo : rappel prérempli pour la création. */
 function demoDraft(): ReminderDraft {
@@ -86,17 +77,20 @@ function draftOf(item: Reminder): ReminderDraft {
   };
 }
 
-function quickDates() {
-  const today = startOfDay(DEMO_TODAY);
-  const toSaturday = (6 - today.getDay() + 7) % 7 || 7;
-  const toMonday = (1 - today.getDay() + 7) % 7 || 7;
-  return [
-    { label: 'Aujourd’hui', date: today },
-    { label: 'Demain', date: addDays(today, 1) },
-    { label: 'Ce week-end', date: addDays(today, toSaturday) },
-    { label: 'Semaine prochaine', date: addDays(today, toMonday) },
-  ];
+const two = (value: number) => String(value).padStart(2, '0');
+const HOUR_ITEMS = Array.from({ length: 24 }, (_, value) => ({ key: `h${value}`, label: two(value) }));
+const MINUTE_ITEMS = Array.from({ length: 60 }, (_, value) => ({ key: `m${value}`, label: two(value) }));
+const WHEEL_DAYS = ['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.'];
+
+/** « Aujourd'hui », « Demain », sinon « Sam. 18 mai ». */
+function wheelDayLabel(day: Date): string {
+  const offset = dayOffset(day);
+  if (offset === 0) return 'Aujourd’hui';
+  if (offset === 1) return 'Demain';
+  const short = WHEEL_DAYS[day.getDay()];
+  return `${short.charAt(0).toUpperCase()}${short.slice(1)} ${formatDay(day)}`;
 }
+
 
 /** Les heures de silence vont de 22h00 à 07h00. */
 function inQuietHours(date: Date): boolean {
@@ -105,6 +99,8 @@ function inQuietHours(date: Date): boolean {
 }
 
 export default function ReminderFormScreen() {
+  const { c, styles } = useLook();
+  const kitStyles = useKitStyles();
   const pathname = usePathname();
   const { id, linkKind, linkId, linkTitle, at, title } = useLocalSearchParams<{
     id?: string;
@@ -139,8 +135,6 @@ export default function ReminderFormScreen() {
   const [titleFocused, setTitleFocused] = useState(false);
   const [noteFocused, setNoteFocused] = useState(false);
   const [titleTouched, setTitleTouched] = useState(false);
-  const [showCalendar, setShowCalendar] = useState(false);
-  const [showTime, setShowTime] = useState(false);
   const [sheet, setSheet] = useState<'link' | 'delete' | null>(null);
 
   const set = <K extends keyof ReminderDraft>(key: K, value: ReminderDraft[K]) =>
@@ -150,13 +144,11 @@ export default function ReminderFormScreen() {
   const channelError = draft.channels.length === 0;
   const canSave = draft.title.trim().length > 0 && !channelError;
 
-  const dates = quickDates();
-  const selectedOffset = dayOffset(draft.at);
-  const quickSelected = dates.some((entry) => dayOffset(entry.date) === selectedOffset);
-  const calendarDays = Array.from({ length: 21 }, (_, index) => addDays(startOfDay(DEMO_TODAY), index));
+  // Roue des dates : d'aujourd'hui (ou de la date du rappel si elle est passée) à 3 mois.
+  const wheelStart = startOfDay(dayOffset(draft.at) < 0 ? draft.at : DEMO_TODAY);
+  const wheelDays = Array.from({ length: 92 }, (_, index) => addDays(wheelStart, index));
   const hour = draft.at.getHours();
   const minute = draft.at.getMinutes();
-  const customTime = !TIMES.some((value) => value === hour && minute === 0);
   const occurrences = nextOccurrences(draft.at, draft.repeat, draft.weekdays);
   const linkTarget = linkHref(draft.link);
 
@@ -235,14 +227,14 @@ export default function ReminderFormScreen() {
               setTitleTouched(true);
             }}
             placeholder="Ex. Appeler le médecin"
-            placeholderTextColor={Serene.onSurfaceVariant}
-            selectionColor={Tint.primary}
+            placeholderTextColor={c.muted}
+            selectionColor={c.link}
             accessibilityLabel="Objet du rappel"
             aria-invalid={titleError}
           />
           {titleError ? (
             <View style={styles.errorRow} accessibilityLiveRegion="polite">
-              <Icon name="error" size={16} color={Serene.error} />
+              <Icon name="error" size={16} color={c.error} />
               <Text style={styles.errorText}>Indiquez l’objet du rappel.</Text>
             </View>
           ) : null}
@@ -252,12 +244,12 @@ export default function ReminderFormScreen() {
           <View style={[kitStyles.card, styles.cardGap]}>
             <View style={styles.summary}>
               <View style={styles.summaryIcon}>
-                <Icon name="alarm" size={22} color={Tint.primary} />
+                <Icon name="alarm" size={22} color={c.link} />
               </View>
               <View style={styles.flexMin}>
                 <Text style={styles.summaryTitle}>{formatDueLong({ dueAt: draft.at, hasTime: true })}</Text>
                 <View style={styles.zone}>
-                  <Icon name="public" size={15} color={Serene.onSurfaceVariant} />
+                  <Icon name="public" size={15} color={c.muted} />
                   <Text style={kitStyles.muted}>
                     {USER_TIMEZONE.label} ({USER_TIMEZONE.offset})
                   </Text>
@@ -265,79 +257,32 @@ export default function ReminderFormScreen() {
               </View>
             </View>
 
-            <View style={styles.wrap}>
-              {dates.map((entry) => (
-                <Chip
-                  key={entry.label}
-                  label={entry.label}
-                  selected={!showCalendar && dayOffset(entry.date) === selectedOffset}
-                  onPress={() => {
-                    setShowCalendar(false);
-                    selectDay(entry.date);
-                  }}
-                />
-              ))}
-              <Chip
-                label="Autre date"
-                icon="calendar_month"
-                selected={showCalendar || !quickSelected}
-                onPress={() => setShowCalendar((value) => !value)}
-              />
+            <View style={styles.wheels}>
+              <View style={styles.dateColumn}>
+                <Text style={styles.wheelLabel}>Date</Text>
+                <View style={styles.wheelBox}>
+                  <WheelList
+                    label="Date"
+                    size="medium"
+                    items={wheelDays.map((day) => ({ key: day.toDateString(), label: wheelDayLabel(day) }))}
+                    index={Math.max(0, wheelDays.findIndex((day) => dayOffset(day) === dayOffset(draft.at)))}
+                    onChange={(index) => selectDay(wheelDays[index])}
+                  />
+                </View>
+              </View>
+              <View style={styles.timeColumn}>
+                <Text style={styles.wheelLabel}>Heure</Text>
+                <View style={[styles.wheelBox, styles.timeBox]}>
+                  <WheelList label="Heures" items={HOUR_ITEMS} index={hour} onChange={(value) => selectTime(value, minute)} style={styles.timeWheel} />
+                  <WheelSeparator />
+                  <WheelList label="Minutes" items={MINUTE_ITEMS} index={minute} onChange={(value) => selectTime(hour, value)} style={styles.timeWheel} />
+                </View>
+              </View>
             </View>
-
-            {showCalendar ? (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.days}>
-                {calendarDays.map((day) => {
-                  const selected = dayOffset(day) === selectedOffset;
-                  return (
-                    <Pressable
-                      key={day.toISOString()}
-                      style={[styles.day, selected && styles.daySelected]}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected }}
-                      onPress={() => selectDay(day)}>
-                      <Text style={[styles.dayName, selected && styles.dayTextSelected]}>
-                        {DAY_SHORT[day.getDay()]}
-                      </Text>
-                      <Text style={[styles.dayNumber, selected && styles.dayTextSelected]}>{day.getDate()}</Text>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-            ) : null}
-
-            <Text style={styles.subLabel}>Heure</Text>
-            <View style={styles.wrap}>
-              {TIMES.map((value) => (
-                <Chip
-                  key={value}
-                  label={`${String(value).padStart(2, '0')}h00`}
-                  selected={!showTime && hour === value && minute === 0}
-                  onPress={() => {
-                    setShowTime(false);
-                    selectTime(value, 0);
-                  }}
-                />
-              ))}
-              <Chip
-                label={customTime ? formatTime(draft.at) : 'Autre heure'}
-                icon="schedule"
-                selected={showTime || customTime}
-                onPress={() => setShowTime((value) => !value)}
-              />
-            </View>
-            {showTime ? (
-              <TimePicker
-                hours={hour}
-                minutes={minute - (minute % 5)}
-                onChange={selectTime}
-                onDone={() => setShowTime(false)}
-              />
-            ) : null}
 
             {inQuietHours(draft.at) ? (
               <View style={styles.warning}>
-                <Icon name="bedtime" size={18} color="#b45309" />
+                <Icon name="bedtime" size={18} color={c.amberText} />
                 <Text style={styles.warningText}>
                   Cette heure tombe pendant vos heures de silence ({QUIET_HOURS.from} – {QUIET_HOURS.to}). La
                   notification sera silencieuse.
@@ -348,7 +293,7 @@ export default function ReminderFormScreen() {
 
           {/* Répétition */}
           <Text style={[kitStyles.label, styles.spaced, styles.gap]}>Répétition</Text>
-          <View style={styles.wrap}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll} contentContainerStyle={styles.chipsRow}>
             {REPEATS.map((repeat) => (
               <Chip
                 key={repeat}
@@ -357,7 +302,7 @@ export default function ReminderFormScreen() {
                 onPress={() => set('repeat', repeat)}
               />
             ))}
-          </View>
+          </ScrollView>
           {draft.repeat === 'custom' ? (
             <View style={styles.weekdays}>
               {[1, 2, 3, 4, 5, 6, 0].map((day) => {
@@ -380,7 +325,7 @@ export default function ReminderFormScreen() {
           ) : null}
           {draft.repeat !== 'once' && occurrences.length > 0 ? (
             <View style={styles.preview}>
-              <Icon name="event_repeat" size={18} color={Tint.primary} />
+              <Icon name="event_repeat" size={18} color={c.link} />
               <Text style={styles.previewText}>
                 Prochains : {occurrences.map(formatOccurrence).join(', ')}…
               </Text>
@@ -396,7 +341,7 @@ export default function ReminderFormScreen() {
               return (
                 <View key={channel} style={[styles.channel, index > 0 && styles.channelBorder]}>
                   <View style={styles.channelIcon}>
-                    <Icon name={meta.icon} size={20} color={Tint.navy} />
+                    <Icon name={meta.icon} size={20} color={c.text} />
                   </View>
                   <View style={styles.flexMin}>
                     <Text style={styles.channelTitle}>{meta.label}</Text>
@@ -424,7 +369,7 @@ export default function ReminderFormScreen() {
           </View>
           {channelError ? (
             <View style={styles.errorRow} accessibilityLiveRegion="polite">
-              <Icon name="error" size={16} color={Serene.error} />
+              <Icon name="error" size={16} color={c.error} />
               <Text style={styles.errorText}>Choisissez au moins un canal.</Text>
             </View>
           ) : null}
@@ -433,7 +378,7 @@ export default function ReminderFormScreen() {
           <Text style={[kitStyles.label, styles.spaced, styles.gap]}>Associer à</Text>
           <View style={[kitStyles.card, styles.linkCard]}>
             <View style={styles.channelIcon}>
-              <Icon name={linkIcon(draft.link)} size={20} color={Tint.navy} />
+              <Icon name={linkIcon(draft.link)} size={20} color={c.text} />
             </View>
             <View style={styles.flexMin}>
               <Text style={styles.linkKind}>{linkLabel(draft.link)}</Text>
@@ -462,7 +407,7 @@ export default function ReminderFormScreen() {
               <Icon
                 name={draft.shared ? 'group' : 'lock'}
                 size={20}
-                color={draft.shared ? Serene.onSecondaryContainer : Tint.navy}
+                color={draft.shared ? c.link : c.text}
               />
             </View>
             <View style={styles.flexMin}>
@@ -486,8 +431,8 @@ export default function ReminderFormScreen() {
             onFocus={() => setNoteFocused(true)}
             onBlur={() => setNoteFocused(false)}
             placeholder="Ajoutez un détail utile…"
-            placeholderTextColor={Serene.onSurfaceVariant}
-            selectionColor={Tint.primary}
+            placeholderTextColor={c.muted}
+            selectionColor={c.link}
             multiline
             textAlignVertical="top"
             accessibilityLabel="Note"
@@ -555,7 +500,7 @@ export default function ReminderFormScreen() {
             style={({ pressed }) => [styles.deleteButton, pressed && styles.pressedSoft]}
             accessibilityRole="button"
             onPress={handleDelete}>
-            <Icon name="delete" size={20} color={Serene.onPrimary} />
+            <Icon name="delete" size={20} color={c.solidText} />
             <Text style={styles.deleteText}>Supprimer</Text>
           </Pressable>
         </View>
@@ -573,312 +518,363 @@ function DemoSwitch({
   onValueChange: (value: boolean) => void;
   label: string;
 }) {
+  const { c } = useLook();
   return (
     <Switch
       value={value}
       onValueChange={onValueChange}
-      trackColor={{ false: Tint.border, true: Tint.primary }}
-      thumbColor={Serene.surfaceContainerLowest}
-      {...(Platform.OS === 'web' ? { activeThumbColor: Serene.surfaceContainerLowest } : {})}
-      ios_backgroundColor={Tint.border}
+      trackColor={{ false: c.border, true: c.link }}
+      thumbColor={c.card}
+      {...(Platform.OS === 'web' ? { activeThumbColor: c.card } : {})}
+      ios_backgroundColor={c.border}
       accessibilityLabel={label}
     />
   );
 }
 
-const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-  },
-  flexMin: {
-    flex: 1,
-    minWidth: 0,
-  },
-  pressedSoft: {
-    opacity: 0.8,
-  },
-  content: {
-    paddingTop: 8,
-    paddingBottom: 32,
-  },
-  labelRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
-  spaced: {
-    marginTop: 22,
-  },
-  gap: {
-    marginBottom: 10,
-  },
-  required: {
-    color: Serene.error,
-  },
-  counter: {
-    fontFamily: FontFamily.body,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurfaceVariant,
-  },
-  errorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 8,
-  },
-  errorText: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.error,
-  },
-  cardGap: {
-    gap: 14,
-  },
-  summary: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  summaryIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: Serene.secondaryContainer,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  summaryTitle: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 17,
-    lineHeight: 23,
-    color: Tint.navy,
-  },
-  zone: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  wrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  days: {
-    gap: 8,
-  },
-  day: {
-    width: 52,
-    height: 64,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: Tint.border,
-    backgroundColor: Serene.surfaceContainerLowest,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 2,
-  },
-  daySelected: {
-    backgroundColor: Tint.black,
-    borderColor: Tint.black,
-  },
-  dayName: {
-    fontFamily: FontFamily.body,
-    fontSize: 13,
-    lineHeight: 17,
-    color: Serene.onSurfaceVariant,
-  },
-  dayNumber: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 18,
-    lineHeight: 23,
-    color: Tint.navy,
-  },
-  dayTextSelected: {
-    color: Serene.onPrimary,
-  },
-  subLabel: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 14,
-    lineHeight: 19,
-    color: Serene.onSurfaceVariant,
-  },
-  warning: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    padding: 12,
-    borderRadius: 14,
-    backgroundColor: '#fffbeb',
-    borderWidth: 1,
-    borderColor: '#fde68a',
-  },
-  warningText: {
-    flex: 1,
-    fontFamily: FontFamily.body,
-    fontSize: 13,
-    lineHeight: 19,
-    color: '#92400e',
-  },
-  weekdays: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 12,
-  },
-  weekday: {
-    flex: 1,
-    height: 44,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-    borderColor: Tint.border,
-    backgroundColor: Serene.surfaceContainerLowest,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  weekdaySelected: {
-    backgroundColor: Tint.black,
-    borderColor: Tint.black,
-  },
-  weekdayText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 15,
-    lineHeight: 20,
-    color: Tint.navy,
-  },
-  preview: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    marginTop: 12,
-    padding: 12,
-    borderRadius: 14,
-    backgroundColor: '#f0fdfa',
-    borderWidth: 1,
-    borderColor: '#99f6e4',
-  },
-  previewText: {
-    flex: 1,
-    fontFamily: FontFamily.body,
-    fontSize: 14,
-    lineHeight: 20,
-    color: Tint.navy,
-  },
-  channels: {
-    paddingVertical: 4,
-  },
-  channel: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    minHeight: 64,
-    paddingVertical: 8,
-  },
-  channelBorder: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Tint.border,
-  },
-  channelIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: Tint.soft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  channelIconOn: {
-    backgroundColor: Serene.secondaryContainer,
-  },
-  channelTitle: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 16,
-    lineHeight: 21,
-    color: Tint.navy,
-  },
-  permissionText: {
-    fontFamily: FontFamily.body,
-    fontSize: 13,
-    lineHeight: 18,
-    color: '#b45309',
-  },
-  permissionLink: {
-    fontFamily: FontFamily.bodySemiBold,
-    color: Tint.primary,
-  },
-  linkCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  linkKind: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Tint.primary,
-  },
-  change: {
-    height: 40,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Tint.border,
-    justifyContent: 'center',
-  },
-  changeText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 14,
-    lineHeight: 19,
-    color: Tint.navy,
-  },
-  shareCard: {
-    marginTop: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  textarea: {
-    minHeight: 96,
-  },
-  delete: {
-    marginTop: 24,
-  },
-  footer: {
-    paddingTop: 12,
-    paddingHorizontal: Space.gutter,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Tint.border,
-    backgroundColor: Tint.softer,
-    alignItems: 'center',
-  },
-  footerButton: {
-    width: '100%',
-    maxWidth: 528,
-  },
-  sheetList: {
-    maxHeight: 420,
-  },
-  sheetListContent: {
-    gap: 10,
-  },
-  deleteRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  deleteButton: {
-    flex: 1.3,
-    height: 50,
-    borderRadius: 16,
-    backgroundColor: Serene.error,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  deleteText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 16,
-    lineHeight: 21,
-    color: Serene.onPrimary,
-  },
-});
+function makeStyles(c: AppColors) {
+  return StyleSheet.create({
+    wheels: {
+      flexDirection: 'row',
+      gap: 10,
+      marginTop: 16,
+    },
+    dateColumn: {
+      flex: 1.15,
+      gap: 8,
+    },
+    timeColumn: {
+      flex: 1,
+      gap: 8,
+    },
+    wheelLabel: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 15,
+      lineHeight: 20,
+      color: c.text,
+    },
+    wheelBox: {
+      borderRadius: 14,
+      backgroundColor: c.dark ? '#0F1B33' : '#F0F1F4',
+      overflow: 'hidden',
+    },
+    timeBox: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    timeWheel: {
+      flex: 1,
+    },
+    // La ligne de puces va jusqu'aux bords de l'écran pour montrer qu'elle défile.
+    chipsScroll: {
+      marginHorizontal: -Space.gutter,
+    },
+    chipsRow: {
+      gap: 8,
+      paddingHorizontal: Space.gutter,
+    },
+    flex: {
+      flex: 1,
+    },
+    flexMin: {
+      flex: 1,
+      minWidth: 0,
+    },
+    pressedSoft: {
+      opacity: 0.8,
+    },
+    content: {
+      paddingTop: 8,
+      paddingBottom: 32,
+    },
+    labelRow: {
+      flexDirection: 'row',
+      alignItems: 'baseline',
+      justifyContent: 'space-between',
+      marginBottom: 10,
+    },
+    spaced: {
+      marginTop: 22,
+    },
+    gap: {
+      marginBottom: 10,
+    },
+    required: {
+      color: c.error,
+    },
+    counter: {
+      fontFamily: FontFamily.body,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.muted,
+    },
+    errorRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginTop: 8,
+    },
+    errorText: {
+      fontFamily: FontFamily.bodyMedium,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.error,
+    },
+    cardGap: {
+      gap: 14,
+    },
+    summary: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    summaryIcon: {
+      width: 44,
+      height: 44,
+      borderRadius: 14,
+      backgroundColor: c.tintMint,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    summaryTitle: {
+      fontFamily: FontFamily.headingBold,
+      fontSize: 17,
+      lineHeight: 23,
+      color: c.text,
+    },
+    zone: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+    },
+    wrap: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    days: {
+      gap: 8,
+    },
+    day: {
+      width: 52,
+      height: 64,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.card,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 2,
+    },
+    daySelected: {
+      backgroundColor: c.solid,
+      borderColor: c.solid,
+    },
+    dayName: {
+      fontFamily: FontFamily.body,
+      fontSize: 13,
+      lineHeight: 17,
+      color: c.muted,
+    },
+    dayNumber: {
+      fontFamily: FontFamily.headingBold,
+      fontSize: 18,
+      lineHeight: 23,
+      color: c.text,
+    },
+    dayTextSelected: {
+      color: c.solidText,
+    },
+    subLabel: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 14,
+      lineHeight: 19,
+      color: c.muted,
+    },
+    warning: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 8,
+      padding: 12,
+      borderRadius: 14,
+      backgroundColor: c.tintAmber,
+      borderWidth: 1,
+      borderColor: c.dark ? '#5A4A1E' : '#fde68a',
+    },
+    warningText: {
+      flex: 1,
+      fontFamily: FontFamily.body,
+      fontSize: 13,
+      lineHeight: 19,
+      color: c.amberText,
+    },
+    weekdays: {
+      flexDirection: 'row',
+      gap: 8,
+      marginTop: 12,
+    },
+    weekday: {
+      flex: 1,
+      height: 44,
+      borderRadius: Radius.full,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.card,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    weekdaySelected: {
+      backgroundColor: c.solid,
+      borderColor: c.solid,
+    },
+    weekdayText: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 15,
+      lineHeight: 20,
+      color: c.text,
+    },
+    preview: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 8,
+      marginTop: 12,
+      padding: 12,
+      borderRadius: 14,
+      backgroundColor: c.tintMint,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    previewText: {
+      flex: 1,
+      fontFamily: FontFamily.body,
+      fontSize: 14,
+      lineHeight: 20,
+      color: c.text,
+    },
+    channels: {
+      paddingVertical: 4,
+    },
+    channel: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      minHeight: 64,
+      paddingVertical: 8,
+    },
+    channelBorder: {
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: c.border,
+    },
+    channelIcon: {
+      width: 40,
+      height: 40,
+      borderRadius: 12,
+      backgroundColor: c.soft,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    channelIconOn: {
+      backgroundColor: c.tintMint,
+    },
+    channelTitle: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 16,
+      lineHeight: 21,
+      color: c.text,
+    },
+    permissionText: {
+      fontFamily: FontFamily.body,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.amberText,
+    },
+    permissionLink: {
+      fontFamily: FontFamily.bodySemiBold,
+      color: c.link,
+    },
+    linkCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    linkKind: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.link,
+    },
+    change: {
+      height: 40,
+      paddingHorizontal: 14,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: c.border,
+      justifyContent: 'center',
+    },
+    changeText: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 14,
+      lineHeight: 19,
+      color: c.text,
+    },
+    shareCard: {
+      marginTop: 12,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    textarea: {
+      minHeight: 96,
+    },
+    delete: {
+      marginTop: 24,
+    },
+    footer: {
+      paddingTop: 12,
+      paddingHorizontal: Space.gutter,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: c.border,
+      backgroundColor: c.page,
+      alignItems: 'center',
+    },
+    footerButton: {
+      width: '100%',
+      maxWidth: 528,
+    },
+    sheetList: {
+      maxHeight: 420,
+    },
+    sheetListContent: {
+      gap: 10,
+    },
+    deleteRow: {
+      flexDirection: 'row',
+      gap: 10,
+    },
+    deleteButton: {
+      flex: 1.3,
+      height: 50,
+      borderRadius: 16,
+      backgroundColor: c.error,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+    },
+    deleteText: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 16,
+      lineHeight: 21,
+      color: c.solidText,
+    },
+  });
+}
+
+const STYLES = { light: makeStyles(LIGHT), dark: makeStyles(DARK) };
+
+/** Couleurs et styles du mode actuel (sombre seulement dans un module converti). */
+function useLook() {
+  const c = useScopedColors();
+  return { c, styles: c.dark ? STYLES.dark : STYLES.light };
+}

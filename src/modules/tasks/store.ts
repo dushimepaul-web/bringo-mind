@@ -129,6 +129,13 @@ export const taskActions = {
       () => update(id, before),
     );
   },
+  /** Ajoute une étape à la fin de la liste. */
+  addSubtask(id: string, title: string) {
+    const task = state.tasks.find((entry) => entry.id === id);
+    const clean = title.trim();
+    if (!task || !clean) return;
+    update(id, { subtasks: [...task.subtasks, { id: `${id}-${Date.now().toString(36)}`, title: clean, done: false }] });
+  },
   toggleSubtask(id: string, subtaskId: string) {
     const task = state.tasks.find((entry) => entry.id === id);
     if (!task) return;
@@ -156,14 +163,18 @@ export const taskActions = {
   },
   create(draft: TaskDraft): string {
     const id = `t-${Date.now().toString(36)}`;
+    const { steps = [], assignee = 'Claire', ...fields } = draft;
     const task: Task = {
-      ...draft,
+      ...fields,
       id,
       context: draft.household ? `Partagée • ${draft.household}` : 'Personnelle',
       status: 'open',
-      assignee: 'Claire',
+      assignee,
       createdAt: DEMO_TODAY,
-      subtasks: [],
+      subtasks: steps
+        .map((title) => title.trim())
+        .filter(Boolean)
+        .map((title, index) => ({ id: `${id}-${index + 1}`, title, done: false })),
     };
     emit({ tasks: [task, ...state.tasks] });
     remote(() => tasksApi.create(draft), (dto) => replace(id, dto), () => emit({ tasks: state.tasks.filter((entry) => entry.id !== id) }));

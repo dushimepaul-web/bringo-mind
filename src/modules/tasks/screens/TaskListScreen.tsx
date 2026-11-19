@@ -1,80 +1,66 @@
 // S-08 - Liste des tâches | Module M04 Tâches | Phase S4
+// D'après les maquettes validées : titre + recherche + « + », onglets Personnel / Foyer,
+// puis les tâches classées « À faire », « En cours » et « Terminées » (bandeau de couleur, compteur, menu ⋮).
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import {
-  Platform,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppHeader } from '@/components/app-header';
 import { Icon } from '@/components/icon';
-import { FontFamily, Radius, Serene, Space, Tint } from '@/constants/design';
-
-import {
-  BottomSheet,
-  CheckCircle,
-  Chip,
-  PrimaryButton,
-  PriorityBadge,
-  SecondaryButton,
-  SwipeRow,
-  Tag,
-  UndoToast,
-  taskStyles,
-} from '../components/task-ui';
-import {
-  CATEGORIES,
-  CATEGORY_ICONS,
-  GROUP_LABELS,
-  PRIORITY_LABELS,
-  formatDay,
-  formatDue,
-  groupOf,
-  lateDays,
-} from '../data';
 import { QueryView } from '@/components/ui/states';
+import { DARK, LIGHT, useScopedColors, type AppColors } from '@/constants/app-colors';
+import { FontFamily, Radius } from '@/constants/design';
 import { useQuery } from '@/hooks/use-query';
 
+import { BottomSheet, SheetOption, SwipeRow, UndoToast, useTaskStyles } from '../components/task-ui';
+import { CATEGORY_ICONS, HOUSEHOLD, dayOffset, formatDay } from '../data';
 import { syncTasks, taskActions, useFlash, useTasks } from '../store';
-import type { Task, TaskCategory, TaskGroup, TaskPriority } from '../types';
+import { TASK_VIEWS, setTaskView, useTaskView, type TaskView } from '../view-mode';
+import type { Task } from '../types';
 
-type FilterKey = 'all' | 'late' | 'today' | 'upcoming' | 'shared' | 'done' | 'archived';
-
-const FILTERS: { key: FilterKey; label: string }[] = [
-  { key: 'all', label: 'Toutes' },
-  { key: 'late', label: 'En retard' },
-  { key: 'today', label: 'Aujourd’hui' },
-  { key: 'upcoming', label: 'À venir' },
-  { key: 'shared', label: 'Partagées' },
-  { key: 'done', label: 'Terminées' },
-  { key: 'archived', label: 'Archivées' },
-];
-
-/** Ordre d'affichage des sections dans la vue « Toutes ». */
-const SECTION_ORDER: TaskGroup[] = ['late', 'today', 'upcoming', 'done'];
-
-const PRIORITIES: TaskPriority[] = [4, 3, 2, 1];
-
+type Space = 'personal' | 'household';
+type Status = 'todo' | 'doing' | 'done';
 type Toast = { text: string; undo?: () => void };
 
+const SPACES: { key: Space; label: string }[] = [
+  { key: 'personal', label: 'Personnel' },
+  { key: 'household', label: `Foyer · Famille ${HOUSEHOLD.name.replace('Foyer ', '')}` },
+];
+
+const STATUS_LABELS: Record<Status, string> = { todo: 'À faire', doing: 'En cours', done: 'Terminées' };
+
+/** « En cours » : au moins une étape faite ; « Terminées » : tâche terminée. */
+function statusOf(task: Task): Status | null {
+  if (task.status === 'done') return 'done';
+  if (task.status !== 'open') return null;
+  return task.subtasks.some((step) => step.done) ? 'doing' : 'todo';
+}
+
+/** « Aujourd'hui », « Demain », « Hier », sinon « 16 mai ». */
+function dueText(task: Task): string {
+  const date = task.status === 'done' ? (task.completedAt ?? task.dueAt) : task.dueAt;
+  const offset = dayOffset(date);
+  if (offset === 0) return 'Aujourd’hui';
+  if (offset === 1) return 'Demain';
+  if (offset === -1) return 'Hier';
+  return formatDay(date);
+}
+
 export default function TaskListScreen() {
+  const { c, styles } = useLook();
+  const taskStyles = useTaskStyles();
   const tasks = useTasks();
   const flash = useFlash();
-  const [filter, setFilter] = useState<FilterKey>('all');
+  const [space, setSpace] = useState<Space>('personal');
+  const [searching, setSearching] = useState(false);
   const [query, setQuery] = useState('');
-  const [searchFocused, setSearchFocused] = useState(false);
-  const [priorities, setPriorities] = useState<TaskPriority[]>([]);
-  const [categories, setCategories] = useState<TaskCategory[]>([]);
-  const [sheetOpen, setSheetOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState<Record<Status, boolean>>({ todo: false, doing: false, done: true });
+  const [menuTask, setMenuTask] = useState<Task | null>(null);
+  const [viewSheet, setViewSheet] = useState(false);
+  const [allDone, setAllDone] = useState(false);
+  const view = useTaskView();
   const [toast, setToast] = useState<Toast | null>(null);
-  const [showHint, setShowHint] = useState(true);
   // Chargement (mode « api ») et rechargement en tirant la liste vers le bas.
   const sync = useQuery('tasks', syncTasks);
 
@@ -88,68 +74,25 @@ export default function TaskListScreen() {
     }, [flash]),
   );
 
-  const counts = useMemo(() => {
-    const result: Record<FilterKey, number> = {
-      all: 0,
-      late: 0,
-      today: 0,
-      upcoming: 0,
-      shared: 0,
-      done: 0,
-      archived: 0,
-    };
-    for (const task of tasks) {
-      const group = groupOf(task);
-      result[group] += 1;
-      if (group !== 'archived') result.all += 1;
-      if (task.household && task.status === 'open') result.shared += 1;
-    }
-    return result;
-  }, [tasks]);
-
-  const visible = useMemo(() => {
-    const term = query.trim().toLowerCase();
-    return tasks.filter((task) => {
-      const group = groupOf(task);
-      const inFilter =
-        filter === 'all'
-          ? group !== 'archived'
-          : filter === 'shared'
-            ? task.household !== null && task.status === 'open'
-            : group === filter;
-      const inQuery =
-        !term ||
-        task.title.toLowerCase().includes(term) ||
-        task.category.toLowerCase().includes(term) ||
-        task.context.toLowerCase().includes(term);
-      const inPriority = priorities.length === 0 || priorities.includes(task.priority);
-      const inCategory = categories.length === 0 || categories.includes(task.category);
-      return inFilter && inQuery && inPriority && inCategory;
-    });
-  }, [tasks, filter, query, priorities, categories]);
-
   const sections = useMemo(() => {
-    const order: TaskGroup[] =
-      filter === 'archived' ? ['archived'] : filter === 'shared' ? ['late', 'today', 'upcoming'] : SECTION_ORDER;
-    return order
-      .map((group) => ({
-        group,
-        items: visible
-          .filter((task) => groupOf(task) === group)
-          .sort((a, b) =>
-            group === 'done'
-              ? (b.completedAt?.getTime() ?? 0) - (a.completedAt?.getTime() ?? 0)
-              : a.dueAt.getTime() - b.dueAt.getTime(),
-          ),
-      }))
-      .filter((section) => section.items.length > 0);
-  }, [visible, filter]);
-
-  const advancedCount = priorities.length + categories.length;
-  const activeCount = counts.late + counts.today + counts.upcoming;
-
-  const refreshing = sync.refreshing;
-  const onRefresh = sync.reload;
+    const term = query.trim().toLowerCase();
+    const mine = tasks.filter((task) => {
+      const inSpace = space === 'personal' ? task.household === null : task.household !== null;
+      const inQuery =
+        !term || [task.title, task.category, task.context].some((value) => value.toLowerCase().includes(term));
+      return inSpace && inQuery;
+    });
+    return (['todo', 'doing', 'done'] as Status[]).map((status) => ({
+      status,
+      items: mine
+        .filter((task) => statusOf(task) === status)
+        .sort((a, b) =>
+          status === 'done'
+            ? (b.completedAt?.getTime() ?? 0) - (a.completedAt?.getTime() ?? 0)
+            : a.dueAt.getTime() - b.dueAt.getTime(),
+        ),
+    }));
+  }, [tasks, space, query]);
 
   const complete = (task: Task) => {
     taskActions.complete(task.id);
@@ -163,17 +106,12 @@ export default function TaskListScreen() {
     taskActions.postpone(task.id, 1);
     setToast({ text: 'Échéance reportée d’un jour.', undo: () => taskActions.postpone(task.id, -1) });
   };
-  const restore = (task: Task) => {
-    taskActions.restore(task.id);
-    setToast({ text: 'Tâche restaurée.', undo: () => taskActions.archive(task.id) });
+  const archive = (task: Task) => {
+    taskActions.archive(task.id);
+    setToast({ text: 'Tâche archivée.', undo: () => taskActions.restore(task.id) });
   };
 
-  const resetFilters = () => {
-    setFilter('all');
-    setQuery('');
-    setPriorities([]);
-    setCategories([]);
-  };
+  const nothing = sections.every((section) => section.items.length === 0);
 
   return (
     <SafeAreaView style={taskStyles.safe} edges={['top']}>
@@ -184,616 +122,675 @@ export default function TaskListScreen() {
         contentContainerStyle={[taskStyles.content, styles.content]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={Tint.primary}
-            colors={[Tint.primary]}
-          />
-        }>
+        refreshControl={<RefreshControl refreshing={sync.refreshing} onRefresh={sync.reload} tintColor={c.link} colors={[c.link]} />}>
         <View style={styles.titleRow}>
-          <View style={styles.flex}>
-            <Text style={styles.eyebrow}>Mon espace</Text>
-            <Text style={styles.pageTitle}>Tâches</Text>
+          <Text style={styles.pageTitle}>Tâches</Text>
+          <View style={styles.titleActions}>
+            <Pressable
+              style={({ pressed }) => [styles.squareButton, pressed && styles.pressed]}
+              accessibilityRole="button"
+              accessibilityLabel={`Affichage : ${TASK_VIEWS.find((entry) => entry.key === view)?.label}`}
+              onPress={() => setViewSheet(true)}>
+              <Icon name={TASK_VIEWS.find((entry) => entry.key === view)?.icon ?? 'view_list'} size={22} color={c.text} />
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [styles.squareButton, searching && styles.squareButtonOn, pressed && styles.pressed]}
+              accessibilityRole="button"
+              accessibilityLabel={searching ? 'Fermer la recherche' : 'Rechercher une tâche'}
+              onPress={() => {
+                setSearching((value) => !value);
+                setQuery('');
+              }}>
+              <Icon name={searching ? 'close' : 'search'} size={22} color={c.text} />
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [styles.squareButton, styles.addButton, pressed && styles.pressed]}
+              accessibilityRole="button"
+              accessibilityLabel="Nouvelle tâche"
+              onPress={() => router.push('/tasks/add')}>
+              <Icon name="add" size={26} color={c.solidText} />
+            </Pressable>
           </View>
-          <Tag label={`${activeCount} actives`} />
         </View>
 
-        <View style={styles.searchRow}>
-          <View style={[styles.search, searchFocused && taskStyles.inputFocused]}>
-            <Icon
-              name="search"
-              size={22}
-              color={searchFocused ? Tint.primary : Serene.onSurfaceVariant}
-            />
+        {searching ? (
+          <View style={styles.search}>
+            <Icon name="search" size={20} color={c.muted} />
             <TextInput
               style={styles.searchInput}
               placeholder="Rechercher une tâche…"
-              placeholderTextColor={Serene.onSurfaceVariant}
-              selectionColor={Tint.primary}
+              placeholderTextColor={c.muted}
+              selectionColor={c.link}
               value={query}
               onChangeText={setQuery}
-              onFocus={() => setSearchFocused(true)}
-              onBlur={() => setSearchFocused(false)}
+              autoFocus
               returnKeyType="search"
               accessibilityLabel="Rechercher une tâche"
             />
-            {query ? (
-              <Pressable
-                hitSlop={10}
-                accessibilityRole="button"
-                accessibilityLabel="Effacer la recherche"
-                onPress={() => setQuery('')}>
-                <Icon name="cancel" size={20} color={Serene.onSurfaceVariant} filled />
-              </Pressable>
-            ) : null}
-          </View>
-          <Pressable
-            style={({ pressed }) => [
-              styles.filterButton,
-              advancedCount > 0 && styles.filterButtonActive,
-              pressed && styles.pressed,
-            ]}
-            accessibilityRole="button"
-            accessibilityLabel={`Filtres avancés${advancedCount ? `, ${advancedCount} actifs` : ''}`}
-            onPress={() => setSheetOpen(true)}>
-            <Icon name="tune" size={22} color={advancedCount > 0 ? Serene.onPrimary : Tint.navy} />
-            {advancedCount > 0 ? (
-              <View style={styles.filterBadge}>
-                <Text style={styles.filterBadgeText}>{advancedCount}</Text>
-              </View>
-            ) : null}
-          </Pressable>
-        </View>
-
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.chipsScroll}
-          contentContainerStyle={styles.chipsRow}>
-          {FILTERS.map((entry) => (
-            <Chip
-              key={entry.key}
-              label={entry.label}
-              selected={filter === entry.key}
-              count={entry.key === 'all' ? undefined : counts[entry.key] || undefined}
-              onPress={() => setFilter(entry.key)}
-            />
-          ))}
-        </ScrollView>
-
-        {showHint && filter === 'all' ? (
-          <View style={styles.hint}>
-            <Icon name="swipe" size={22} color={Tint.primary} />
-            <Text style={styles.hintText}>
-              Glissez une tâche vers la droite pour la terminer, vers la gauche pour la reporter.
-            </Text>
-            <Pressable
-              hitSlop={10}
-              accessibilityRole="button"
-              accessibilityLabel="Masquer l’astuce"
-              onPress={() => setShowHint(false)}>
-              <Icon name="close" size={20} color={Serene.onSurfaceVariant} />
-            </Pressable>
           </View>
         ) : null}
 
-        <QueryView query={sync} empty={{ icon: 'task_alt', title: 'Aucune tâche pour l’instant', text: 'Ajoutez votre première démarche : Bringo Mind vous rappellera l’échéance.', actionLabel: 'Nouvelle tâche', onAction: () => router.push('/tasks/add') }}>
-        {sections.length === 0 ? (
-          <View style={[taskStyles.card, styles.empty]}>
-            <View style={styles.emptyIcon}>
-              <Icon
-                name={filter === 'done' ? 'task_alt' : filter === 'archived' ? 'inventory_2' : 'search_off'}
-                size={30}
-                color={Tint.primary}
-              />
-            </View>
-            <Text style={styles.emptyTitle}>
-              {query || advancedCount
-                ? 'Aucune tâche ne correspond'
-                : filter === 'late'
-                  ? 'Aucune tâche en retard'
-                  : filter === 'archived'
-                    ? 'Aucune tâche archivée'
-                    : 'Rien à faire ici'}
-            </Text>
-            <Text style={styles.emptyText}>
-              {query || advancedCount
-                ? 'Essayez un autre mot-clé ou retirez des filtres.'
-                : 'Profitez-en, ou ajoutez une nouvelle tâche.'}
-            </Text>
-            {query || advancedCount || filter !== 'all' ? (
-              <SecondaryButton label="Réinitialiser les filtres" icon="restart_alt" onPress={resetFilters} />
-            ) : null}
-          </View>
-        ) : (
-          sections.map((section) => (
-            <View key={section.group} style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Text
-                  style={[taskStyles.sectionTitle, section.group === 'late' && styles.lateTitle]}>
-                  {GROUP_LABELS[section.group]}
+        <View style={styles.segments} accessibilityRole="tablist">
+          {SPACES.map((entry) => {
+            const selected = space === entry.key;
+            return (
+              <Pressable
+                key={entry.key}
+                style={[styles.segment, selected && styles.segmentOn]}
+                accessibilityRole="tab"
+                accessibilityState={{ selected }}
+                onPress={() => setSpace(entry.key)}>
+                <Text style={[styles.segmentText, selected && styles.segmentTextOn]} numberOfLines={1}>
+                  {entry.label}
                 </Text>
-                <View style={[styles.countPill, section.group === 'late' && styles.countPillLate]}>
-                  <Text
-                    style={[styles.countText, section.group === 'late' && styles.countTextLate]}>
-                    {section.items.length}
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.stack}>
-                {section.items.map((task) => (
-                  <TaskRow
-                    key={task.id}
-                    task={task}
-                    onToggle={() => (task.status === 'open' ? complete(task) : reopen(task))}
-                    onPostpone={() => postpone(task)}
-                    onRestore={() => restore(task)}
-                  />
-                ))}
-              </View>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        <QueryView
+          query={sync}
+          empty={{
+            icon: 'task_alt',
+            title: 'Aucune tâche pour l’instant',
+            text: 'Ajoutez votre première démarche : Bringo Mind vous rappellera l’échéance.',
+            actionLabel: 'Nouvelle tâche',
+            onAction: () => router.push('/tasks/add'),
+          }}>
+          {nothing ? (
+            <View style={styles.empty}>
+              <Icon name={query ? 'search_off' : 'task_alt'} size={32} color={c.link} />
+              <Text style={styles.emptyTitle}>{query ? 'Aucune tâche ne correspond' : 'Rien à faire ici'}</Text>
+              <Text style={styles.emptyText}>
+                {query ? 'Essayez un autre mot.' : 'Touchez « + » pour ajouter une tâche.'}
+              </Text>
             </View>
-          ))
-        )}
+          ) : (
+            sections.map((section) => {
+              // « Terminées » : les 7 derniers jours, puis « Voir tout ».
+              const recent =
+                section.status === 'done' && !allDone
+                  ? section.items.filter((task) => dayOffset(task.completedAt ?? task.dueAt) >= -7)
+                  : section.items;
+              const hidden = section.items.length - recent.length;
+              return (
+              <Section
+                key={section.status}
+                status={section.status}
+                items={recent}
+                total={section.items.length}
+                hidden={hidden}
+                onShowAll={() => setAllDone(true)}
+                view={view}
+                collapsed={collapsed[section.status]}
+                onToggle={() => setCollapsed((value) => ({ ...value, [section.status]: !value[section.status] }))}
+                onCheck={(task) => (task.status === 'done' ? reopen(task) : complete(task))}
+                onPostpone={postpone}
+                onMenu={setMenuTask}
+              />
+              );
+            })
+          )}
         </QueryView>
       </ScrollView>
 
-      <View style={styles.fabWrap} pointerEvents="box-none">
-        <PrimaryButton
-          label="Nouvelle tâche"
-          icon="add"
-          onPress={() => router.push('/tasks/add')}
-          style={styles.fab}
-        />
-      </View>
-
       {toast ? (
-        <UndoToast
-          key={toast.text}
-          text={toast.text}
-          onUndo={toast.undo}
-          onHide={() => setToast(null)}
-          bottom={84}
-        />
+        <UndoToast key={toast.text} text={toast.text} onUndo={toast.undo} onHide={() => setToast(null)} bottom={84} />
       ) : null}
 
-      <BottomSheet
-        visible={sheetOpen}
-        title="Filtres avancés"
-        subtitle="Affinez la liste par priorité et par catégorie."
-        onClose={() => setSheetOpen(false)}>
-        <Text style={taskStyles.label}>Priorité</Text>
-        <View style={styles.wrap}>
-          {PRIORITIES.map((priority) => (
-            <Chip
-              key={priority}
-              label={PRIORITY_LABELS[priority]}
-              selected={priorities.includes(priority)}
-              onPress={() =>
-                setPriorities((list) =>
-                  list.includes(priority) ? list.filter((p) => p !== priority) : [...list, priority],
-                )
-              }
-            />
-          ))}
-        </View>
-        <Text style={[taskStyles.label, styles.sheetLabel]}>Catégorie</Text>
-        <View style={styles.wrap}>
-          {CATEGORIES.map((category) => (
-            <Chip
-              key={category}
-              label={category}
-              icon={CATEGORY_ICONS[category]}
-              selected={categories.includes(category)}
-              onPress={() =>
-                setCategories((list) =>
-                  list.includes(category) ? list.filter((c) => c !== category) : [...list, category],
-                )
-              }
-            />
-          ))}
-        </View>
-        <View style={styles.sheetActions}>
-          <SecondaryButton
-            label="Réinitialiser"
-            style={styles.flex}
+      <BottomSheet visible={viewSheet} title="Affichage" subtitle="Choisissez comment voir vos tâches." onClose={() => setViewSheet(false)}>
+        {TASK_VIEWS.map((entry) => (
+          <SheetOption
+            key={entry.key}
+            icon={view === entry.key ? 'check_circle' : entry.icon}
+            label={entry.label}
+            hint={entry.hint}
             onPress={() => {
-              setPriorities([]);
-              setCategories([]);
+              setTaskView(entry.key);
+              setViewSheet(false);
             }}
           />
-          <PrimaryButton
-            label={`Voir ${visible.length} tâche${visible.length > 1 ? 's' : ''}`}
-            style={styles.sheetPrimary}
-            onPress={() => setSheetOpen(false)}
-          />
-        </View>
+        ))}
+      </BottomSheet>
+
+      <BottomSheet visible={menuTask !== null} title={menuTask?.title ?? ''} onClose={() => setMenuTask(null)}>
+        {menuTask ? (
+          <>
+            {menuTask.status === 'open' ? (
+              <SheetOption
+                icon="schedule"
+                label="Reporter d’un jour"
+                onPress={() => {
+                  setMenuTask(null);
+                  postpone(menuTask);
+                }}
+              />
+            ) : null}
+            <SheetOption
+              icon="edit"
+              label="Modifier"
+              onPress={() => {
+                setMenuTask(null);
+                router.push({ pathname: '/tasks/edit', params: { id: menuTask.id } });
+              }}
+            />
+            <SheetOption
+              icon="inventory_2"
+              label="Archiver"
+              danger
+              onPress={() => {
+                setMenuTask(null);
+                archive(menuTask);
+              }}
+            />
+          </>
+        ) : null}
       </BottomSheet>
     </SafeAreaView>
   );
 }
 
+/** Couleurs d'un groupe : bandeau, pictogramme, compteur. */
+function useStatusTone(status: Status) {
+  const { c } = useLook();
+  if (status === 'done') {
+    return {
+      band: c.dark ? '#163328' : '#DFF5E6',
+      icon: c.dark ? '#4ADE80' : '#16A34A',
+      pill: c.dark ? '#1F4A35' : '#C8EED5',
+      pillText: c.dark ? '#4ADE80' : '#15803D',
+    };
+  }
+  return {
+    band: c.dark ? '#1B2A4D' : '#E6EEFB',
+    icon: status === 'doing' ? (c.dark ? '#6FA8FF' : '#1D6FE0') : c.text,
+    pill: c.dark ? '#24396A' : '#D5E3FA',
+    pillText: c.dark ? '#8DBBFF' : '#1D5ED0',
+  };
+}
+
+function Section({
+  status,
+  items,
+  total,
+  hidden,
+  onShowAll,
+  view,
+  collapsed,
+  onToggle,
+  onCheck,
+  onPostpone,
+  onMenu,
+}: {
+  status: Status;
+  items: Task[];
+  total: number;
+  hidden: number;
+  onShowAll: () => void;
+  view: TaskView;
+  collapsed: boolean;
+  onToggle: () => void;
+  onCheck: (task: Task) => void;
+  onPostpone: (task: Task) => void;
+  onMenu: (task: Task) => void;
+}) {
+  const { styles } = useLook();
+  const tone = useStatusTone(status);
+  return (
+    <View style={styles.section}>
+      <Pressable
+        style={[styles.band, { backgroundColor: tone.band }]}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: !collapsed }}
+        accessibilityLabel={`${STATUS_LABELS[status]}, ${total} tâche${total > 1 ? 's' : ''}`}
+        onPress={onToggle}>
+        {status === 'todo' ? (
+          <View style={[styles.bandDot, { backgroundColor: tone.icon }]} />
+        ) : (
+          <Icon name={status === 'doing' ? 'schedule' : 'check_circle'} size={22} color={tone.icon} filled />
+        )}
+        <Text style={styles.bandTitle}>{STATUS_LABELS[status]}</Text>
+        <View style={[styles.bandPill, { backgroundColor: tone.pill }]}>
+          <Text style={[styles.bandPillText, { color: tone.pillText }]}>{total}</Text>
+        </View>
+        <Icon name={collapsed ? 'expand_more' : 'chevron_right'} size={22} color={tone.pillText} />
+      </Pressable>
+
+      {!collapsed && items.length > 0 && view === 'cards' ? (
+        <View style={styles.cardsStack}>
+          {items.map((task) => (
+            <TaskCard key={task.id} task={task} status={status} onCheck={() => onCheck(task)} onPostpone={() => onPostpone(task)} onMenu={() => onMenu(task)} />
+          ))}
+        </View>
+      ) : null}
+
+      {!collapsed && items.length > 0 && view === 'grid' ? (
+        <View style={styles.grid}>
+          {items.map((task) => (
+            <TaskTile key={task.id} task={task} status={status} onCheck={() => onCheck(task)} onMenu={() => onMenu(task)} />
+          ))}
+        </View>
+      ) : null}
+
+      {!collapsed && items.length > 0 && view === 'list' ? (
+        <View style={styles.card}>
+          {items.map((task, index) => (
+            <TaskRow
+              key={task.id}
+              task={task}
+              status={status}
+              first={index === 0}
+              onCheck={() => onCheck(task)}
+              onPostpone={() => onPostpone(task)}
+              onMenu={() => onMenu(task)}
+            />
+          ))}
+        </View>
+      ) : null}
+      {!collapsed && hidden > 0 ? (
+        <Pressable style={styles.showAll} accessibilityRole="button" onPress={onShowAll}>
+          <Text style={styles.showAllText}>Voir tout ({hidden} de plus)</Text>
+          <Icon name="expand_more" size={20} color={tone.pillText} />
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
 function TaskRow({
   task,
-  onToggle,
+  status,
+  first,
+  onCheck,
   onPostpone,
-  onRestore,
+  onMenu,
 }: {
   task: Task;
-  onToggle: () => void;
+  status: Status;
+  first: boolean;
+  onCheck: () => void;
   onPostpone: () => void;
-  onRestore: () => void;
+  onMenu: () => void;
 }) {
-  const done = task.status === 'done';
-  const archived = task.status === 'archived';
-  const late = lateDays(task);
-  const doneSubtasks = task.subtasks.filter((sub) => sub.done).length;
+  const { c, styles } = useLook();
+  const tone = useStatusTone(status);
+  const late = task.status === 'open' && dayOffset(task.dueAt) < 0;
+  const done = status === 'done';
 
-  const dueLabel = done
-    ? `Terminée le ${formatDay(task.completedAt ?? task.dueAt)}`
-    : archived
-      ? 'Archivée'
-      : late > 0
-        ? `En retard • ${formatDue(task)}`
-        : formatDue(task);
-
-  const card = (
+  const row = (
     <Pressable
-      style={({ pressed }) => [taskStyles.card, styles.row, pressed && taskStyles.cardPressed]}
-      // Sur le web, un rôle « button » produirait un <button> contenant la case à cocher.
+      style={({ pressed }) => [styles.row, !first && styles.rowDivider, pressed && styles.rowPressed]}
+      // Sur le web, un rôle « button » produirait un <button> contenant d'autres boutons.
       accessibilityRole={Platform.OS === 'web' ? undefined : 'button'}
-      accessibilityLabel={`${task.title}, ${dueLabel}`}
+      accessibilityLabel={`${task.title}, ${dueText(task)}`}
       onPress={() => router.push({ pathname: '/tasks/detail', params: { id: task.id } })}>
-      {archived ? (
-        <View style={styles.archivedIcon}>
-          <Icon name="inventory_2" size={18} color={Serene.onSurfaceVariant} />
-        </View>
-      ) : (
-        <CheckCircle
-          checked={done}
-          onPress={onToggle}
-          label={done ? `Rouvrir ${task.title}` : `Terminer ${task.title}`}
-        />
-      )}
-      <View style={styles.rowBody}>
-        <View style={styles.rowTop}>
-          <PriorityBadge priority={task.priority} />
-          <Text
-            style={[styles.due, late > 0 && styles.dueLate, done && styles.dueDone]}
-            numberOfLines={1}>
-            {dueLabel}
-          </Text>
-        </View>
-        <Text style={[taskStyles.title, done && styles.titleDone]} numberOfLines={2}>
+      <Pressable
+        hitSlop={10}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: done }}
+        accessibilityLabel={done ? `Rouvrir ${task.title}` : `Terminer ${task.title}`}
+        onPress={onCheck}>
+        {status === 'todo' ? (
+          <View style={[styles.check, task.suggested && styles.checkSuggested]} />
+        ) : (
+          <View style={[styles.check, styles.checkFilled, { backgroundColor: tone.icon, borderColor: tone.icon }]}>
+            <Icon name="check" size={15} color={c.dark ? '#0A1326' : '#FFFFFF'} />
+          </View>
+        )}
+      </Pressable>
+
+      <View style={styles.rowMain}>
+        <Text style={[styles.rowTitle, done && styles.rowTitleDone]} numberOfLines={2}>
           {task.title}
         </Text>
-        <View style={styles.meta}>
-          <View style={styles.metaItem}>
-            <Icon name={CATEGORY_ICONS[task.category]} size={16} color={Serene.onSurfaceVariant} />
-            <Text style={styles.metaText}>{task.category}</Text>
+        {task.priority === 4 && !done ? <Pill label="Urgent" tone="red" /> : null}
+        {task.priority === 3 && !done ? <Pill label="Haute" tone="orange" /> : null}
+        {task.suggested && !done ? <Pill label="À vérifier" tone="orange" /> : null}
+      </View>
+
+      <View style={styles.due}>
+        <Icon name="calendar_month" size={16} color={late ? c.error : c.muted} />
+        <Text style={[styles.dueText, late && { color: c.error }]} numberOfLines={1}>
+          {dueText(task)}
+        </Text>
+      </View>
+
+      <Pressable hitSlop={10} accessibilityRole="button" accessibilityLabel={`Actions pour ${task.title}`} onPress={onMenu}>
+        <Icon name="more_vert" size={22} color={c.text} />
+      </Pressable>
+    </Pressable>
+  );
+
+  if (task.status !== 'open') return row;
+  return (
+    <SwipeRow onSwipeRight={onCheck} onSwipeLeft={onPostpone} rightLabel="Terminer" leftLabel="Reporter">
+      {row}
+    </SwipeRow>
+  );
+}
+
+/** Case ronde selon l'état : vide (à faire), bleue cochée (en cours), verte cochée (terminée). */
+function CheckMark({ task, status, onPress }: { task: Task; status: Status; onPress: () => void }) {
+  const { c, styles } = useLook();
+  const tone = useStatusTone(status);
+  const done = status === 'done';
+  return (
+    <Pressable
+      hitSlop={10}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked: done }}
+      accessibilityLabel={done ? `Rouvrir ${task.title}` : `Terminer ${task.title}`}
+      onPress={onPress}>
+      {status === 'todo' ? (
+        <View style={[styles.check, task.suggested && styles.checkSuggested]} />
+      ) : (
+        <View style={[styles.check, styles.checkFilled, { backgroundColor: tone.icon, borderColor: tone.icon }]}>
+          <Icon name="check" size={15} color={c.dark ? '#0A1326' : '#FFFFFF'} />
+        </View>
+      )}
+    </Pressable>
+  );
+}
+
+function TaskPills({ task, done }: { task: Task; done: boolean }) {
+  if (done) return null;
+  return (
+    <>
+      {task.priority === 4 ? <Pill label="Urgent" tone="red" /> : null}
+      {task.priority === 3 ? <Pill label="Haute" tone="orange" /> : null}
+      {task.suggested ? <Pill label="À vérifier" tone="orange" /> : null}
+    </>
+  );
+}
+
+function DueLabel({ task }: { task: Task }) {
+  const { c, styles } = useLook();
+  const late = task.status === 'open' && dayOffset(task.dueAt) < 0;
+  return (
+    <View style={styles.dueInline}>
+      <Icon name="calendar_month" size={16} color={late ? c.error : c.muted} />
+      <Text style={[styles.dueText, late && { color: c.error }]} numberOfLines={1}>
+        {dueText(task)}
+      </Text>
+    </View>
+  );
+}
+
+function Initials({ name }: { name: string }) {
+  const { styles } = useLook();
+  const initials = name === 'Thomas' ? 'TM' : name.slice(0, 2).toUpperCase();
+  return (
+    <View style={styles.initials} accessibilityLabel={`Confiée à ${name}`}>
+      <Text style={styles.initialsText}>{initials}</Text>
+    </View>
+  );
+}
+
+/** Vue « Cartes » : une carte par tâche, avec catégorie, étapes et personne. */
+function TaskCard({ task, status, onCheck, onPostpone, onMenu }: { task: Task; status: Status; onCheck: () => void; onPostpone: () => void; onMenu: () => void }) {
+  const { c, styles } = useLook();
+  const done = status === 'done';
+  const steps = task.subtasks.length;
+  const stepsDone = task.subtasks.filter((step) => step.done).length;
+  const card = (
+    <Pressable
+      style={({ pressed }) => [styles.taskCard, pressed && styles.rowPressed]}
+      accessibilityRole={Platform.OS === 'web' ? undefined : 'button'}
+      accessibilityLabel={`${task.title}, ${dueText(task)}`}
+      onPress={() => router.push({ pathname: '/tasks/detail', params: { id: task.id } })}>
+      <CheckMark task={task} status={status} onPress={onCheck} />
+      <View style={styles.cardBody}>
+        <Text style={[styles.cardTitle, done && styles.rowTitleDone]} numberOfLines={2}>
+          {task.title}
+        </Text>
+        <View style={styles.cardMeta}>
+          <DueLabel task={task} />
+          <View style={styles.dueInline}>
+            <Icon name={CATEGORY_ICONS[task.category]} size={16} color={c.muted} />
+            <Text style={styles.dueText}>{task.category}</Text>
           </View>
-          {task.household ? (
-            <View style={styles.metaItem}>
-              <Icon name="group" size={16} color={Tint.primary} />
-              <Text style={[styles.metaText, styles.metaShared]}>Partagée</Text>
-            </View>
-          ) : null}
-          {task.subtasks.length > 0 ? (
-            <View style={styles.metaItem}>
-              <Icon name="checklist" size={16} color={Serene.onSurfaceVariant} />
-              <Text style={styles.metaText}>
-                {doneSubtasks}/{task.subtasks.length}
+          {steps > 0 ? (
+            <View style={styles.dueInline}>
+              <Icon name="checklist" size={16} color={c.muted} />
+              <Text style={styles.dueText}>
+                {stepsDone}/{steps} étapes
               </Text>
             </View>
           ) : null}
         </View>
+        <View style={styles.cardPills}>
+          <TaskPills task={task} done={done} />
+        </View>
       </View>
-      {archived ? (
-        <Pressable
-          style={({ pressed }) => [styles.restore, pressed && styles.pressed]}
-          accessibilityRole="button"
-          onPress={onRestore}>
-          <Icon name="unarchive" size={18} color={Tint.primary} />
-          <Text style={taskStyles.link}>Restaurer</Text>
+      <View style={styles.cardSide}>
+        <Pressable hitSlop={10} accessibilityRole="button" accessibilityLabel={`Actions pour ${task.title}`} onPress={onMenu}>
+          <Icon name="more_vert" size={22} color={c.text} />
         </Pressable>
-      ) : (
-        <Icon name="chevron_right" size={22} color={Serene.onSurfaceVariant} />
-      )}
+        {task.assignee !== 'Claire' ? <Initials name={task.assignee} /> : null}
+      </View>
     </Pressable>
   );
-
   if (task.status !== 'open') return card;
-
   return (
-    <SwipeRow
-      onSwipeRight={onToggle}
-      onSwipeLeft={onPostpone}
-      rightLabel="Terminer"
-      leftLabel="Reporter">
+    <SwipeRow onSwipeRight={onCheck} onSwipeLeft={onPostpone} rightLabel="Terminer" leftLabel="Reporter">
       {card}
     </SwipeRow>
   );
 }
 
-const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-  },
-  pressed: {
-    opacity: 0.7,
-  },
-  content: {
-    paddingBottom: 120,
-  },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 12,
-    paddingTop: 16,
-  },
-  eyebrow: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 13,
-    lineHeight: 18,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-    color: Tint.primary,
-  },
-  pageTitle: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 30,
-    lineHeight: 36,
-    letterSpacing: -0.6,
-    color: Tint.navy,
-  },
-  searchRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: Space.md,
-  },
-  search: {
-    flex: 1,
-    height: 52,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 14,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: Tint.border,
-    backgroundColor: Serene.surfaceContainerLowest,
-  },
-  searchInput: {
-    flex: 1,
-    minWidth: 0,
-    outlineWidth: 0,
-    outlineStyle: 'solid',
-    fontFamily: FontFamily.body,
-    fontSize: 16,
-    color: Tint.navy,
-    paddingVertical: 0,
-  },
-  filterButton: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: Tint.border,
-    backgroundColor: Serene.surfaceContainerLowest,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  filterButtonActive: {
-    backgroundColor: Tint.black,
-    borderColor: Tint.black,
-  },
-  filterBadge: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
-    minWidth: 18,
-    height: 18,
-    paddingHorizontal: 4,
-    borderRadius: Radius.full,
-    backgroundColor: Serene.secondaryFixed,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  filterBadgeText: {
-    fontFamily: FontFamily.bodyBold,
-    fontSize: 11,
-    lineHeight: 14,
-    color: Serene.onSecondaryFixed,
-  },
-  chipsScroll: {
-    marginTop: 14,
-    marginHorizontal: -Space.gutter,
-  },
-  chipsRow: {
-    gap: 8,
-    paddingHorizontal: Space.gutter,
-  },
-  hint: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginTop: 16,
-    padding: 14,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#99f6e4',
-    backgroundColor: '#f0fdfa',
-  },
-  hintText: {
-    flex: 1,
-    fontFamily: FontFamily.body,
-    fontSize: 14,
-    lineHeight: 20,
-    color: Tint.navy,
-  },
-  section: {
-    marginTop: 26,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
-  },
-  lateTitle: {
-    color: '#b91c1c',
-  },
-  countPill: {
-    minWidth: 26,
-    height: 24,
-    paddingHorizontal: 8,
-    borderRadius: Radius.full,
-    backgroundColor: Tint.soft,
-    borderWidth: 1,
-    borderColor: Tint.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  countPillLate: {
-    backgroundColor: '#fee2e2',
-    borderColor: '#fecaca',
-  },
-  countText: {
-    fontFamily: FontFamily.bodyBold,
-    fontSize: 13,
-    lineHeight: 17,
-    color: Tint.navy,
-  },
-  countTextLate: {
-    color: '#b91c1c',
-  },
-  stack: {
-    gap: 12,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  rowBody: {
-    flex: 1,
-    minWidth: 0,
-    gap: 4,
-  },
-  rowTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  due: {
-    flexShrink: 1,
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurfaceVariant,
-  },
-  dueLate: {
-    color: '#b91c1c',
-  },
-  dueDone: {
-    color: Serene.success,
-  },
-  titleDone: {
-    color: Serene.onSurfaceVariant,
-    textDecorationLine: 'line-through',
-  },
-  meta: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: 12,
-    marginTop: 2,
-  },
-  metaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  metaText: {
-    fontFamily: FontFamily.body,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurfaceVariant,
-  },
-  metaShared: {
-    fontFamily: FontFamily.bodySemiBold,
-    color: Tint.primary,
-  },
-  archivedIcon: {
-    width: 26,
-    height: 26,
-    borderRadius: 8,
-    backgroundColor: Tint.soft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  restore: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  empty: {
-    marginTop: 26,
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 28,
-  },
-  emptyIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 20,
-    backgroundColor: Serene.secondaryContainer,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyTitle: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 18,
-    lineHeight: 24,
-    color: Tint.navy,
-    textAlign: 'center',
-  },
-  emptyText: {
-    fontFamily: FontFamily.body,
-    fontSize: 15,
-    lineHeight: 21,
-    color: Serene.onSurfaceVariant,
-    textAlign: 'center',
-    marginBottom: 6,
-  },
-  fabWrap: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 12,
-    paddingHorizontal: Space.gutter,
-    alignItems: 'center',
-  },
-  fab: {
-    width: '100%',
-    maxWidth: 528,
-  },
-  wrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  sheetLabel: {
-    marginTop: 8,
-  },
-  sheetActions: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 12,
-  },
-  sheetPrimary: {
-    flex: 1.4,
-  },
-});
+/** Vue « Grille » : deux tuiles par ligne. */
+function TaskTile({ task, status, onCheck, onMenu }: { task: Task; status: Status; onCheck: () => void; onMenu: () => void }) {
+  const { c, styles } = useLook();
+  const done = status === 'done';
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.tile, pressed && styles.rowPressed]}
+      accessibilityRole={Platform.OS === 'web' ? undefined : 'button'}
+      accessibilityLabel={`${task.title}, ${dueText(task)}`}
+      onPress={() => router.push({ pathname: '/tasks/detail', params: { id: task.id } })}>
+      <View style={styles.tileTop}>
+        <CheckMark task={task} status={status} onPress={onCheck} />
+        <Pressable hitSlop={10} accessibilityRole="button" accessibilityLabel={`Actions pour ${task.title}`} onPress={onMenu}>
+          <Icon name="more_vert" size={20} color={c.text} />
+        </Pressable>
+      </View>
+      <Text style={[styles.tileTitle, done && styles.rowTitleDone]} numberOfLines={2}>
+        {task.title}
+      </Text>
+      <DueLabel task={task} />
+      <View style={styles.cardPills}>
+        <TaskPills task={task} done={done} />
+      </View>
+    </Pressable>
+  );
+}
+
+function Pill({ label, tone }: { label: string; tone: 'red' | 'orange' }) {
+  const { c, styles } = useLook();
+  const colors =
+    tone === 'red'
+      ? { bg: c.dark ? '#3B1D24' : '#FDE2E2', fg: c.dark ? '#FCA5A5' : '#B91C1C' }
+      : { bg: c.dark ? '#3A2717' : '#FDEBD3', fg: c.dark ? '#FDBA74' : '#B45309' };
+  return (
+    <View style={[styles.pill, { backgroundColor: colors.bg }]}>
+      <Text style={[styles.pillText, { color: colors.fg }]}>{label}</Text>
+    </View>
+  );
+}
+
+function makeStyles(c: AppColors) {
+  return StyleSheet.create({
+    flex: { flex: 1 },
+    pressed: { opacity: 0.75 },
+    content: { paddingBottom: 120, paddingTop: 12, gap: 14 },
+    titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    pageTitle: { fontFamily: FontFamily.headingBold, fontSize: 28, lineHeight: 34, letterSpacing: -0.5, color: c.text },
+    titleActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    squareButton: {
+      width: 42,
+      height: 42,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.card,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    squareButtonOn: { borderColor: c.link },
+    addButton: { borderColor: c.solid, backgroundColor: c.solid },
+    search: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      minHeight: 48,
+      paddingHorizontal: 14,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.card,
+    },
+    searchInput: {
+      flex: 1,
+      paddingVertical: 12,
+      fontFamily: FontFamily.body,
+      fontSize: 16,
+      lineHeight: 22,
+      color: c.text,
+      outlineWidth: 0,
+      outlineStyle: 'solid',
+    },
+    segments: {
+      flexDirection: 'row',
+      padding: 4,
+      borderRadius: 14,
+      backgroundColor: c.dark ? '#13213D' : '#E8EEF3',
+    },
+    segment: { flex: 1, minHeight: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },
+    segmentOn: {
+      backgroundColor: c.dark ? '#22365C' : '#FFFFFF',
+      shadowColor: '#0C1A37',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: c.dark ? 0 : 0.08,
+      shadowRadius: 6,
+      elevation: 2,
+    },
+    segmentText: { fontFamily: FontFamily.bodyMedium, fontSize: 14, lineHeight: 19, color: c.muted },
+    segmentTextOn: { fontFamily: FontFamily.bodySemiBold, color: c.text },
+    section: { gap: 8 },
+    band: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      minHeight: 44,
+      paddingHorizontal: 14,
+      borderRadius: 14,
+    },
+    bandDot: { width: 12, height: 12, borderRadius: 6, marginHorizontal: 5 },
+    bandTitle: { flex: 1, fontFamily: FontFamily.headingBold, fontSize: 17, lineHeight: 22, color: c.text },
+    bandPill: { minWidth: 30, height: 24, paddingHorizontal: 9, borderRadius: Radius.full, alignItems: 'center', justifyContent: 'center' },
+    bandPillText: { fontFamily: FontFamily.bodyBold, fontSize: 13, lineHeight: 17 },
+    card: {
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.card,
+      overflow: 'hidden',
+      shadowColor: '#0C1A37',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: c.shadowOpacity,
+      shadowRadius: 10,
+      elevation: 1,
+    },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      minHeight: 48,
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+      backgroundColor: c.card,
+    },
+    rowDivider: { borderTopWidth: 1, borderTopColor: c.border },
+    rowPressed: { backgroundColor: c.soft },
+    check: {
+      width: 22,
+      height: 22,
+      borderRadius: 11,
+      borderWidth: 2,
+      borderColor: c.dark ? '#5B6B8C' : '#B5C0CE',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    checkSuggested: { borderStyle: 'dashed', borderColor: c.dark ? '#FDBA74' : '#D97706' },
+    checkFilled: { borderWidth: 0 },
+    rowMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, minWidth: 0 },
+    rowTitle: { flexShrink: 1, fontFamily: FontFamily.bodySemiBold, fontSize: 14, lineHeight: 19, color: c.text },
+    rowTitleDone: { color: c.muted, textDecorationLine: 'line-through' },
+    pill: { paddingHorizontal: 7, paddingVertical: 1, borderRadius: Radius.full },
+    pillText: { fontFamily: FontFamily.bodySemiBold, fontSize: 13, lineHeight: 17 },
+    due: { flexDirection: 'row', alignItems: 'center', gap: 4, maxWidth: 110 },
+    dueText: { fontFamily: FontFamily.body, fontSize: 13, lineHeight: 17, color: c.muted },
+    empty: { alignItems: 'center', gap: 8, paddingVertical: 40 },
+    cardsStack: { gap: 8 },
+    showAll: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, minHeight: 40 },
+    showAllText: { fontFamily: FontFamily.bodySemiBold, fontSize: 14, lineHeight: 19, color: c.link },
+    taskCard: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 12,
+      padding: 14,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.card,
+      shadowColor: '#0C1A37',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: c.shadowOpacity,
+      shadowRadius: 10,
+      elevation: 1,
+    },
+    cardBody: { flex: 1, gap: 6 },
+    cardTitle: { fontFamily: FontFamily.bodySemiBold, fontSize: 15, lineHeight: 20, color: c.text },
+    cardMeta: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 12, rowGap: 4 },
+    cardPills: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+    cardSide: { alignItems: 'center', gap: 10 },
+    dueInline: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    initials: {
+      width: 30,
+      height: 30,
+      borderRadius: Radius.full,
+      backgroundColor: c.dark ? '#14532D' : '#22C55E',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    initialsText: { fontFamily: FontFamily.bodyBold, fontSize: 12, lineHeight: 15, color: '#FFFFFF' },
+    grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    tile: {
+      width: '48.8%',
+      flexGrow: 1,
+      gap: 8,
+      padding: 12,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.card,
+      shadowColor: '#0C1A37',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: c.shadowOpacity,
+      shadowRadius: 10,
+      elevation: 1,
+    },
+    tileTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    tileTitle: { minHeight: 38, fontFamily: FontFamily.bodySemiBold, fontSize: 14, lineHeight: 19, color: c.text },
+    emptyTitle: { fontFamily: FontFamily.headingBold, fontSize: 17, lineHeight: 23, color: c.text },
+    emptyText: { fontFamily: FontFamily.body, fontSize: 14, lineHeight: 20, color: c.muted, textAlign: 'center' },
+  });
+}
+
+const STYLES = { light: makeStyles(LIGHT), dark: makeStyles(DARK) };
+
+/** Couleurs et styles du mode actuel (sombre dans le module Tâches, converti). */
+function useLook() {
+  const c = useScopedColors();
+  return { c, styles: c.dark ? STYLES.dark : STYLES.light };
+}

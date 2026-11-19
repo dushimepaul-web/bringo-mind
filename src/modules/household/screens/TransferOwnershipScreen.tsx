@@ -6,14 +6,17 @@ import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icon';
-import { PrimaryButton, TopBar, kitStyles } from '@/components/ui/kit';
-import { FontFamily, Serene, Tint } from '@/constants/design';
+import { PrimaryButton, TopBar, useKitStyles } from '@/components/ui/kit';
+import { DARK, LIGHT, useScopedColors, type AppColors } from '@/constants/app-colors';
+import { FontFamily } from '@/constants/design';
 
 import { Avatar, ChoiceCard } from '../components/household-ui';
 import { ROLE_LABELS, firstName } from '../data';
 import { householdActions, useHouseholdState } from '../store';
 
 export default function TransferOwnershipScreen() {
+  const { c, styles } = useLook();
+  const kitStyles = useKitStyles();
   const { to } = useLocalSearchParams<{ to?: string }>();
   const { name, members } = useHouseholdState();
   const me = members.find((member) => member.you);
@@ -32,7 +35,7 @@ export default function TransferOwnershipScreen() {
         <TopBar title="Transférer la propriété" fallback="/household" />
         <View style={[kitStyles.content, styles.content]}>
           <View style={[kitStyles.card, styles.blocked]}>
-            <Icon name="info" size={28} color={Tint.primary} />
+            <Icon name="info" size={28} color={c.link} />
             <Text style={kitStyles.title}>Transfert indisponible</Text>
             <Text style={[kitStyles.muted, styles.center]}>
               {me?.role !== 'owner'
@@ -59,7 +62,7 @@ export default function TransferOwnershipScreen() {
               <Text style={styles.swapName}>Vous</Text>
               <Text style={styles.swapRole}>Propriétaire → Admin</Text>
             </View>
-            <Icon name="arrow_forward" size={26} color={Serene.onSurfaceVariant} />
+            <Icon name="arrow_forward" size={26} color={c.muted} />
             <View style={styles.swapPerson}>
               <Avatar name={chosen.name} color={chosen.color} size={56} />
               <Text style={styles.swapName}>{firstName(chosen.name)}</Text>
@@ -109,8 +112,8 @@ export default function TransferOwnershipScreen() {
             onBlur={() => setFocused(false)}
             autoCorrect={false}
             placeholder={name}
-            placeholderTextColor={Serene.onSurfaceVariant}
-            selectionColor={Tint.primary}
+            placeholderTextColor={c.muted}
+            selectionColor={c.link}
             accessibilityLabel={`Saisissez ${name} pour confirmer`}
           />
           <Text style={[styles.hint, matches && styles.hintOk]}>
@@ -136,110 +139,120 @@ export default function TransferOwnershipScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-  },
-  center: {
-    textAlign: 'center',
-  },
-  content: {
-    paddingTop: 4,
-    paddingBottom: 24,
-  },
-  blocked: {
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 24,
-  },
-  swap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 14,
-    paddingVertical: 12,
-  },
-  swapPerson: {
-    width: 128,
-    alignItems: 'center',
-    gap: 4,
-  },
-  swapName: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 17,
-    lineHeight: 23,
-    color: Tint.navy,
-  },
-  swapRole: {
-    fontFamily: FontFamily.body,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurfaceVariant,
-    textAlign: 'center',
-  },
-  label: {
-    marginTop: 20,
-    marginBottom: 8,
-  },
-  stack: {
-    gap: 10,
-  },
-  warning: {
-    marginTop: 18,
-    gap: 8,
-    backgroundColor: '#fffbeb',
-    borderColor: '#fde68a',
-  },
-  warningHead: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  warningTitle: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 16,
-    lineHeight: 22,
-    color: '#92400e',
-  },
-  warningLine: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-  },
-  bullet: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginTop: 8,
-    backgroundColor: '#b45309',
-  },
-  warningText: {
-    flex: 1,
-    fontFamily: FontFamily.body,
-    fontSize: 14,
-    lineHeight: 20,
-    color: Tint.navy,
-  },
-  hint: {
-    marginTop: 6,
-    fontFamily: FontFamily.body,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurfaceVariant,
-  },
-  hintOk: {
-    fontFamily: FontFamily.bodySemiBold,
-    color: Tint.primary,
-  },
-  footer: {
-    width: '100%',
-    maxWidth: 560,
-    alignSelf: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Tint.border,
-    backgroundColor: Tint.softer,
-  },
-});
+function makeStyles(c: AppColors) {
+  return StyleSheet.create({
+    flex: {
+      flex: 1,
+    },
+    center: {
+      textAlign: 'center',
+    },
+    content: {
+      paddingTop: 4,
+      paddingBottom: 24,
+    },
+    blocked: {
+      alignItems: 'center',
+      gap: 8,
+      paddingVertical: 24,
+    },
+    swap: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 14,
+      paddingVertical: 12,
+    },
+    swapPerson: {
+      width: 128,
+      alignItems: 'center',
+      gap: 4,
+    },
+    swapName: {
+      fontFamily: FontFamily.headingBold,
+      fontSize: 17,
+      lineHeight: 23,
+      color: c.text,
+    },
+    swapRole: {
+      fontFamily: FontFamily.body,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.muted,
+      textAlign: 'center',
+    },
+    label: {
+      marginTop: 20,
+      marginBottom: 8,
+    },
+    stack: {
+      gap: 10,
+    },
+    warning: {
+      marginTop: 18,
+      gap: 8,
+      backgroundColor: c.tintAmber,
+      borderColor: c.dark ? '#5A4A1E' : '#fde68a',
+    },
+    warningHead: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    warningTitle: {
+      fontFamily: FontFamily.headingBold,
+      fontSize: 16,
+      lineHeight: 22,
+      color: c.amberText,
+    },
+    warningLine: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 8,
+    },
+    bullet: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+      marginTop: 8,
+      backgroundColor: '#b45309',
+    },
+    warningText: {
+      flex: 1,
+      fontFamily: FontFamily.body,
+      fontSize: 14,
+      lineHeight: 20,
+      color: c.text,
+    },
+    hint: {
+      marginTop: 6,
+      fontFamily: FontFamily.body,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.muted,
+    },
+    hintOk: {
+      fontFamily: FontFamily.bodySemiBold,
+      color: c.link,
+    },
+    footer: {
+      width: '100%',
+      maxWidth: 560,
+      alignSelf: 'center',
+      paddingHorizontal: 20,
+      paddingTop: 10,
+      paddingBottom: 12,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: c.border,
+      backgroundColor: c.page,
+    },
+  });
+}
+
+const STYLES = { light: makeStyles(LIGHT), dark: makeStyles(DARK) };
+
+/** Couleurs et styles du mode actuel (sombre seulement dans un module converti). */
+function useLook() {
+  const c = useScopedColors();
+  return { c, styles: c.dark ? STYLES.dark : STYLES.light };
+}

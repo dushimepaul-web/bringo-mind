@@ -6,8 +6,9 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icon';
-import { BottomSheet, PrimaryButton, SecondaryButton, Tag, TopBar, kitStyles } from '@/components/ui/kit';
-import { FontFamily, Serene, Tint } from '@/constants/design';
+import { BottomSheet, PrimaryButton, SecondaryButton, Tag, TopBar, useKitStyles } from '@/components/ui/kit';
+import { DARK, LIGHT, useScopedColors, type AppColors } from '@/constants/app-colors';
+import { FontFamily } from '@/constants/design';
 import { DEMO_TODAY, addDays, formatLongDay } from '@/lib/demo-dates';
 
 import { Avatar } from '../components/household-ui';
@@ -25,6 +26,8 @@ const PRIVATE = [
 ];
 
 export default function AcceptInvitationScreen() {
+  const { c, styles } = useLook();
+  const kitStyles = useKitStyles();
   const [decline, setDecline] = useState(false);
   const host = DEMO_MEMBERS.find((member) => member.id === 'thomas') ?? DEMO_MEMBERS[0];
   const expires = addDays(DEMO_TODAY, 6);
@@ -58,7 +61,7 @@ export default function AcceptInvitationScreen() {
         <View style={[kitStyles.card, styles.list]}>
           {SHARED.map((item) => (
             <View key={item.text} style={styles.line}>
-              <Icon name={item.icon} size={20} color={Tint.primary} />
+              <Icon name={item.icon} size={20} color={c.link} />
               <Text style={styles.lineText}>{item.text}</Text>
             </View>
           ))}
@@ -68,7 +71,7 @@ export default function AcceptInvitationScreen() {
         <View style={[kitStyles.card, styles.list]}>
           {PRIVATE.map((item) => (
             <View key={item.text} style={styles.line}>
-              <Icon name={item.icon} size={20} color={Serene.onSurfaceVariant} />
+              <Icon name={item.icon} size={20} color={c.muted} />
               <Text style={styles.lineText}>{item.text}</Text>
             </View>
           ))}
@@ -108,89 +111,99 @@ export default function AcceptInvitationScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  content: {
-    paddingTop: 4,
-    paddingBottom: 24,
-  },
-  hero: {
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 24,
-  },
-  from: {
-    marginTop: 6,
-    fontFamily: FontFamily.body,
-    fontSize: 15,
-    lineHeight: 21,
-    color: Serene.onSurfaceVariant,
-    textAlign: 'center',
-  },
-  household: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 26,
-    lineHeight: 32,
-    letterSpacing: -0.4,
-    color: Tint.navy,
-    textAlign: 'center',
-  },
-  tags: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  faces: {
-    flexDirection: 'row',
-    gap: 16,
-    marginTop: 8,
-  },
-  face: {
-    alignItems: 'center',
-    gap: 4,
-  },
-  faceName: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Tint.navy,
-  },
-  expiry: {
-    marginTop: 6,
-    fontFamily: FontFamily.body,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurfaceVariant,
-  },
-  label: {
-    marginTop: 20,
-    marginBottom: 8,
-  },
-  list: {
-    gap: 12,
-  },
-  line: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  lineText: {
-    flex: 1,
-    fontFamily: FontFamily.body,
-    fontSize: 15,
-    lineHeight: 21,
-    color: Tint.navy,
-  },
-  footer: {
-    width: '100%',
-    maxWidth: 560,
-    alignSelf: 'center',
-    gap: 8,
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Tint.border,
-    backgroundColor: Tint.softer,
-  },
-});
+function makeStyles(c: AppColors) {
+  return StyleSheet.create({
+    content: {
+      paddingTop: 4,
+      paddingBottom: 24,
+    },
+    hero: {
+      alignItems: 'center',
+      gap: 8,
+      paddingVertical: 24,
+    },
+    from: {
+      marginTop: 6,
+      fontFamily: FontFamily.body,
+      fontSize: 15,
+      lineHeight: 21,
+      color: c.muted,
+      textAlign: 'center',
+    },
+    household: {
+      fontFamily: FontFamily.headingBold,
+      fontSize: 26,
+      lineHeight: 32,
+      letterSpacing: -0.4,
+      color: c.text,
+      textAlign: 'center',
+    },
+    tags: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'center',
+      gap: 8,
+    },
+    faces: {
+      flexDirection: 'row',
+      gap: 16,
+      marginTop: 8,
+    },
+    face: {
+      alignItems: 'center',
+      gap: 4,
+    },
+    faceName: {
+      fontFamily: FontFamily.bodyMedium,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.text,
+    },
+    expiry: {
+      marginTop: 6,
+      fontFamily: FontFamily.body,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.muted,
+    },
+    label: {
+      marginTop: 20,
+      marginBottom: 8,
+    },
+    list: {
+      gap: 12,
+    },
+    line: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    lineText: {
+      flex: 1,
+      fontFamily: FontFamily.body,
+      fontSize: 15,
+      lineHeight: 21,
+      color: c.text,
+    },
+    footer: {
+      width: '100%',
+      maxWidth: 560,
+      alignSelf: 'center',
+      gap: 8,
+      paddingHorizontal: 20,
+      paddingTop: 10,
+      paddingBottom: 12,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: c.border,
+      backgroundColor: c.page,
+    },
+  });
+}
+
+const STYLES = { light: makeStyles(LIGHT), dark: makeStyles(DARK) };
+
+/** Couleurs et styles du mode actuel (sombre seulement dans un module converti). */
+function useLook() {
+  const c = useScopedColors();
+  return { c, styles: c.dark ? STYLES.dark : STYLES.light };
+}

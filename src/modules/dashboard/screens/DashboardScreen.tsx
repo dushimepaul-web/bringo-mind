@@ -87,7 +87,7 @@ function HomeHeader() {
             <Text style={styles.bellBadgeText}>3</Text>
           </View>
         </Pressable>
-        <Pressable style={styles.account} accessibilityRole="button" accessibilityLabel="Mon compte" onPress={go('/profile')}>
+        <Pressable style={styles.account} accessibilityRole="button" accessibilityLabel="Mes informations personnelles" onPress={go('/profile/complete')}>
           <OutlineRing size={46} stroke={4}>
             <View style={styles.avatar}>
               <Text style={styles.avatarText}>CM</Text>
@@ -261,7 +261,7 @@ const SHORTCUTS: Shortcut[][] = [
   [
     { label: 'Notes', icon: 'description', color: '#2F7BE0', bg: 'tintBlue', href: '/notes' },
     { label: 'Documents', icon: 'folder', color: BRAND.emerald, bg: 'tintGreen', href: '/documents' },
-    { label: 'Foyer', icon: 'home', color: '#2F7BE0', bg: 'tintBlue', href: '/household' },
+    { label: 'Scanner', icon: 'document_scanner', color: '#2F7BE0', bg: 'tintBlue', href: '/documents?scan=1' },
   ],
 ];
 
@@ -310,16 +310,15 @@ function TodayCard() {
     <View style={styles.cardWrap}>
       <View style={styles.cardAccent} />
       <View style={styles.card}>
-        <Pressable style={styles.todayHead} accessibilityRole={pressRole} onPress={go('/calendar/agenda')}>
+        <View style={styles.todayHead}>
           <View style={styles.todayHeadLeft}>
             <Icon name="calendar_month" size={24} color={c.text} filled />
             <Text style={styles.cardTitle}>Aujourd’hui</Text>
           </View>
           <View style={styles.todayHeadRight}>
             <Text style={styles.todayDate}>Mardi 14 mai 2024</Text>
-            <Icon name="chevron_right" size={22} color={c.text} />
           </View>
-        </Pressable>
+        </View>
 
         <View style={styles.todayBody}>
           <View style={styles.todayList}>

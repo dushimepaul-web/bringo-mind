@@ -1,5 +1,7 @@
 // Couleurs des écrans au style de la maquette validée, en clair et en sombre.
 // Tirées du logo officiel, sans dégradé. Utiliser via useAppColors().
+import { createContext, useContext } from 'react';
+
 import { useIsDark } from '@/lib/theme';
 
 const NAVY = '#0C1A37';
@@ -125,4 +127,23 @@ export const DARK: AppColors = {
 /** Couleurs du mode actuel (clair ou sombre). */
 export function useAppColors(): AppColors {
   return useIsDark() ? DARK : LIGHT;
+}
+
+/**
+ * Portée du mode sombre pour les éléments partagés (en-tête, boutons, puces, fenêtres…).
+ * Un module déjà converti entoure ses écrans de <DarkModeScope value> ; ailleurs ils restent clairs.
+ */
+const DarkScope = createContext(false);
+export const DarkModeScope = DarkScope.Provider;
+
+/** true dans un module déjà converti au mode sombre. */
+export function useDarkModeSupported(): boolean {
+  return useContext(DarkScope);
+}
+
+/** Couleurs des éléments partagés : sombres seulement dans un module converti. */
+export function useScopedColors(): AppColors {
+  const supported = useContext(DarkScope);
+  const dark = useIsDark();
+  return supported && dark ? DARK : LIGHT;
 }

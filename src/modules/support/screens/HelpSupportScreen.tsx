@@ -1,158 +1,205 @@
 // S-32 - Aide et support | Module M16 Support | Phase S12
-// Recherche et catégories pour trouver seul ; formulaire prérempli et confirmé pour écrire à l'équipe.
+// Comme l'app « Aide » du téléphone : recherche, thèmes en tuiles, questions fréquentes avec avis 👍 / 👎,
+// puis « Discuter avec Kora » ou « Écrire à l'équipe » (formulaire dans une feuille, envoi confirmé).
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icon';
-import { BottomSheet, Chip, PrimaryButton, SecondaryButton, TopBar, kitStyles } from '@/components/ui/kit';
-import { SettingsRow, SettingsSection, ToggleSwitch } from '@/components/ui/settings';
-import { FontFamily, Radius, Serene, Tint } from '@/constants/design';
+import { TURQUOISE } from '@/components/rings';
+import { BottomSheet, PrimaryButton, SecondaryButton, TopBar, UndoToast, useKitStyles } from '@/components/ui/kit';
+import { ToggleSwitch } from '@/components/ui/settings';
+import { DARK, LIGHT, useScopedColors, type AppColors } from '@/constants/app-colors';
+import { FontFamily, Radius } from '@/constants/design';
 
-type Category = 'all' | 'account' | 'household' | 'documents' | 'kora' | 'billing';
+type Topic = 'account' | 'household' | 'documents' | 'kora' | 'reminders' | 'privacy';
+type Href = '/household/invite' | '/profile/privacy' | '/integrations' | '/billing' | '/profile/biometric' | '/notifications/settings';
 
-const CATEGORIES: { key: Category; label: string; icon: string }[] = [
-  { key: 'all', label: 'Tout', icon: 'apps' },
-  { key: 'account', label: 'Compte', icon: 'person' },
-  { key: 'household', label: 'Foyer', icon: 'family_restroom' },
-  { key: 'documents', label: 'Documents', icon: 'folder' },
-  { key: 'kora', label: 'Kora', icon: 'auto_awesome' },
-  { key: 'billing', label: 'Abonnement', icon: 'workspace_premium' },
+const TOPICS: { key: Topic; label: string; icon: string; tint: string }[] = [
+  { key: 'account', label: 'Compte', icon: 'person', tint: '#2F7BE0' },
+  { key: 'household', label: 'Foyer', icon: 'family_restroom', tint: '#8B5CF6' },
+  { key: 'documents', label: 'Documents', icon: 'folder', tint: '#E08A00' },
+  { key: 'kora', label: 'Kora', icon: 'auto_awesome', tint: '#0FB5A3' },
+  { key: 'reminders', label: 'Rappels', icon: 'alarm', tint: '#E5484D' },
+  { key: 'privacy', label: 'Vie privée', icon: 'shield', tint: '#16A34A' },
 ];
 
-const FAQ: { id: string; category: Exclude<Category, 'all'>; question: string; answer: string; link?: { label: string; href: '/household/invite' | '/profile/privacy' | '/integrations' | '/billing' | '/profile/biometric' } }[] = [
+const TOPIC_OF = Object.fromEntries(TOPICS.map((topic) => [topic.key, topic])) as Record<Topic, (typeof TOPICS)[number]>;
+
+const FAQ: { id: string; topic: Topic; question: string; answer: string; link?: { label: string; href: Href } }[] = [
   {
     id: 'q1',
-    category: 'household',
+    topic: 'household',
     question: 'Les membres du foyer voient-ils mes éléments personnels ?',
     answer: 'Non. Ils voient seulement ce que vous partagez avec le foyer. Tout le reste reste privé, même pour le propriétaire.',
   },
   {
     id: 'q2',
-    category: 'household',
+    topic: 'household',
     question: 'Comment ajouter un membre au foyer ?',
     answer: 'Depuis le Foyer, touchez « Inviter ». La personne reçoit un lien valable 7 jours, que vous pouvez annuler à tout moment.',
     link: { label: 'Inviter un membre', href: '/household/invite' },
   },
   {
     id: 'q3',
-    category: 'kora',
+    topic: 'kora',
     question: 'Kora peut-elle créer des éléments sans mon accord ?',
     answer: 'Non. Kora propose ; c’est vous qui validez chaque tâche, rappel ou événement dans son formulaire.',
   },
   {
     id: 'q4',
-    category: 'documents',
+    topic: 'documents',
     question: 'Comment Kora lit-elle mes documents ?',
     answer: 'Kora repère les dates et les montants pour vous les proposer. Vous pouvez tout corriger, ou désactiver cette analyse.',
     link: { label: 'Gérer mes consentements', href: '/profile/privacy' },
   },
   {
+    id: 'q9',
+    topic: 'reminders',
+    question: 'Pourquoi un rappel n’a-t-il pas sonné ?',
+    answer: 'Il tombait peut-être pendant vos heures de silence, ou les notifications de ce type sont coupées. Vérifiez vos réglages.',
+    link: { label: 'Réglages des notifications', href: '/notifications/settings' },
+  },
+  {
     id: 'q5',
-    category: 'account',
+    topic: 'account',
     question: 'Puis-je utiliser Bringo Mind sans connecter ma messagerie ?',
     answer: 'Oui. Les connexions externes sont optionnelles : tout fonctionne aussi en saisissant vos éléments vous-même.',
     link: { label: 'Voir les connexions', href: '/integrations' },
   },
   {
     id: 'q6',
-    category: 'account',
+    topic: 'privacy',
     question: 'Comment exporter toutes mes données ?',
     answer: 'Dans Confidentialité et données, touchez « Exporter mes données » et choisissez ce que vous voulez récupérer.',
     link: { label: 'Exporter mes données', href: '/profile/privacy' },
   },
   {
     id: 'q7',
-    category: 'account',
+    topic: 'account',
     question: 'Comment activer Face ID ?',
     answer: 'Dans Mon profil, ouvrez « Déverrouillage biométrique » et activez Face ID. Vous pouvez aussi choisir quand l’app se verrouille.',
     link: { label: 'Déverrouillage biométrique', href: '/profile/biometric' },
   },
   {
     id: 'q8',
-    category: 'billing',
+    topic: 'account',
     question: 'Que se passe-t-il si je résilie Premium ?',
     answer: 'Vous gardez Premium jusqu’à la fin de la période payée. Vos données sont conservées, puis vous passez à l’offre Gratuite.',
     link: { label: 'Voir mon abonnement', href: '/billing' },
   },
 ];
 
-const TOPICS = ['Question', 'Problème', 'Suggestion'];
+const SUBJECTS = ['Question', 'Problème', 'Suggestion'];
+const SHOWN = 5;
 
 export default function HelpSupportScreen() {
+  const { c, styles } = useLook();
+  const kitStyles = useKitStyles();
   const [query, setQuery] = useState('');
-  const [category, setCategory] = useState<Category>('all');
-  const [open, setOpen] = useState<string | null>('q1');
-  const [focus, setFocus] = useState<'search' | 'message' | null>(null);
-  const [topic, setTopic] = useState('Question');
-  const [message, setMessage] = useState('Bonjour, comment partager seulement certains documents avec Thomas, sans partager tout le dossier Logement ?');
+  const [topic, setTopic] = useState<Topic | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
+  const [all, setAll] = useState(false);
+  const [votes, setVotes] = useState<Record<string, 'up' | 'down'>>({});
+  const [sheet, setSheet] = useState<'write' | 'confirm' | null>(null);
+  const [subject, setSubject] = useState('Question');
+  const [message, setMessage] = useState('');
   const [deviceInfo, setDeviceInfo] = useState(true);
-  const [confirm, setConfirm] = useState(false);
-  const [sent, setSent] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
 
   const term = query.trim().toLowerCase();
   const results = FAQ.filter(
-    (item) =>
-      (category === 'all' || item.category === category) &&
-      (!term || item.question.toLowerCase().includes(term) || item.answer.toLowerCase().includes(term)),
+    (item) => (!topic || item.topic === topic) && (!term || item.question.toLowerCase().includes(term) || item.answer.toLowerCase().includes(term)),
   );
+  const filtered = !!topic || !!term;
+  const visible = all || filtered ? results : results.slice(0, SHOWN);
 
   return (
     <SafeAreaView style={kitStyles.safe} edges={['top']}>
-      <TopBar title="Aide et support" fallback="/profile" />
+      <TopBar title="Aide" fallback="/profile" />
       <ScrollView contentContainerStyle={[kitStyles.content, styles.content]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-        <Text style={styles.title}>Comment pouvons-nous vous aider ?</Text>
-        <View style={[styles.search, focus === 'search' && kitStyles.inputFocused]}>
-          <Icon name="search" size={20} color={focus === 'search' ? Tint.primary : Serene.onSurfaceVariant} />
+        <View style={styles.search}>
+          <Icon name="search" size={22} color={c.muted} />
           <TextInput
             style={styles.searchInput}
             value={query}
             onChangeText={setQuery}
-            onFocus={() => setFocus('search')}
-            onBlur={() => setFocus(null)}
-            placeholder="Rechercher : foyer, export, Face ID…"
-            placeholderTextColor={Serene.onSurfaceVariant}
-            selectionColor={Tint.primary}
+            placeholder="Rechercher dans l’aide"
+            placeholderTextColor={c.muted}
+            selectionColor={c.link}
             accessibilityLabel="Rechercher dans l’aide"
           />
           {query ? (
             <Pressable hitSlop={10} accessibilityRole="button" accessibilityLabel="Effacer" onPress={() => setQuery('')}>
-              <Icon name="cancel" size={20} color={Serene.onSurfaceVariant} filled />
+              <Icon name="cancel" size={20} color={c.muted} filled />
             </Pressable>
           ) : null}
         </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips} style={styles.chipsScroll}>
-          {CATEGORIES.map((entry) => (
-            <Chip key={entry.key} label={entry.label} icon={entry.icon} selected={category === entry.key} onPress={() => setCategory(entry.key)} />
-          ))}
-        </ScrollView>
-
         <View style={styles.status}>
           <View style={styles.statusDot} />
-          <Text style={styles.statusText}>Tous les services fonctionnent normalement</Text>
+          <Text style={styles.statusText}>Services OK</Text>
         </View>
 
-        <Text style={styles.sectionTitle}>Questions fréquentes</Text>
-        {results.length === 0 ? (
-          <View style={[kitStyles.card, styles.empty]}>
-            <Icon name="search_off" size={28} color={Tint.primary} />
-            <Text style={kitStyles.title}>Aucune réponse trouvée</Text>
-            <Text style={[kitStyles.muted, styles.center]}>Écrivez-nous ci-dessous : nous répondons sous 24 h.</Text>
+        {/* Thèmes */}
+        <Text style={styles.section}>Thèmes</Text>
+        <View style={styles.grid}>
+          {TOPICS.map((entry) => {
+            const on = topic === entry.key;
+            return (
+              <Pressable
+                key={entry.key}
+                style={({ pressed }) => [styles.tile, on && styles.tileOn, pressed && styles.pressed]}
+                accessibilityRole="button"
+                accessibilityState={{ selected: on }}
+                onPress={() => {
+                  setTopic(on ? null : entry.key);
+                  setOpen(null);
+                }}>
+                <View style={[styles.tileIcon, { backgroundColor: entry.tint }]}>
+                  <Icon name={entry.icon} size={20} color="#FFFFFF" filled />
+                </View>
+                <Text style={styles.tileText} numberOfLines={1}>
+                  {entry.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {/* Questions fréquentes */}
+        <View style={styles.sectionRow}>
+          <Text style={styles.sectionInline}>{topic ? TOPIC_OF[topic].label : 'Questions fréquentes'}</Text>
+          {!filtered && results.length > SHOWN ? (
+            <Pressable hitSlop={8} accessibilityRole="button" onPress={() => setAll((value) => !value)}>
+              <Text style={styles.link}>{all ? 'Réduire' : `Voir toutes (${results.length})`}</Text>
+            </Pressable>
+          ) : null}
+        </View>
+        {visible.length === 0 ? (
+          <View style={[styles.card, styles.empty]}>
+            <Icon name="search_off" size={28} color={c.link} />
+            <Text style={styles.emptyTitle}>Aucune réponse trouvée</Text>
+            <Text style={styles.muted}>Écrivez-nous : nous répondons sous 24 h.</Text>
           </View>
         ) : (
-          <View style={[kitStyles.card, styles.faq]}>
-            {results.map((item, index) => {
+          <View style={styles.card}>
+            {visible.map((item, index) => {
               const expanded = open === item.id;
+              const meta = TOPIC_OF[item.topic];
               return (
-                <View key={item.id} style={[styles.faqItem, index > 0 && styles.faqBorder]}>
+                <Fragment key={item.id}>
+                  {index > 0 ? <View style={styles.divider} /> : null}
                   <Pressable
                     style={({ pressed }) => [styles.faqHead, pressed && styles.pressed]}
                     accessibilityRole="button"
                     accessibilityState={{ expanded }}
                     onPress={() => setOpen(expanded ? null : item.id)}>
+                    <View style={[styles.faqIcon, { backgroundColor: meta.tint }]}>
+                      <Icon name={meta.icon} size={16} color="#FFFFFF" filled />
+                    </View>
                     <Text style={styles.question}>{item.question}</Text>
-                    <Icon name={expanded ? 'expand_less' : 'expand_more'} size={22} color={Serene.onSurfaceVariant} />
+                    <Icon name={expanded ? 'expand_more' : 'chevron_right'} size={22} color={c.muted} />
                   </Pressable>
                   {expanded ? (
                     <View style={styles.answerBox}>
@@ -162,270 +209,419 @@ export default function HelpSupportScreen() {
                           <Text style={styles.link}>{item.link.label} →</Text>
                         </Pressable>
                       ) : null}
+                      <View style={styles.vote}>
+                        <Text style={styles.voteText}>{votes[item.id] ? 'Merci pour votre avis !' : 'Cette réponse vous a aidé ?'}</Text>
+                        {(['up', 'down'] as const).map((value) => {
+                          const on = votes[item.id] === value;
+                          return (
+                            <Pressable
+                              key={value}
+                              hitSlop={6}
+                              style={[styles.voteButton, on && styles.voteButtonOn]}
+                              accessibilityRole="button"
+                              accessibilityLabel={value === 'up' ? 'Oui, utile' : 'Non, pas utile'}
+                              accessibilityState={{ selected: on }}
+                              onPress={() => setVotes((current) => ({ ...current, [item.id]: value }))}>
+                              <Icon name={value === 'up' ? 'thumb_up' : 'thumb_down'} size={18} color={on ? '#0C1A37' : c.muted} filled={on} />
+                            </Pressable>
+                          );
+                        })}
+                      </View>
                     </View>
                   ) : null}
-                </View>
+                </Fragment>
               );
             })}
           </View>
         )}
 
-        {/* Écrire à l'équipe */}
-        <Text style={styles.sectionTitle}>Écrire à l’équipe</Text>
-        {sent ? (
-          <View style={[kitStyles.card, styles.sent]}>
-            <View style={styles.sentIcon}>
-              <Icon name="mark_email_read" size={28} color={Serene.onPrimary} />
-            </View>
-            <Text style={kitStyles.title}>Message envoyé</Text>
-            <Text style={[kitStyles.muted, styles.center]}>
-              Demande n° BM-2405-1182. Nous répondons sous 24 h à claire.martin@email.fr.
-            </Text>
-            <SecondaryButton label="Écrire un autre message" onPress={() => setSent(false)} />
-          </View>
-        ) : (
-          <View style={[kitStyles.card, styles.form]}>
-            <Text style={styles.fieldLabel}>Sujet</Text>
-            <View style={styles.topics}>
-              {TOPICS.map((entry) => (
-                <Chip key={entry} label={entry} selected={topic === entry} onPress={() => setTopic(entry)} />
-              ))}
-            </View>
-            <Text style={styles.fieldLabel}>Message</Text>
-            <TextInput
-              style={[kitStyles.input, styles.message, focus === 'message' && kitStyles.inputFocused]}
-              value={message}
-              onChangeText={setMessage}
-              onFocus={() => setFocus('message')}
-              onBlur={() => setFocus(null)}
-              multiline
-              textAlignVertical="top"
-              selectionColor={Tint.primary}
-              accessibilityLabel="Votre message"
-            />
-            <View style={styles.deviceRow}>
-              <View style={styles.flex}>
-                <Text style={styles.deviceTitle}>Joindre les infos de l’appareil</Text>
-                <Text style={styles.deviceHint}>iPhone 15 • iOS 18 • Bringo Mind 1.0.0 (aucune donnée personnelle)</Text>
-              </View>
-              <ToggleSwitch value={deviceInfo} label="Joindre les informations de l’appareil" onValueChange={setDeviceInfo} />
-            </View>
-            <PrimaryButton
-              label="Envoyer le message"
-              icon="send"
-              disabled={message.trim().length < 10}
-              onPress={() => setConfirm(true)}
-            />
-          </View>
-        )}
+        {/* Nous contacter */}
+        <Text style={styles.section}>Nous contacter</Text>
+        <View style={styles.card}>
+          <Row icon="forum" tint="#0C1A37" title="Discuter avec Kora" subtitle="Réponse immédiate, à toute heure" onPress={() => router.push('/assistant')} />
+          <View style={styles.divider} />
+          <Row icon="mail" tint="#2F7BE0" title="Écrire à l’équipe" subtitle="Réponse sous 24 h par e-mail" onPress={() => setSheet('write')} />
+        </View>
 
-        <SettingsSection title="Autres ressources" icon="menu_book">
-          <SettingsRow first icon="school" title="Guide de démarrage" subtitle="Les bases en 5 minutes" onPress={() => router.push('/onboarding')} />
-          <SettingsRow icon="shield" title="Confidentialité et données" subtitle="Consentements, export, suppression" onPress={() => router.push('/profile/privacy')} />
-        </SettingsSection>
+        {/* Autres ressources */}
+        <Text style={styles.section}>Autres ressources</Text>
+        <View style={styles.card}>
+          <Row icon="school" tint="#E08A00" title="Guide de démarrage" subtitle="Les bases en 5 minutes" onPress={() => router.push('/onboarding')} />
+          <View style={styles.divider} />
+          <Row icon="shield" tint="#16A34A" title="Confidentialité et données" subtitle="Consentements, export, suppression" onPress={() => router.push('/profile/privacy')} />
+        </View>
 
         <Text style={styles.version}>Bringo Mind 1.0.0 • version de démonstration</Text>
       </ScrollView>
 
+      {/* Écrire à l'équipe */}
+      <BottomSheet visible={sheet === 'write'} title="Écrire à l’équipe" subtitle="Réponse sous 24 h à claire.martin@email.fr." onClose={() => setSheet(null)}>
+        <View style={styles.segments} accessibilityRole="radiogroup">
+          {SUBJECTS.map((entry) => {
+            const on = subject === entry;
+            return (
+              <Pressable
+                key={entry}
+                style={[styles.segment, on && styles.segmentOn]}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: on }}
+                onPress={() => setSubject(entry)}>
+                <Text style={[styles.segmentText, on && styles.segmentTextOn]}>{entry}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        <TextInput
+          style={styles.message}
+          value={message}
+          onChangeText={setMessage}
+          placeholder="Décrivez votre question…"
+          placeholderTextColor={c.muted}
+          multiline
+          textAlignVertical="top"
+          selectionColor={c.link}
+          accessibilityLabel="Votre message"
+        />
+        <View style={styles.deviceRow}>
+          <View style={styles.flex}>
+            <Text style={styles.deviceTitle}>Joindre les infos de l’appareil</Text>
+            <Text style={styles.muted}>iPhone 15 • iOS 18 • Bringo Mind 1.0.0</Text>
+          </View>
+          <ToggleSwitch value={deviceInfo} label="Joindre les informations de l’appareil" onValueChange={setDeviceInfo} />
+        </View>
+        {message.trim() ? <PrimaryButton label="Envoyer" icon="send" onPress={() => setSheet('confirm')} /> : null}
+      </BottomSheet>
+
       <BottomSheet
-        visible={confirm}
+        visible={sheet === 'confirm'}
         title="Envoyer votre message ?"
-        subtitle={`Sujet : ${topic}. Réponse sous 24 h à claire.martin@email.fr.`}
-        onClose={() => setConfirm(false)}>
+        subtitle={`Sujet : ${subject}. Réponse sous 24 h à claire.martin@email.fr.`}
+        onClose={() => setSheet('write')}>
         <PrimaryButton
           label="Oui, envoyer"
           icon="send"
           onPress={() => {
-            setConfirm(false);
-            setSent(true);
+            setSheet(null);
+            setMessage('');
+            setToast('Message envoyé • demande n° BM-2405-1182');
           }}
         />
-        <SecondaryButton label="Revenir au message" onPress={() => setConfirm(false)} />
+        <SecondaryButton label="Revenir au message" onPress={() => setSheet('write')} />
       </BottomSheet>
+
+      {toast ? <UndoToast key={toast} text={toast} onHide={() => setToast(null)} bottom={24} /> : null}
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-  },
-  center: {
-    textAlign: 'center',
-  },
-  pressed: {
-    opacity: 0.8,
-  },
-  content: {
-    paddingTop: 4,
-    paddingBottom: 40,
-  },
-  title: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 24,
-    lineHeight: 30,
-    letterSpacing: -0.3,
-    color: Tint.navy,
-  },
-  search: {
-    marginTop: 14,
-    height: 50,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: Tint.border,
-    backgroundColor: Serene.surfaceContainerLowest,
-  },
-  searchInput: {
-    flex: 1,
-    minWidth: 0,
-    outlineWidth: 0,
-    outlineStyle: 'solid',
-    fontFamily: FontFamily.body,
-    fontSize: 16,
-    color: Tint.navy,
-    paddingVertical: 0,
-  },
-  chipsScroll: {
-    marginTop: 10,
-  },
-  chips: {
-    gap: 8,
-  },
-  status: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 14,
-    padding: 12,
-    borderRadius: 14,
-    backgroundColor: '#f0fdf4',
-    borderWidth: 1,
-    borderColor: '#bbf7d0',
-  },
-  statusDot: {
-    width: 10,
-    height: 10,
-    borderRadius: Radius.full,
-    backgroundColor: '#16a34a',
-  },
-  statusText: {
-    flex: 1,
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 14,
-    lineHeight: 19,
-    color: '#166534',
-  },
-  sectionTitle: {
-    marginTop: 24,
-    marginBottom: 10,
-    fontFamily: FontFamily.headingBold,
-    fontSize: 20,
-    lineHeight: 26,
-    letterSpacing: -0.3,
-    color: Tint.navy,
-  },
-  empty: {
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 24,
-  },
-  faq: {
-    paddingVertical: 4,
-    paddingHorizontal: 0,
-  },
-  faqItem: {
-    paddingHorizontal: 14,
-  },
-  faqBorder: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Tint.border,
-  },
-  faqHead: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 14,
-  },
-  question: {
-    flex: 1,
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 15,
-    lineHeight: 21,
-    color: Tint.navy,
-  },
-  answerBox: {
-    gap: 8,
-    paddingBottom: 14,
-  },
-  answer: {
-    fontFamily: FontFamily.body,
-    fontSize: 14,
-    lineHeight: 21,
-    color: Tint.navy,
-  },
-  link: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 14,
-    lineHeight: 19,
-    color: Tint.primary,
-  },
-  form: {
-    gap: 10,
-  },
-  fieldLabel: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 14,
-    lineHeight: 19,
-    color: Tint.navy,
-  },
-  topics: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  message: {
-    minHeight: 110,
-  },
-  deviceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  deviceTitle: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 14,
-    lineHeight: 19,
-    color: Tint.navy,
-  },
-  deviceHint: {
-    fontFamily: FontFamily.body,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurfaceVariant,
-  },
-  sent: {
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 22,
-  },
-  sentIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 18,
-    backgroundColor: Tint.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  version: {
-    marginTop: 20,
-    textAlign: 'center',
-    fontFamily: FontFamily.body,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurfaceVariant,
-  },
-});
+function Row({ icon, tint, title, subtitle, onPress }: { icon: string; tint: string; title: string; subtitle: string; onPress: () => void }) {
+  const { c, styles } = useLook();
+  return (
+    <Pressable style={({ pressed }) => [styles.row, pressed && styles.pressed]} accessibilityRole="button" onPress={onPress}>
+      <View style={[styles.rowIcon, { backgroundColor: tint }, tint === '#0C1A37' && c.dark && styles.rowIconDark]}>
+        <Icon name={icon} size={20} color="#FFFFFF" filled />
+      </View>
+      <View style={styles.flex}>
+        <Text style={styles.rowTitle}>{title}</Text>
+        <Text style={styles.muted}>{subtitle}</Text>
+      </View>
+      <Icon name="chevron_right" size={22} color={c.muted} />
+    </Pressable>
+  );
+}
+
+function makeStyles(c: AppColors) {
+  return StyleSheet.create({
+    flex: {
+      flex: 1,
+      minWidth: 0,
+    },
+    pressed: {
+      opacity: 0.75,
+    },
+    content: {
+      paddingTop: 4,
+      paddingBottom: 40,
+    },
+    search: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      height: 54,
+      paddingHorizontal: 16,
+      borderRadius: Radius.full,
+      backgroundColor: c.card,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    searchInput: {
+      flex: 1,
+      height: '100%',
+      fontFamily: FontFamily.body,
+      fontSize: 16,
+      color: c.text,
+    },
+    status: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginTop: 10,
+      marginLeft: 6,
+    },
+    statusDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: '#16A34A',
+    },
+    statusText: {
+      fontFamily: FontFamily.body,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.muted,
+    },
+    section: {
+      marginTop: 22,
+      marginBottom: 8,
+      marginLeft: 4,
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 13,
+      lineHeight: 18,
+      letterSpacing: 0.4,
+      textTransform: 'uppercase',
+      color: c.muted,
+    },
+    sectionRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginTop: 22,
+      marginBottom: 8,
+      marginHorizontal: 4,
+    },
+    sectionInline: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 13,
+      lineHeight: 18,
+      letterSpacing: 0.4,
+      textTransform: 'uppercase',
+      color: c.muted,
+    },
+    link: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 14,
+      lineHeight: 19,
+      color: c.link,
+    },
+    grid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 10,
+    },
+    tile: {
+      width: '48%',
+      flexGrow: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      padding: 12,
+      borderRadius: 16,
+      backgroundColor: c.card,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    tileOn: {
+      borderWidth: 2,
+      borderColor: TURQUOISE,
+      padding: 11,
+    },
+    tileIcon: {
+      width: 36,
+      height: 36,
+      borderRadius: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    tileText: {
+      flex: 1,
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 15,
+      lineHeight: 20,
+      color: c.text,
+    },
+    card: {
+      borderRadius: 18,
+      backgroundColor: c.card,
+      borderWidth: 1,
+      borderColor: c.border,
+      overflow: 'hidden',
+    },
+    divider: {
+      height: StyleSheet.hairlineWidth,
+      marginLeft: 14,
+      backgroundColor: c.divider,
+    },
+    faqHead: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 13,
+    },
+    faqIcon: {
+      width: 28,
+      height: 28,
+      borderRadius: 8,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    question: {
+      flex: 1,
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 15,
+      lineHeight: 20,
+      color: c.text,
+    },
+    answerBox: {
+      gap: 10,
+      paddingLeft: 54,
+      paddingRight: 14,
+      paddingBottom: 14,
+    },
+    answer: {
+      fontFamily: FontFamily.body,
+      fontSize: 14,
+      lineHeight: 20,
+      color: c.muted,
+    },
+    vote: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginTop: 2,
+    },
+    voteText: {
+      flex: 1,
+      fontFamily: FontFamily.body,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.muted,
+    },
+    voteButton: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: c.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    voteButtonOn: {
+      backgroundColor: TURQUOISE,
+      borderColor: TURQUOISE,
+    },
+    empty: {
+      alignItems: 'center',
+      gap: 8,
+      paddingVertical: 24,
+    },
+    emptyTitle: {
+      fontFamily: FontFamily.headingBold,
+      fontSize: 17,
+      lineHeight: 23,
+      color: c.text,
+    },
+    muted: {
+      fontFamily: FontFamily.body,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.muted,
+    },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+    },
+    rowIcon: {
+      width: 36,
+      height: 36,
+      borderRadius: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    rowIconDark: {
+      backgroundColor: '#3B5079',
+    },
+    rowTitle: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 15,
+      lineHeight: 20,
+      color: c.text,
+    },
+    version: {
+      marginTop: 22,
+      textAlign: 'center',
+      fontFamily: FontFamily.body,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.muted,
+    },
+    segments: {
+      flexDirection: 'row',
+      padding: 4,
+      gap: 4,
+      borderRadius: 14,
+      backgroundColor: c.dark ? '#0F1B33' : '#F0F1F4',
+    },
+    segment: {
+      flex: 1,
+      alignItems: 'center',
+      paddingVertical: 9,
+      borderRadius: 11,
+    },
+    segmentOn: {
+      backgroundColor: c.solid,
+    },
+    segmentText: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 14,
+      lineHeight: 19,
+      color: c.text,
+    },
+    segmentTextOn: {
+      color: c.solidText,
+    },
+    message: {
+      minHeight: 120,
+      padding: 14,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.card,
+      fontFamily: FontFamily.body,
+      fontSize: 16,
+      lineHeight: 22,
+      color: c.text,
+    },
+    deviceRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    deviceTitle: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 15,
+      lineHeight: 20,
+      color: c.text,
+    },
+  });
+}
+
+const STYLES = { light: makeStyles(LIGHT), dark: makeStyles(DARK) };
+
+function useLook() {
+  const c = useScopedColors();
+  return { c, styles: c.dark ? STYLES.dark : STYLES.light };
+}

@@ -5,13 +5,16 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icon';
-import { BottomSheet, Chip, PrimaryButton, SecondaryButton, Tag, TopBar, UndoToast, kitStyles } from '@/components/ui/kit';
+import { BottomSheet, Chip, PrimaryButton, SecondaryButton, Tag, TopBar, UndoToast, useKitStyles } from '@/components/ui/kit';
 import { FieldLabel, SettingsRow, SettingsSection, ToggleSwitch, settingsStyles } from '@/components/ui/settings';
-import { FontFamily, Radius, Serene, Tint } from '@/constants/design';
+import { DARK, LIGHT, useScopedColors, type AppColors } from '@/constants/app-colors';
+import { FontFamily, Radius } from '@/constants/design';
 
 import { LOCK_DELAYS, profileActions, useProfileState } from '../store';
 
 export default function BiometricSettingsScreen() {
+  const { c, styles } = useLook();
+  const kitStyles = useKitStyles();
   const { biometric, confirmSensitive, fallbackCode, lockDelay } = useProfileState();
   const [test, setTest] = useState<'idle' | 'scanning' | 'success'>('idle');
   const [confirmOff, setConfirmOff] = useState(false);
@@ -35,7 +38,7 @@ export default function BiometricSettingsScreen() {
             <Icon
               name={test === 'success' ? 'check' : 'face'}
               size={44}
-              color={off ? Serene.onSurfaceVariant : Serene.onPrimary}
+              color={off ? c.muted : c.solidText}
             />
           </View>
           <Text style={styles.heroTitle}>{off ? 'Face ID désactivé' : 'Face ID activé'}</Text>
@@ -135,7 +138,7 @@ export default function BiometricSettingsScreen() {
         </SettingsSection>
 
         <View style={styles.note}>
-          <Icon name="lock" size={18} color={Tint.primary} />
+          <Icon name="lock" size={18} color={c.link} />
           <Text style={styles.noteText}>
             Votre visage ne quitte jamais le téléphone : Bringo Mind reçoit seulement « reconnu » ou « non reconnu ».
           </Text>
@@ -167,66 +170,76 @@ export default function BiometricSettingsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  center: {
-    textAlign: 'center',
-  },
-  content: {
-    paddingTop: 4,
-    paddingBottom: 40,
-  },
-  hero: {
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 22,
-  },
-  faceId: {
-    width: 88,
-    height: 88,
-    borderRadius: 28,
-    backgroundColor: Tint.black,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
-  },
-  faceIdOff: {
-    backgroundColor: Tint.soft,
-  },
-  faceIdOk: {
-    backgroundColor: Tint.primary,
-  },
-  heroTitle: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 21,
-    lineHeight: 27,
-    color: Tint.navy,
-  },
-  heroButton: {
-    alignSelf: 'stretch',
-    marginTop: 8,
-  },
-  disabled: {
-    opacity: 0.45,
-  },
-  chips: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  note: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    marginTop: 20,
-    padding: 14,
-    borderRadius: Radius.md,
-    backgroundColor: Tint.soft,
-  },
-  noteText: {
-    flex: 1,
-    fontFamily: FontFamily.body,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Tint.navy,
-  },
-});
+function makeStyles(c: AppColors) {
+  return StyleSheet.create({
+    center: {
+      textAlign: 'center',
+    },
+    content: {
+      paddingTop: 4,
+      paddingBottom: 40,
+    },
+    hero: {
+      alignItems: 'center',
+      gap: 8,
+      paddingVertical: 22,
+    },
+    faceId: {
+      width: 88,
+      height: 88,
+      borderRadius: 28,
+      backgroundColor: c.solid,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 4,
+    },
+    faceIdOff: {
+      backgroundColor: c.soft,
+    },
+    faceIdOk: {
+      backgroundColor: c.link,
+    },
+    heroTitle: {
+      fontFamily: FontFamily.headingBold,
+      fontSize: 21,
+      lineHeight: 27,
+      color: c.text,
+    },
+    heroButton: {
+      alignSelf: 'stretch',
+      marginTop: 8,
+    },
+    disabled: {
+      opacity: 0.45,
+    },
+    chips: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    note: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 8,
+      marginTop: 20,
+      padding: 14,
+      borderRadius: Radius.md,
+      backgroundColor: c.soft,
+    },
+    noteText: {
+      flex: 1,
+      fontFamily: FontFamily.body,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.text,
+    },
+  });
+}
+
+const STYLES = { light: makeStyles(LIGHT), dark: makeStyles(DARK) };
+
+/** Couleurs et styles du mode actuel (sombre seulement dans un module converti). */
+function useLook() {
+  const c = useScopedColors();
+  return { c, styles: c.dark ? STYLES.dark : STYLES.light };
+}

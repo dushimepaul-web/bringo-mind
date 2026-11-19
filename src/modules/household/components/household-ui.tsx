@@ -5,7 +5,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Icon } from '@/components/icon';
 import { Tag } from '@/components/ui/kit';
-import { FontFamily, Radius, Serene, Tint } from '@/constants/design';
+import { DARK, LIGHT, useScopedColors, type AppColors } from '@/constants/app-colors';
+import { FontFamily, Radius } from '@/constants/design';
 
 import { ROLE_LABELS, initials } from '../data';
 import { householdActions, useHouseholdState } from '../store';
@@ -22,13 +23,19 @@ export function Avatar({
   size?: number;
   kora?: boolean;
 }) {
+  const { c, styles } = useLook();
   return (
     <View
-      style={[styles.avatar, { width: size, height: size, backgroundColor: kora ? Tint.black : color }]}
+      style={[
+        styles.avatar,
+        // Kora : pastille bleu nuit ; en sombre, un fin contour garde chaque avatar visible.
+        { width: size, height: size, backgroundColor: kora ? '#0C1A37' : color },
+        c.dark && styles.avatarDark,
+      ]}
       accessibilityElementsHidden
       importantForAccessibility="no">
       {kora ? (
-        <Icon name="auto_awesome" size={size * 0.45} color={Tint.glow} />
+        <Icon name="auto_awesome" size={size * 0.45} color="#2FD5C1" />
       ) : (
         <Text style={[styles.avatarText, { fontSize: size * 0.36, lineHeight: size * 0.46 }]}>{initials(name)}</Text>
       )}
@@ -57,6 +64,7 @@ export function SectionHeader({
   action?: string;
   href?: Href;
 }) {
+  const { styles } = useLook();
   return (
     <View style={styles.sectionHeader}>
       <Text style={styles.sectionTitle}>{title}</Text>
@@ -89,6 +97,7 @@ export function ChoiceCard({
   selected: boolean;
   onPress: () => void;
 }) {
+  const { c, styles } = useLook();
   return (
     <Pressable
       style={({ pressed }) => [styles.choice, selected && styles.choiceSelected, pressed && styles.pressed]}
@@ -97,7 +106,7 @@ export function ChoiceCard({
       onPress={onPress}>
       {icon ? (
         <View style={styles.choiceIcon}>
-          <Icon name={icon} size={20} color={Tint.navy} />
+          <Icon name={icon} size={20} color={c.text} />
         </View>
       ) : null}
       <View style={styles.flex}>
@@ -105,7 +114,7 @@ export function ChoiceCard({
         {hint ? <Text style={styles.choiceHint}>{hint}</Text> : null}
       </View>
       <View style={[styles.radio, selected && styles.radioOn]}>
-        {selected ? <Icon name="check" size={16} color={Serene.onPrimary} /> : null}
+        {selected ? <Icon name="check" size={16} color={c.solidText} /> : null}
       </View>
     </Pressable>
   );
@@ -123,7 +132,8 @@ export function SmallButton({
   onPress: () => void;
   variant?: 'dark' | 'light' | 'danger';
 }) {
-  const color = variant === 'dark' ? Serene.onPrimary : variant === 'danger' ? Serene.error : Tint.navy;
+  const { c, styles } = useLook();
+  const color = variant === 'dark' ? c.solidText : variant === 'danger' ? c.error : c.text;
   return (
     <Pressable
       style={({ pressed }) => [
@@ -155,149 +165,174 @@ export function useFlashToast() {
   return [toast, setToast] as const;
 }
 
-export const householdStyles = StyleSheet.create({
-  note: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    padding: 14,
-    borderRadius: 16,
-    backgroundColor: Tint.soft,
-    borderWidth: 1,
-    borderColor: Tint.border,
-  },
-  noteText: {
-    flex: 1,
-    fontFamily: FontFamily.body,
-    fontSize: 14,
-    lineHeight: 20,
-    color: Tint.navy,
-  },
-});
+function makeHouseholdStyles(c: AppColors) {
+  return StyleSheet.create({
+    note: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 10,
+      padding: 14,
+      borderRadius: 16,
+      backgroundColor: c.soft,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    noteText: {
+      flex: 1,
+      fontFamily: FontFamily.body,
+      fontSize: 14,
+      lineHeight: 20,
+      color: c.text,
+    },
+  });
+}
 
-const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-  },
-  pressed: {
-    opacity: 0.8,
-  },
-  avatar: {
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: {
-    fontFamily: FontFamily.headingBold,
-    color: Serene.onPrimary,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 26,
-    marginBottom: 10,
-  },
-  sectionTitle: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 20,
-    lineHeight: 26,
-    letterSpacing: -0.3,
-    color: Tint.navy,
-  },
-  countPill: {
-    minWidth: 24,
-    height: 24,
-    paddingHorizontal: 7,
-    borderRadius: Radius.full,
-    backgroundColor: Tint.lavender,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  countText: {
-    fontFamily: FontFamily.bodyBold,
-    fontSize: 13,
-    lineHeight: 17,
-    color: Tint.navy,
-  },
-  link: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 15,
-    lineHeight: 20,
-    color: Tint.primary,
-  },
-  choice: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    minHeight: 64,
-    padding: 14,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: Tint.border,
-    backgroundColor: Serene.surfaceContainerLowest,
-  },
-  choiceSelected: {
-    borderWidth: 2,
-    borderColor: Tint.black,
-    padding: 13,
-  },
-  choiceIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: Tint.soft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  choiceTitle: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 16,
-    lineHeight: 21,
-    color: Tint.navy,
-  },
-  choiceHint: {
-    fontFamily: FontFamily.body,
-    fontSize: 13,
-    lineHeight: 18,
-    color: Serene.onSurfaceVariant,
-  },
-  radio: {
-    width: 26,
-    height: 26,
-    borderRadius: Radius.full,
-    borderWidth: 2,
-    borderColor: '#b9c4d6',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  radioOn: {
-    backgroundColor: Tint.black,
-    borderColor: Tint.black,
-  },
-  small: {
-    height: 40,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    backgroundColor: Tint.black,
-  },
-  smallLight: {
-    backgroundColor: Serene.surfaceContainerLowest,
-    borderWidth: 1,
-    borderColor: Tint.border,
-  },
-  smallDanger: {
-    backgroundColor: '#fff5f5',
-    borderWidth: 1,
-    borderColor: '#fecaca',
-  },
-  smallText: {
-    fontFamily: FontFamily.bodySemiBold,
-    fontSize: 14,
-    lineHeight: 19,
-  },
-});
+const HOUSEHOLDSTYLES_SHEETS = { light: makeHouseholdStyles(LIGHT), dark: makeHouseholdStyles(DARK) };
+/** Version claire (écrans pas encore convertis au mode sombre). */
+export const householdStyles = HOUSEHOLDSTYLES_SHEETS.light;
+
+/** householdStyles du mode actuel. */
+export function useHouseholdStyles() {
+  return useScopedColors().dark ? HOUSEHOLDSTYLES_SHEETS.dark : HOUSEHOLDSTYLES_SHEETS.light;
+}
+
+function makeStyles(c: AppColors) {
+  return StyleSheet.create({
+    flex: {
+      flex: 1,
+    },
+    pressed: {
+      opacity: 0.8,
+    },
+    avatar: {
+      borderRadius: Radius.full,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    avatarText: {
+      fontFamily: FontFamily.headingBold,
+      color: '#FFFFFF',
+    },
+    avatarDark: {
+      borderWidth: 1.5,
+      borderColor: '#3B5079',
+    },
+    sectionHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginTop: 26,
+      marginBottom: 10,
+    },
+    sectionTitle: {
+      fontFamily: FontFamily.headingBold,
+      fontSize: 20,
+      lineHeight: 26,
+      letterSpacing: -0.3,
+      color: c.text,
+    },
+    countPill: {
+      minWidth: 24,
+      height: 24,
+      paddingHorizontal: 7,
+      borderRadius: Radius.full,
+      backgroundColor: c.soft,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    countText: {
+      fontFamily: FontFamily.bodyBold,
+      fontSize: 13,
+      lineHeight: 17,
+      color: c.text,
+    },
+    link: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 15,
+      lineHeight: 20,
+      color: c.link,
+    },
+    choice: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      minHeight: 64,
+      padding: 14,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.card,
+    },
+    choiceSelected: {
+      borderWidth: 2,
+      borderColor: c.solid,
+      padding: 13,
+    },
+    choiceIcon: {
+      width: 40,
+      height: 40,
+      borderRadius: 12,
+      backgroundColor: c.soft,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    choiceTitle: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 16,
+      lineHeight: 21,
+      color: c.text,
+    },
+    choiceHint: {
+      fontFamily: FontFamily.body,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.muted,
+    },
+    radio: {
+      width: 26,
+      height: 26,
+      borderRadius: Radius.full,
+      borderWidth: 2,
+      borderColor: c.dark ? '#3B5079' : '#b9c4d6',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    radioOn: {
+      backgroundColor: c.solid,
+      borderColor: c.solid,
+    },
+    small: {
+      height: 40,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      paddingHorizontal: 14,
+      borderRadius: 12,
+      backgroundColor: c.solid,
+    },
+    smallLight: {
+      backgroundColor: c.card,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    smallDanger: {
+      backgroundColor: c.dark ? '#3B1D24' : '#fff5f5',
+      borderWidth: 1,
+      borderColor: c.dark ? '#5B2A33' : '#fecaca',
+    },
+    smallText: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 14,
+      lineHeight: 19,
+    },
+  });
+}
+
+const STYLES = { light: makeStyles(LIGHT), dark: makeStyles(DARK) };
+
+/** Couleurs et styles du mode actuel (sombre seulement dans un module converti). */
+function useLook() {
+  const c = useScopedColors();
+  return { c, styles: c.dark ? STYLES.dark : STYLES.light };
+}
