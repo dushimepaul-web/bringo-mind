@@ -12,6 +12,24 @@
       "runtimeExecutable": "npx",
       "runtimeArgs": ["expo", "start", "--web", "--port", "8081", "--clear"],
       "port": 8081
+    },
+    {
+      "name": "eleaning",
+      "runtimeExecutable": "C:/wamp64/www/eleaning/.venv/Scripts/python.exe",
+      "runtimeArgs": ["C:/wamp64/www/eleaning/manage.py", "runserver", "8000"],
+      "port": 8000
+    },
+    {
+      "name": "nufotec-api",
+      "runtimeExecutable": "C:/wamp64/www/nufotec/backend/.venv/Scripts/python.exe",
+      "runtimeArgs": ["-m", "uvicorn", "app.main:app", "--app-dir", "C:/wamp64/www/nufotec/backend", "--port", "8000"],
+      "port": 8000
+    },
+    {
+      "name": "nufotec-front",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "C:/wamp64/www/nufotec/frontend", "run", "dev", "--", "--port", "5173", "--strictPort"],
+      "port": 5173
     }
   ]
 }

@@ -25,6 +25,8 @@ src/hooks/
 
 `src/modules/auth/services/auth.service.ts` est l'ancien service ; il sera réécrit sur `@/lib/api` à la phase 2.
 
+> Liste des routes du backend par écran : [API_BACKEND.md](API_BACKEND.md). Documentation complète du backend : [docs/backend/](docs/backend/README.md).
+
 ## 1. Architecture en couches
 
 ```text
@@ -55,10 +57,10 @@ Règles :
 Créer un fichier `.env` à la racine (modèle dans `.env.example`) :
 
 ```text
-EXPO_PUBLIC_API_URL=https://api.exemple.com
+EXPO_PUBLIC_API_URL=https://app.bringomind.com
 ```
 
-La valeur est l'hôte **sans** `/api/v1` : le préfixe est ajouté par `src/lib/config.ts`. Expo expose au runtime uniquement les variables préfixées `EXPO_PUBLIC_`. Redémarrer le serveur après modification.
+Serveur de production : `https://app.bringomind.com` (API sous `/api/v1`). La valeur est l'hôte **sans** `/api/v1` : le préfixe est ajouté par `src/lib/config.ts`. Expo expose au runtime uniquement les variables préfixées `EXPO_PUBLIC_`. Redémarrer le serveur après modification.
 
 > Ne jamais placer de secret (clé privée, token d'administration) dans une variable `EXPO_PUBLIC_*` : elle est embarquée dans le bundle client.
 
