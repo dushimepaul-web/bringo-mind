@@ -2,7 +2,7 @@
 // Comme les notifications du téléphone : une carte par jour, une ligne par notification (icône de couleur,
 // titre, détail, heure), point turquoise si non lue. Balayer : à droite lu, à gauche supprimer (avec « Annuler »).
 import { router } from 'expo-router';
-import { Fragment, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -15,7 +15,7 @@ import { FontFamily, Radius, Space } from '@/constants/design';
 import { useQuery } from '@/hooks/use-query';
 import { dayOffset, formatDay, formatTime } from '@/lib/demo-dates';
 
-import { inQuietNow, shortHour, useNotificationSettings } from '../settings-store';
+import { inQuietNow, shortHour, syncNotificationPreferences, useNotificationSettings } from '../settings-store';
 import { notificationActions, syncNotifications, useNotifications, type AppNotification, type NotificationKind } from '../store';
 
 type Filter = 'all' | 'unread' | NotificationKind;
@@ -48,10 +48,24 @@ export default function NotificationCenterScreen() {
   const { c, styles } = useLook();
   const kitStyles = useKitStyles();
   const settings = useNotificationSettings();
-  const { items } = useNotifications();
+  const { items, error } = useNotifications();
   const sync = useQuery('notifications', syncNotifications);
+  // Pastille « Silence » : préférences chargées au mieux, sans bloquer la liste.
+  useEffect(() => {
+    void syncNotificationPreferences().catch(() => undefined);
+  }, []);
   const [filter, setFilter] = useState<Filter>('all');
   const [toast, setToast] = useState<{ text: string; undo?: () => void } | null>(null);
+
+  // Action refusée par le serveur : le message s'affiche une fois.
+  useEffect(() => {
+    if (!error) return;
+    const timer = setTimeout(() => {
+      setToast({ text: error });
+      notificationActions.clearError();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [error]);
 
   const unread = items.filter((item) => !item.read).length;
   const list = items.filter((item) => (filter === 'all' ? true : filter === 'unread' ? !item.read : item.kind === filter));
@@ -64,7 +78,7 @@ export default function NotificationCenterScreen() {
   }
 
   const open = (item: AppNotification) => {
-    notificationActions.setRead(item.id, true);
+    notificationActions.markRead(item.id);
     router.push(item.href);
   };
 
@@ -80,8 +94,8 @@ export default function NotificationCenterScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Tout marquer comme lu"
                 onPress={() => {
-                  const undo = notificationActions.readAll();
-                  setToast({ text: 'Toutes les notifications sont lues', undo });
+                  notificationActions.readAll();
+                  setToast({ text: 'Toutes les notifications sont lues' });
                 }}>
                 <Text style={styles.link}>Tout lire</Text>
               </Pressable>
@@ -139,12 +153,12 @@ export default function NotificationCenterScreen() {
                       <Fragment key={item.id}>
                         {index > 0 ? <View style={styles.divider} /> : null}
                         <SwipeRow
-                          rightLabel={item.read ? 'Non lue' : 'Lue'}
-                          rightIcon={item.read ? 'mark_email_unread' : 'mark_email_read'}
+                          rightLabel="Lue"
+                          rightIcon="mark_email_read"
                           leftLabel="Supprimer"
                           leftIcon="delete"
                           leftColor={c.error}
-                          onSwipeRight={() => notificationActions.setRead(item.id, !item.read)}
+                          onSwipeRight={() => notificationActions.markRead(item.id)}
                           onSwipeLeft={() => {
                             const undo = notificationActions.remove(item.id);
                             setToast({ text: 'Notification supprimée', undo });

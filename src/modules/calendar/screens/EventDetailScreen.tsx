@@ -1,18 +1,21 @@
 // S-14 - Détail d'un événement | Module M07 Rendez-vous et calendrier | Phase S6
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Switch, Text, View, Platform } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icon';
 import { BottomSheet, IconButton, PrimaryButton, SecondaryButton, SheetOption, Tag, TopBar, UndoToast, useKitStyles } from '@/components/ui/kit';
+import { ErrorState, LoadingState } from '@/components/ui/states';
 import { DARK, LIGHT, useScopedColors, type AppColors } from '@/constants/app-colors';
 import { FontFamily, Radius, Serene } from '@/constants/design';
+import { useQuery } from '@/hooks/use-query';
 import { formatLongDay, formatTime } from '@/lib/demo-dates';
+import { useSession } from '@/lib/session';
 
-import { RECURRENCE_LABELS, USER_TIMEZONE, conflictsFor, durationOf, formatDuration, reminderLabel } from '../data';
+import { conflictsFor, durationOf, formatDuration, reminderLabel, timeZoneLabel } from '../data';
 import { useTones } from '../components/calendar-ui';
-import { eventActions, useCalendarState, useEvent } from '../store';
+import { ensureEvent, eventActions, loadEventReminder, useCalendarState, useEvent } from '../store';
 
 type Sheet = 'menu' | 'cancel' | null;
 
@@ -24,8 +27,35 @@ export default function EventDetailScreen() {
   const event = useEvent(id);
   const { events } = useCalendarState();
   const [sheet, setSheet] = useState<Sheet>(null);
-  const [notify, setNotify] = useState(true);
   const [toast, setToast] = useState<{ text: string; undo?: () => void } | null>(null);
+  const { user } = useSession();
+  // Événement ouvert depuis un autre écran : chargé s'il manque ; puis son rappel.
+  const load = useQuery(`event-${id ?? ''}`, async () => {
+    await ensureEvent(id);
+    await loadEventReminder(id).catch(() => undefined);
+  });
+
+  if (!event && load.status === 'loading') {
+    return (
+      <SafeAreaView style={kitStyles.safe} edges={['top']}>
+        <TopBar title="Détail de l’événement" fallback="/calendar" />
+        <View style={kitStyles.content}>
+          <LoadingState rows={3} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!event && load.status === 'error') {
+    return (
+      <SafeAreaView style={kitStyles.safe} edges={['top']}>
+        <TopBar title="Détail de l’événement" fallback="/calendar" />
+        <View style={kitStyles.content}>
+          <ErrorState error={load.error} onRetry={load.reload} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (!event) {
     return (
@@ -53,19 +83,15 @@ export default function EventDetailScreen() {
     },
   } as const;
 
+  const editable = !event.readOnly && !event.cancelled;
+  const guests = event.shared ? event.members.filter((name) => name !== 'Vous') : event.members;
+
   const cancel = () => {
     setSheet(null);
     eventActions.cancel(event.id);
-    setToast({
-      text: event.shared && notify ? 'Événement annulé. Thomas a été prévenu.' : 'Événement annulé.',
-      undo: () => eventActions.restore(event.id),
+    eventActions.setFlash({
+      text: event.shared ? 'Événement annulé. Les membres du foyer sont prévenus.' : 'Événement annulé.',
     });
-  };
-
-  const remove = () => {
-    setSheet(null);
-    const undo = eventActions.remove(event.id);
-    eventActions.setFlash({ text: `« ${event.title} » supprimé.`, undo });
     if (router.canGoBack()) router.back();
     else router.replace('/calendar');
   };
@@ -75,7 +101,7 @@ export default function EventDetailScreen() {
       <TopBar
         title="Détail de l’événement"
         fallback="/calendar"
-        right={<IconButton icon="more_vert" label="Plus d’actions" onPress={() => setSheet('menu')} />}
+        right={editable ? <IconButton icon="more_vert" label="Plus d’actions" onPress={() => setSheet('menu')} /> : undefined}
       />
 
       <ScrollView
@@ -87,17 +113,8 @@ export default function EventDetailScreen() {
             <Icon name="event_busy" size={22} color="#b91c1c" />
             <View style={styles.flexMin}>
               <Text style={styles.cancelTitle}>Événement annulé</Text>
-              <Text style={styles.cancelText}>Il reste visible barré dans votre calendrier.</Text>
+              <Text style={styles.cancelText}>Il n’apparaît plus dans votre calendrier.</Text>
             </View>
-            <Pressable
-              style={({ pressed }) => [styles.restore, pressed && styles.pressed]}
-              accessibilityRole="button"
-              onPress={() => {
-                eventActions.restore(event.id);
-                setToast({ text: 'Événement rétabli.' });
-              }}>
-              <Text style={styles.restoreText}>Rétablir</Text>
-            </Pressable>
           </View>
         ) : null}
 
@@ -107,12 +124,7 @@ export default function EventDetailScreen() {
               <Icon name={tone.icon} size={26} color={tone.fg} />
             </View>
             <View style={styles.badges}>
-              <Tag label={tone.label} />
-              <Tag
-                icon={event.shared ? 'group' : 'person'}
-                label={event.shared ? 'Foyer' : 'Personnel'}
-                tone={event.shared ? 'teal' : 'neutral'}
-              />
+              <Tag icon={tone.icon} label={tone.label} tone={event.shared ? 'teal' : 'neutral'} />
             </View>
           </View>
           <Text style={[styles.title, event.cancelled && styles.cancelledText]}>{event.title}</Text>
@@ -155,25 +167,42 @@ export default function EventDetailScreen() {
           {!event.allDay ? (
             <InfoRow icon="timer" label="Durée" value={formatDuration(durationOf(event))} />
           ) : null}
-          <InfoRow icon="public" label="Fuseau" value={`${USER_TIMEZONE.label} (${USER_TIMEZONE.offset})`} />
-          <InfoRow icon="notifications_active" label="Rappel" value={reminderLabel(event.reminder)} />
-          <InfoRow icon="event_repeat" label="Récurrence" value={RECURRENCE_LABELS[event.recurrence]} last />
+          <InfoRow icon="public" label="Fuseau" value={timeZoneLabel()} />
+          <InfoRow icon="notifications_active" label="Rappel" value={reminderLabel(event.reminder)} last />
         </View>
 
         <SectionTitle icon="group" title="Participants" />
         <View style={[kitStyles.card, styles.info]}>
-          <Person initial="C" name="Claire Martin (vous)" detail="Organisatrice" dark />
-          {event.shared
-            ? event.members.map((name) => (
-                <Person key={name} initial={name.charAt(0)} name={`${name} Martin`} detail="Membre du foyer • Confirmé" />
-              ))
-            : null}
-          {event.external ? (
-            <Person initial={event.external.name.replace('Dr. ', '').replace('Dr ', '').charAt(0)} name={event.external.name} detail={event.external.detail} external />
+          {event.source !== 'external' ? (
+            <Person
+              initial={(user?.full_name || user?.email || 'V').charAt(0).toUpperCase()}
+              name={`${user?.full_name || user?.email || 'Vous'} (vous)`}
+              detail="Organisateur"
+              dark
+            />
+          ) : null}
+          {guests.map((name) => (
+            <Person
+              key={name}
+              initial={name.charAt(0).toUpperCase()}
+              name={name}
+              detail={event.shared ? 'Membre du foyer' : 'Invité'}
+              external={!event.shared}
+            />
+          ))}
+          {event.source !== 'external' && guests.length === 0 ? (
+            <Text style={styles.privacy}>Aucun autre participant.</Text>
           ) : null}
         </View>
-        {!event.shared ? (
+        {event.source === 'personal' ? (
           <Text style={styles.privacy}>Événement personnel : les membres du foyer ne le voient pas.</Text>
+        ) : null}
+        {event.readOnly ? (
+          <Text style={styles.privacy}>
+            {event.source === 'external'
+              ? 'Événement d’un agenda connecté : modifiez-le depuis cet agenda.'
+              : 'Événement organisé par une autre personne : vous ne pouvez pas le modifier.'}
+          </Text>
         ) : null}
 
         {event.description ? (
@@ -186,22 +215,13 @@ export default function EventDetailScreen() {
         ) : null}
 
         <View style={styles.actions}>
-          <PrimaryButton label="Modifier l’événement" icon="edit" onPress={() => router.push(editHref)} />
-          <SecondaryButton
-            label="Ajouter un rappel lié"
-            icon="add_alert"
-            onPress={() => router.push(reminderHref)}
-          />
-          {event.cancelled ? (
-            <SecondaryButton label="Supprimer définitivement" icon="delete" danger onPress={remove} />
-          ) : (
-            <SecondaryButton
-              label="Annuler l’événement"
-              icon="event_busy"
-              danger
-              onPress={() => setSheet('cancel')}
-            />
-          )}
+          {editable ? <PrimaryButton label="Modifier l’événement" icon="edit" onPress={() => router.push(editHref)} /> : null}
+          {!event.cancelled && event.source !== 'external' ? (
+            <SecondaryButton label="Ajouter un rappel lié" icon="add_alert" onPress={() => router.push(reminderHref)} />
+          ) : null}
+          {editable ? (
+            <SecondaryButton label="Annuler l’événement" icon="event_busy" danger onPress={() => setSheet('cancel')} />
+          ) : null}
         </View>
       </ScrollView>
 
@@ -226,31 +246,18 @@ export default function EventDetailScreen() {
             router.push(reminderHref);
           }}
         />
-        {!event.cancelled ? (
-          <SheetOption icon="event_busy" label="Annuler l’événement" onPress={() => setSheet('cancel')} />
-        ) : null}
-        <SheetOption icon="delete" label="Supprimer" danger onPress={remove} />
+        <SheetOption icon="event_busy" label="Annuler l’événement" danger onPress={() => setSheet('cancel')} />
       </BottomSheet>
 
       <BottomSheet
         visible={sheet === 'cancel'}
         title="Annuler cet événement ?"
-        subtitle="Il restera visible, barré, dans votre calendrier. Vous pourrez le rétablir."
+        subtitle={
+          event.shared
+            ? 'Il disparaîtra du calendrier du foyer et les membres seront prévenus. Cette action est définitive.'
+            : 'Il disparaîtra de votre calendrier. Cette action est définitive.'
+        }
         onClose={() => setSheet(null)}>
-        {event.shared ? (
-          <View style={styles.notifyRow}>
-            <Icon name="campaign" size={22} color={c.text} />
-            <Text style={styles.notifyText}>Prévenir Thomas</Text>
-            <Switch
-              value={notify}
-              onValueChange={setNotify}
-              trackColor={{ false: c.border, true: c.link }}
-              thumbColor={c.card}
-              {...(Platform.OS === 'web' ? { activeThumbColor: c.card } : {})}
-              accessibilityLabel="Prévenir Thomas"
-            />
-          </View>
-        ) : null}
         <View style={styles.sheetRow}>
           <SecondaryButton label="Garder" style={styles.flex} onPress={() => setSheet(null)} />
           <Pressable

@@ -16,7 +16,7 @@ import { FontFamily, Radius } from '@/constants/design';
 import { useQuery } from '@/hooks/use-query';
 import { dayOffset, formatDay, formatTime } from '@/lib/demo-dates';
 
-import { CHANNEL_META, linkHref, linkLabel, repeatSummary } from '../data';
+import { CHANNEL_META, linkHref, linkIcon, linkLabel, repeatSummary } from '../data';
 import { reminderActions, syncReminders, useReminderState } from '../store';
 import type { Reminder } from '../types';
 import { REMINDER_VIEWS, setReminderView, useReminderView, type ReminderView } from '../view-mode';
@@ -27,7 +27,7 @@ const GROUP_LABELS: Record<Group, string> = {
   today: 'Aujourd’hui',
   tomorrow: 'Demain',
   later: 'Plus tard',
-  paused: 'En pause',
+  paused: 'Désactivés',
   past: 'Passés',
 };
 
@@ -62,7 +62,7 @@ type Toast = { text: string; undo?: () => void };
 export default function ReminderListScreen() {
   const { c, styles } = useLook();
   const kit = useKitStyles();
-  const { reminders, notificationsAllowed, flash } = useReminderState();
+  const { reminders, flash } = useReminderState();
   const sync = useQuery('reminders', syncReminders);
   const view = useReminderView();
   const viewInfo = REMINDER_VIEWS.find((entry) => entry.key === view) ?? REMINDER_VIEWS[0];
@@ -95,12 +95,11 @@ export default function ReminderListScreen() {
       .filter((section) => section.items.length > 0);
   }, [reminders, query]);
 
+  /** L'API ne met pas en pause : l'interrupteur ne sert qu'à réactiver un rappel désactivé. */
   const togglePaused = (item: Reminder) => {
-    reminderActions.setPaused(item.id, !item.paused);
-    setToast({
-      text: item.paused ? 'Rappel réactivé.' : 'Rappel mis en pause.',
-      undo: () => reminderActions.setPaused(item.id, item.paused),
-    });
+    if (!item.paused) return;
+    reminderActions.reactivate(item.id);
+    setToast({ text: 'Rappel réactivé.' });
   };
 
   return (
@@ -149,14 +148,6 @@ export default function ReminderListScreen() {
               accessibilityLabel="Rechercher un rappel"
             />
           </View>
-        ) : null}
-
-        {!notificationsAllowed ? (
-          <Pressable style={styles.permission} accessibilityRole="button" onPress={() => reminderActions.allowNotifications(true)}>
-            <Icon name="notifications_off" size={20} color={c.amberText} />
-            <Text style={styles.permissionText}>Notifications désactivées sur ce téléphone</Text>
-            <Text style={styles.permissionLink}>Autoriser</Text>
-          </Pressable>
         ) : null}
 
         <QueryView
@@ -224,36 +215,36 @@ export default function ReminderListScreen() {
                 router.push({ pathname: '/reminders/edit', params: { id: menuItem.id } });
               }}
             />
-            {!menuItem.delivery ? (
+            {!menuItem.delivery && !menuItem.paused ? (
               <SheetOption
                 icon="snooze"
                 label="Reporter de 15 minutes"
                 onPress={() => {
                   setMenuItem(null);
-                  reminderActions.snooze(menuItem.id, 15);
-                  setToast({ text: 'Rappel reporté de 15 minutes.', undo: () => reminderActions.snooze(menuItem.id, -15) });
+                  const undo = reminderActions.snooze(menuItem.id, 15);
+                  setToast({ text: 'Rappel reporté de 15 minutes.', undo });
                 }}
               />
             ) : null}
-            {menuItem.delivery?.status === 'missed' ? (
+            {menuItem.delivery?.status === 'missed' || menuItem.paused ? (
               <SheetOption
-                icon="send"
-                label="Renvoyer maintenant"
+                icon="restart_alt"
+                label="Réactiver le rappel"
                 onPress={() => {
                   setMenuItem(null);
-                  reminderActions.resend(menuItem.id);
-                  setToast({ text: 'Rappel renvoyé.' });
+                  reminderActions.reactivate(menuItem.id);
+                  setToast({ text: 'Rappel réactivé.' });
                 }}
               />
             ) : null}
-            {linkHref(menuItem.link) ? (
+            {menuItem.link.id ? (
               <SheetOption
                 icon="link"
                 label={`Voir ${linkLabel(menuItem.link).toLowerCase()}`}
                 onPress={() => {
                   const href = linkHref(menuItem.link);
                   setMenuItem(null);
-                  if (href) router.push(href);
+                  router.push(href);
                 }}
               />
             ) : null}
@@ -320,6 +311,8 @@ function Toggle({ item, onToggle }: { item: Reminder; onToggle: () => void }) {
     const missed = item.delivery.status === 'missed';
     return <Icon name={missed ? 'error' : 'check_circle'} size={24} color={missed ? c.error : c.success} filled />;
   }
+  // Rappel actif : rien à basculer (l'API ne propose pas de pause).
+  if (!item.paused) return <Icon name="alarm" size={24} color={c.link} />;
   return (
     <Switch
       value={!item.paused}
@@ -343,7 +336,7 @@ function Meta({ item }: { item: Reminder }) {
       {item.channels.map((channel) => (
         <Icon key={channel} name={CHANNEL_META[channel].icon} size={15} color={c.muted} />
       ))}
-      {item.shared ? <Icon name="group" size={15} color={c.link} /> : null}
+      {item.deferred ? <Icon name="bedtime" size={15} color={c.muted} /> : null}
     </View>
   );
 }
@@ -394,7 +387,7 @@ function ReminderCard({ item, onToggle, onMenu }: { item: Reminder; onToggle: ()
       <Meta item={item} />
       <View style={styles.cardFoot}>
         <View style={styles.linkPill}>
-          <Icon name={item.link.kind === 'personal' ? 'person' : item.link.kind === 'task' ? 'task_alt' : item.link.kind === 'event' ? 'event' : 'description'} size={14} color={c.link} />
+          <Icon name={linkIcon(item.link)} size={14} color={c.link} />
           <Text style={styles.linkPillText} numberOfLines={1}>
             {linkLabel(item.link)}
           </Text>

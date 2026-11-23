@@ -1,207 +1,189 @@
 // Mobile - Informations personnelles | Module M09 Profil | Phase S8
-// Champs préremplis (démo), un seul « Enregistrer », date de naissance au calendrier, retour visible sur le Profil.
+// Nom et e-mail du compte (GET/PATCH /accounts/me) ; l'e-mail se change par un lien de confirmation.
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icon';
-import { BottomSheet, PrimaryButton, SecondaryButton, SheetOption, Tag, TopBar, UndoToast, useKitStyles } from '@/components/ui/kit';
-import { DatePickerSheet } from '@/components/ui/date-picker';
+import { BottomSheet, PrimaryButton, SecondaryButton, Tag, TopBar, UndoToast, useKitStyles } from '@/components/ui/kit';
 import { DARK, LIGHT, useScopedColors, type AppColors } from '@/constants/app-colors';
 import { FontFamily, Radius } from '@/constants/design';
-import { DEMO_TODAY } from '@/lib/demo-dates';
+import { userMessage } from '@/lib/api';
 
-import { USER } from '../data';
-import { initialsOf, profileActions, useProfileState, type PersonalInfo } from '../store';
+import { initialsOf, profileActions, useProfileState } from '../store';
 
-type FieldKey = 'firstName' | 'lastName' | 'phone' | 'address' | 'city';
+type FieldKey = 'firstName' | 'lastName' | 'newEmail' | 'password';
 
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
-const longDate = (date: Date) => `${date.getDate()} ${MONTHS[date.getMonth()]} ${date.getFullYear()}`;
 
 export default function CompleteProfileScreen() {
   const { c, styles } = useLook();
   const kitStyles = useKitStyles();
   const saved = useProfileState().user;
-  const [draft, setDraft] = useState<PersonalInfo>(saved);
+  const [firstName, setFirstName] = useState(saved.firstName);
+  const [lastName, setLastName] = useState(saved.lastName);
   const [focus, setFocus] = useState<FieldKey | null>(null);
-  const [sheet, setSheet] = useState<'photo' | 'email' | 'birthdate' | null>(null);
+  const [sheet, setSheet] = useState<'email' | null>(null);
+  const [newEmail, setNewEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [sending, setSending] = useState(false);
+  const [sheetError, setSheetError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
-  const set = <K extends keyof PersonalInfo>(key: K, value: PersonalInfo[K]) =>
-    setDraft((current) => ({ ...current, [key]: value }));
+  const firstError = firstName.trim().length === 0;
+  const dirty = firstName.trim() !== saved.firstName || lastName.trim() !== saved.lastName;
+  const canSave = dirty && !firstError;
+  const emailValid = EMAIL.test(newEmail.trim());
 
-  const firstError = draft.firstName.trim().length === 0;
-  const lastError = draft.lastName.trim().length === 0;
-  const dirty = (Object.keys(draft) as (keyof PersonalInfo)[]).some((key) =>
-    draft[key] instanceof Date ? (draft[key] as Date).getTime() !== (saved[key] as Date).getTime() : draft[key] !== saved[key],
-  );
-  const canSave = dirty && !firstError && !lastError;
-
-  const input = (key: FieldKey, label: string, options: { error?: string; keyboard?: 'phone-pad' | 'default'; capitalize?: 'words' | 'none' } = {}) => (
+  const field = (key: FieldKey, label: string, value: string, onChange: (value: string) => void, error?: string) => (
     <View style={styles.field}>
       <Text style={styles.label}>{label}</Text>
       <TextInput
-        style={[kitStyles.input, focus === key && kitStyles.inputFocused, options.error ? kitStyles.inputError : null]}
-        value={draft[key]}
-        onChangeText={(value) => set(key, value)}
+        style={[kitStyles.input, focus === key && kitStyles.inputFocused, error ? kitStyles.inputError : null]}
+        value={value}
+        onChangeText={onChange}
         onFocus={() => setFocus(key)}
         onBlur={() => setFocus(null)}
-        keyboardType={options.keyboard ?? 'default'}
-        autoCapitalize={options.capitalize ?? 'sentences'}
+        autoCapitalize="words"
         selectionColor={c.link}
         accessibilityLabel={label}
       />
-      {options.error ? (
+      {error ? (
         <View style={styles.errorRow}>
           <Icon name="error" size={16} color={c.error} />
-          <Text style={styles.errorText}>{options.error}</Text>
+          <Text style={styles.errorText}>{error}</Text>
         </View>
       ) : null}
     </View>
   );
+
+  const sendEmailChange = () => {
+    if (!emailValid || !password || sending) return;
+    setSending(true);
+    setSheetError(null);
+    profileActions
+      .changeEmail(newEmail.trim().toLowerCase(), password)
+      .then(() => {
+        setSheet(null);
+        setToast(`Lien de confirmation envoyé à ${newEmail.trim()}`);
+        setNewEmail('');
+      })
+      .catch((error: unknown) => setSheetError(userMessage(error)))
+      .finally(() => {
+        setSending(false);
+        setPassword('');
+      });
+  };
 
   return (
     <SafeAreaView style={kitStyles.safe} edges={['top', 'bottom']}>
       <TopBar title="Informations personnelles" close fallback="/profile" />
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={[kitStyles.content, styles.content]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-          {/* Photo */}
           <View style={styles.photoZone}>
             <View style={styles.avatar}>
-              {draft.hasPhoto ? (
-                <Icon name="face" size={52} color={c.solidText} />
-              ) : (
-                <Text style={styles.avatarText}>{initialsOf(draft)}</Text>
-              )}
+              <Text style={styles.avatarText}>{initialsOf({ firstName, lastName, email: saved.email })}</Text>
             </View>
-            <Pressable
-              style={({ pressed }) => [styles.photoButton, pressed && styles.pressed]}
-              accessibilityRole="button"
-              onPress={() => setSheet('photo')}>
-              <Icon name="photo_camera" size={18} color={c.link} />
-              <Text style={styles.photoText}>{draft.hasPhoto ? 'Changer la photo' : 'Ajouter une photo'}</Text>
-            </Pressable>
+            {saved.memberSince ? (
+              <Text style={kitStyles.muted}>
+                Membre depuis {MONTHS[saved.memberSince.getMonth()]} {saved.memberSince.getFullYear()}
+              </Text>
+            ) : null}
           </View>
 
           <View style={styles.row}>
-            <View style={styles.flex}>{input('firstName', 'Prénom', { error: firstError ? 'Le prénom est obligatoire.' : undefined, capitalize: 'words' })}</View>
-            <View style={styles.flex}>{input('lastName', 'Nom', { error: lastError ? 'Le nom est obligatoire.' : undefined, capitalize: 'words' })}</View>
+            <View style={styles.flex}>{field('firstName', 'Prénom', firstName, setFirstName, firstError ? 'Le prénom est obligatoire.' : undefined)}</View>
+            <View style={styles.flex}>{field('lastName', 'Nom', lastName, setLastName)}</View>
           </View>
 
-          {/* E-mail : vérifiée, se change par un lien de confirmation */}
+          {/* E-mail : se change par un lien de confirmation envoyé à la nouvelle adresse */}
           <View style={styles.field}>
             <Text style={styles.label}>Adresse e-mail</Text>
             <View style={styles.readonly}>
               <Icon name="mail" size={20} color={c.muted} />
               <Text style={styles.readonlyText} numberOfLines={1}>
-                {USER.email}
+                {saved.email}
               </Text>
-              <Tag label="Vérifiée" icon="verified" tone="success" />
+              {saved.emailVerified ? <Tag label="Vérifiée" icon="verified" tone="success" /> : <Tag label="À vérifier" icon="schedule" />}
             </View>
+            {!saved.emailVerified ? (
+              <Pressable
+                hitSlop={8}
+                accessibilityRole="button"
+                onPress={() =>
+                  profileActions
+                    .resendVerification()
+                    .then(() => setToast(`Lien de vérification renvoyé à ${saved.email}`))
+                    .catch((error: unknown) => setToast(userMessage(error)))
+                }>
+                <Text style={styles.link}>Renvoyer le lien de vérification</Text>
+              </Pressable>
+            ) : null}
             <Pressable hitSlop={8} accessibilityRole="button" onPress={() => setSheet('email')}>
               <Text style={styles.link}>Changer l’adresse e-mail</Text>
             </Pressable>
           </View>
 
-          {input('phone', 'Téléphone', { keyboard: 'phone-pad', capitalize: 'none' })}
-
-          <View style={styles.field}>
-            <Text style={styles.label}>Date de naissance</Text>
-            <Pressable
-              style={({ pressed }) => [styles.readonly, styles.dateField, pressed && styles.pressed]}
-              accessibilityRole="button"
-              accessibilityLabel={`Date de naissance : ${longDate(draft.birthdate)}, changer`}
-              onPress={() => setSheet('birthdate')}>
-              <Icon name="cake" size={20} color={c.text} />
-              <Text style={styles.dateText}>{longDate(draft.birthdate)}</Text>
-              <Icon name="calendar_month" size={20} color={c.muted} />
-            </Pressable>
-          </View>
-
-          {input('address', 'Adresse')}
-          {input('city', 'Code postal et ville', { capitalize: 'words' })}
-
           <View style={styles.note}>
             <Icon name="lock" size={18} color={c.link} />
-            <Text style={styles.noteText}>Ces informations restent privées. Elles servent seulement à préremplir vos démarches.</Text>
+            <Text style={styles.noteText}>Votre nom apparaît auprès des membres de votre foyer et dans vos invitations.</Text>
           </View>
         </ScrollView>
 
-        {/* « Enregistrer » apparaît seulement quand quelque chose a changé */}
         {dirty ? (
-        <View style={styles.footer}>
-          <PrimaryButton
-            label="Enregistrer"
-            icon="check"
-            disabled={!canSave}
-            onPress={() => {
-              profileActions.saveUser({ ...draft, firstName: draft.firstName.trim(), lastName: draft.lastName.trim() });
-              profileActions.setFlash({ text: 'Informations enregistrées' });
-              if (router.canGoBack()) router.back();
-              else router.replace('/profile');
-            }}
-          />
-        </View>
+          <View style={styles.footer}>
+            <PrimaryButton
+              label="Enregistrer"
+              icon="check"
+              disabled={!canSave}
+              onPress={() => {
+                profileActions.saveName(firstName.trim(), lastName.trim());
+                profileActions.setFlash({ text: 'Informations enregistrées' });
+                if (router.canGoBack()) router.back();
+                else router.replace('/profile');
+              }}
+            />
+          </View>
         ) : null}
       </KeyboardAvoidingView>
-
-      <BottomSheet visible={sheet === 'photo'} title="Photo de profil" onClose={() => setSheet(null)}>
-        <SheetOption
-          icon="photo_camera"
-          label="Prendre une photo"
-          onPress={() => {
-            set('hasPhoto', true);
-            setSheet(null);
-          }}
-        />
-        <SheetOption
-          icon="photo_library"
-          label="Choisir dans la galerie"
-          onPress={() => {
-            set('hasPhoto', true);
-            setSheet(null);
-          }}
-        />
-        {draft.hasPhoto ? (
-          <SheetOption
-            icon="delete"
-            label="Retirer la photo"
-            hint="Vos initiales seront affichées"
-            danger
-            onPress={() => {
-              set('hasPhoto', false);
-              setSheet(null);
-            }}
-          />
-        ) : null}
-      </BottomSheet>
 
       <BottomSheet
         visible={sheet === 'email'}
         title="Changer l’adresse e-mail"
-        subtitle="Nous enverrons un lien de confirmation à la nouvelle adresse. L’ancienne reste active jusqu’à la confirmation."
+        subtitle="Un lien de confirmation part à la nouvelle adresse. L’ancienne reste active jusqu’à la confirmation."
         onClose={() => setSheet(null)}>
+        {field('newEmail', 'Nouvelle adresse e-mail', newEmail, setNewEmail, newEmail && !emailValid ? 'Adresse e-mail invalide.' : undefined)}
+        <View style={styles.field}>
+          <Text style={styles.label}>Mot de passe actuel</Text>
+          <TextInput
+            style={[kitStyles.input, focus === 'password' && kitStyles.inputFocused]}
+            value={password}
+            onChangeText={setPassword}
+            onFocus={() => setFocus('password')}
+            onBlur={() => setFocus(null)}
+            secureTextEntry
+            autoCapitalize="none"
+            autoComplete="current-password"
+            selectionColor={c.link}
+            accessibilityLabel="Mot de passe actuel"
+          />
+        </View>
+        {sheetError ? (
+          <View style={styles.errorRow}>
+            <Icon name="error" size={16} color={c.error} />
+            <Text style={styles.errorText}>{sheetError}</Text>
+          </View>
+        ) : null}
         <PrimaryButton
-          label="Continuer"
-          icon="arrow_forward"
-          onPress={() => {
-            setSheet(null);
-            setToast('Démo : saisie de la nouvelle adresse e-mail');
-          }}
+          label={sending ? 'Envoi…' : 'Envoyer le lien'}
+          icon="send"
+          disabled={!emailValid || !password || sending}
+          onPress={sendEmailChange}
         />
         <SecondaryButton label="Garder mon adresse" onPress={() => setSheet(null)} />
       </BottomSheet>
-
-      <DatePickerSheet
-        visible={sheet === 'birthdate'}
-        title="Date de naissance"
-        value={draft.birthdate}
-        maxDate={DEMO_TODAY}
-        onSelect={(date) => set('birthdate', date)}
-        onClose={() => setSheet(null)}
-      />
 
       {toast ? <UndoToast key={toast} text={toast} onHide={() => setToast(null)} bottom={100} /> : null}
     </SafeAreaView>

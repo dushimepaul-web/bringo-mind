@@ -22,41 +22,37 @@ import { WheelList, WheelSeparator } from '@/components/ui/wheel-list';
 
 import { Chip, PrimaryButton, TopBar, usePriorityColors, useTaskStyles } from '../components/task-ui';
 import {
-  CATEGORIES,
-  CATEGORY_ICONS,
-  DEMO_TODAY,
-  HOUSEHOLD,
   PRIORITY_LABELS,
   addDays,
   atTime,
   dayOffset,
   formatDueLong,
   startOfDay,
-  remindersOf,
   dayLabel,
   reminderText,
+  today,
+  initialsOf,
 } from '../data';
-import { taskActions, useTask } from '../store';
-import type { Task, TaskCategory, TaskDraft, TaskPriority } from '../types';
+import { taskActions, useTask, useTaskContext } from '../store';
+import type { Task, TaskDraft, TaskPriority } from '../types';
 
 const TITLE_MAX = 255;
 const DESCRIPTION_MAX = 5000;
 const PRIORITIES: TaskPriority[] = [1, 2, 3, 4];
 
-/** Démo : formulaire de création prérempli (exemple du dossier directeur). */
-function demoDraft(): TaskDraft {
+/** Formulaire de création vide : échéance demain à 17h00, sans rappel. */
+function emptyDraft(): TaskDraft {
   return {
-    title: 'Acheter les fournitures scolaires',
-    description: 'Liste de la rentrée : cahiers, trousse, calculatrice et agenda.',
+    title: '',
+    description: '',
     priority: 2,
-    dueAt: atTime(addDays(DEMO_TODAY, 1), 17),
+    dueAt: atTime(addDays(today(), 1), 17),
     hasTime: true,
-    category: 'Famille',
+    category: null,
     // Personnel par défaut : le partage avec le foyer est toujours un choix explicite.
-    household: null,
-    sharedWith: [],
-    reminder: true,
-    reminderAt: [atTime(addDays(DEMO_TODAY, 1), 16)],
+    householdId: null,
+    assigneeId: null,
+    reminderAt: [],
   };
 }
 
@@ -68,11 +64,9 @@ function draftOf(task: Task): TaskDraft {
     dueAt: task.dueAt,
     hasTime: task.hasTime,
     category: task.category,
-    household: task.household,
-    sharedWith: task.sharedWith,
-    reminder: task.reminder,
-    reminderAt: remindersOf(task),
-    assignee: task.assignee,
+    householdId: task.householdId,
+    assigneeId: task.assigneeId,
+    reminderAt: task.reminderAt,
   };
 }
 
@@ -93,12 +87,13 @@ export default function TaskFormScreen() {
     description?: string;
   }>();
   const isEdit = pathname.includes('/edit');
-  const existing = useTask(isEdit ? id : '__new__');
+  const existing = useTask(isEdit ? id : undefined);
+  const { categories, household } = useTaskContext();
   const insets = useSafeAreaInsets();
 
   const [draft, setDraft] = useState<TaskDraft>(() => {
     if (existing) return draftOf(existing);
-    const base = demoDraft();
+    const base = emptyDraft();
     // Tâche créée depuis un document : titre et échéance déjà remplis.
     if (title) {
       return {
@@ -115,20 +110,13 @@ export default function TaskFormScreen() {
   const [titleTouched, setTitleTouched] = useState(false);
   // Rappel en cours de réglage (null : aucun réglage ouvert).
   const [newReminder, setNewReminder] = useState<Date | null>(null);
-  const [stepText, setStepText] = useState('');
-  const steps = draft.steps ?? [];
-  const addStep = () => {
-    if (!stepText.trim()) return;
-    set('steps', [...steps, stepText.trim()]);
-    setStepText('');
-  };
 
   const set = <K extends keyof TaskDraft>(key: K, value: TaskDraft[K]) =>
     setDraft((current) => ({ ...current, [key]: value }));
 
   const titleError = titleTouched && draft.title.trim().length === 0;
   const canSave = draft.title.trim().length > 0;
-  const shared = draft.household !== null;
+  const shared = draft.householdId !== null;
 
   const selectDay = (day: Date) => {
     const hours = draft.hasTime ? draft.dueAt.getHours() : 12;
@@ -147,9 +135,8 @@ export default function TaskFormScreen() {
   const toggleShare = (value: boolean) => {
     setDraft((current) => ({
       ...current,
-      household: value ? HOUSEHOLD.name : null,
-      sharedWith: value ? ['Thomas'] : [],
-      assignee: value ? current.assignee : 'Claire',
+      householdId: value && household ? household.id : null,
+      assigneeId: value ? current.assigneeId : null,
     }));
   };
 
@@ -170,20 +157,21 @@ export default function TaskFormScreen() {
   };
 
   // Roue des dates : d'aujourd'hui (ou de l'échéance si elle est passée) à 3 mois.
-  const firstDay = startOfDay(dayOffset(draft.dueAt) < 0 ? draft.dueAt : DEMO_TODAY);
+  const firstDay = startOfDay(dayOffset(draft.dueAt) < 0 ? draft.dueAt : today());
   const days = Array.from({ length: 92 }, (_, index) => addDays(firstDay, index));
   const dayIndex = Math.max(0, days.findIndex((day) => dayOffset(day) === dayOffset(draft.dueAt)));
   const reminders = draft.reminderAt ?? [];
   const setReminders = (list: Date[]) =>
-    setDraft((current) => ({ ...current, reminderAt: list, reminder: list.length > 0 }));
+    setDraft((current) => ({ ...current, reminderAt: list }));
   // Roue des dates du rappel : d'aujourd'hui à 3 mois.
-  const reminderDays = Array.from({ length: 92 }, (_, index) => addDays(startOfDay(DEMO_TODAY), index));
+  const reminderDays = Array.from({ length: 92 }, (_, index) => addDays(startOfDay(today()), index));
   const openReminder = () => {
     // Proposition : 1 h avant l'échéance (ou à 9h00 la veille si la tâche n'a pas d'heure).
     const base = draft.hasTime
       ? new Date(draft.dueAt.getTime() - 60 * 60000)
       : atTime(addDays(startOfDay(draft.dueAt), -1), 9);
-    setNewReminder(base.getTime() < DEMO_TODAY.getTime() ? atTime(DEMO_TODAY, DEMO_TODAY.getHours() + 1) : base);
+    const now = today();
+    setNewReminder(base.getTime() < now.getTime() ? atTime(now, now.getHours() + 1) : base);
   };
 
   return (
@@ -348,60 +336,17 @@ export default function TaskFormScreen() {
             showsHorizontalScrollIndicator={false}
             style={styles.chipsScroll}
             contentContainerStyle={styles.chipsRow}>
-            {CATEGORIES.map((category: TaskCategory) => (
+            {categories.map((category) => (
               <Chip
-                key={category}
-                label={category}
-                icon={CATEGORY_ICONS[category]}
-                selected={draft.category === category}
-                onPress={() => set('category', category)}
+                key={category.code}
+                label={category.label}
+                icon={category.icon}
+                selected={draft.category === category.code}
+                // Second appui : retire la catégorie.
+                onPress={() => set('category', draft.category === category.code ? null : category.code)}
               />
             ))}
           </ScrollView>
-
-          {/* Étapes (à la création ; ensuite elles se gèrent depuis le détail) */}
-          {!isEdit ? (
-            <>
-              <Text style={[taskStyles.label, styles.spaced, styles.labelGap]}>Étapes</Text>
-              <View style={[taskStyles.card, styles.remindersCard]}>
-                {steps.map((step, index) => (
-                  <View key={`${index}-${step}`} style={styles.reminderRow}>
-                    <View style={styles.stepNumber}>
-                      <Text style={styles.stepNumberText}>{index + 1}</Text>
-                    </View>
-                    <Text style={styles.reminderText}>{step}</Text>
-                    <Pressable
-                      hitSlop={10}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Retirer l’étape ${step}`}
-                      onPress={() => set('steps', steps.filter((_, at) => at !== index))}>
-                      <Icon name="close" size={20} color={c.muted} />
-                    </Pressable>
-                  </View>
-                ))}
-                <View style={styles.reminderRow}>
-                  <Icon name="add" size={22} color={c.link} />
-                  <TextInput
-                    style={styles.stepInput}
-                    placeholder="Ajouter une étape"
-                    placeholderTextColor={c.muted}
-                    selectionColor={c.link}
-                    value={stepText}
-                    onChangeText={setStepText}
-                    returnKeyType="done"
-                    submitBehavior="blurAndSubmit"
-                    onSubmitEditing={addStep}
-                    accessibilityLabel="Nouvelle étape"
-                  />
-                  {stepText.trim() ? (
-                    <Pressable hitSlop={8} accessibilityRole="button" accessibilityLabel="Ajouter l’étape" onPress={addStep}>
-                      <Icon name="check_circle" size={24} color={c.link} filled />
-                    </Pressable>
-                  ) : null}
-                </View>
-              </View>
-            </>
-          ) : null}
 
           {/* Rappels : date et heure exactes, avec les mêmes roues que l'échéance */}
           <Text style={[taskStyles.label, styles.spaced, styles.labelGap]}>Rappels</Text>
@@ -499,78 +444,63 @@ export default function TaskFormScreen() {
             )}
           </View>
 
-          {/* Partage — personnel par défaut */}
-          <View style={[taskStyles.card, styles.shareCard]}>
-            <View style={styles.toggleCardRow}>
-              <View style={[styles.toggleIcon, shared && styles.toggleIconOn]}>
-                <Icon
-                  name={shared ? 'group' : 'lock'}
-                  size={22}
-                  color={shared ? c.link : c.text}
-                />
-              </View>
-              <View style={styles.flexMin}>
-                <Text style={styles.toggleTitle}>Partager avec le foyer</Text>
-                <Text style={taskStyles.muted}>
-                  {shared ? `Visible par les membres de ${HOUSEHOLD.name}` : 'Tâche personnelle, visible par vous seule'}
-                </Text>
-              </View>
-              <DemoSwitch value={shared} onValueChange={toggleShare} label="Partager avec le foyer" />
-            </View>
-
-            {shared ? (
-              <View style={styles.shareDetails}>
-                <Text style={styles.subLabel}>Membres qui la verront</Text>
-                <View style={styles.wrap}>
-                  <View style={styles.meChip}>
-                    <View style={styles.avatar}>
-                      <Text style={styles.avatarText}>C</Text>
-                    </View>
-                    <Text style={styles.meText}>Claire (vous)</Text>
-                  </View>
-                  {HOUSEHOLD.members
-                    .filter((name) => name !== 'Claire')
-                    .map((name) => {
-                      const selected = draft.sharedWith.includes(name);
-                      return (
-                        <Chip
-                          key={name}
-                          label={name}
-                          icon={selected ? 'check' : 'add'}
-                          selected={selected}
-                          onPress={() =>
-                            set(
-                              'sharedWith',
-                              selected
-                                ? draft.sharedWith.filter((member) => member !== name)
-                                : [...draft.sharedWith, name],
-                            )
-                          }
-                        />
-                      );
-                    })}
+          {/* Partage — personnel par défaut ; proposé seulement si l'utilisateur a un foyer */}
+          {household ? (
+            <View style={[taskStyles.card, styles.shareCard]}>
+              <View style={styles.toggleCardRow}>
+                <View style={[styles.toggleIcon, shared && styles.toggleIconOn]}>
+                  <Icon name={shared ? 'group' : 'lock'} size={22} color={shared ? c.link : c.text} />
                 </View>
-                <Text style={[styles.subLabel, styles.assigneeLabel]}>Confiée à</Text>
-                <View style={styles.wrap}>
-                  {HOUSEHOLD.members.map((name) => (
-                    <Chip
-                      key={name}
-                      label={name === 'Claire' ? 'Claire (vous)' : name}
-                      icon="person"
-                      selected={(draft.assignee ?? 'Claire') === name}
-                      onPress={() => set('assignee', name)}
-                    />
-                  ))}
-                </View>
-                <View style={styles.note}>
-                  <Icon name="shield" size={18} color={c.muted} />
-                  <Text style={styles.noteText}>
-                    Seule cette tâche est partagée. Vos autres tâches et vos notes restent privées.
+                <View style={styles.flexMin}>
+                  <Text style={styles.toggleTitle}>Partager avec le foyer</Text>
+                  <Text style={taskStyles.muted}>
+                    {shared ? `Visible par les membres de ${household.name}` : 'Tâche personnelle, visible par vous seule'}
                   </Text>
                 </View>
+                <DemoSwitch value={shared} onValueChange={toggleShare} label="Partager avec le foyer" />
               </View>
-            ) : null}
-          </View>
+
+              {shared ? (
+                <View style={styles.shareDetails}>
+                  <Text style={styles.subLabel}>Membres qui la verront</Text>
+                  <View style={styles.wrap}>
+                    {household.members.map((member) => (
+                      <View key={member.id} style={styles.meChip}>
+                        <View style={styles.avatar}>
+                          <Text style={styles.avatarText}>{initialsOf(member.name)}</Text>
+                        </View>
+                        <Text style={styles.meText}>{member.you ? `${member.name} (vous)` : member.name}</Text>
+                      </View>
+                    ))}
+                  </View>
+                  <Text style={[styles.subLabel, styles.assigneeLabel]}>Confiée à</Text>
+                  <View style={styles.wrap}>
+                    <Chip
+                      label="Personne"
+                      icon="person_off"
+                      selected={draft.assigneeId === null}
+                      onPress={() => set('assigneeId', null)}
+                    />
+                    {household.members.map((member) => (
+                      <Chip
+                        key={member.id}
+                        label={member.you ? `${member.name} (vous)` : member.name}
+                        icon="person"
+                        selected={draft.assigneeId === member.id}
+                        onPress={() => set('assigneeId', member.id)}
+                      />
+                    ))}
+                  </View>
+                  <View style={styles.note}>
+                    <Icon name="shield" size={18} color={c.muted} />
+                    <Text style={styles.noteText}>
+                      Seule cette tâche est partagée. Vos autres tâches et vos notes restent privées.
+                    </Text>
+                  </View>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
         </ScrollView>
 
         <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, Space.md) }]}>

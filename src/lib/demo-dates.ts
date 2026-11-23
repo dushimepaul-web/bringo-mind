@@ -1,10 +1,20 @@
 // Date de démonstration et formatage des dates en français, partagés par les modules.
 // La démo « vit » au mardi 14 mai 2024 pour que tous les écrans restent cohérents.
 
+import { IS_DEMO } from '@/lib/config';
+
 type Due = { dueAt: Date; hasTime: boolean };
 
 /** « Aujourd'hui » de la démo : mardi 14 mai 2024 (cohérent avec le tableau de bord). */
 export const DEMO_TODAY = new Date(2024, 4, 14, 9, 30);
+
+/**
+ * « Aujourd'hui » des écrans : la date de démo en mode « demo », la vraie date en mode « api ».
+ * Fonction (et non constante) pour rester juste si l'app reste ouverte après minuit.
+ */
+export function today(): Date {
+  return IS_DEMO ? DEMO_TODAY : new Date();
+}
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -29,9 +39,9 @@ export function startOfDay(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
-/** Nombre de jours entre aujourd'hui (démo) et la date. */
+/** Nombre de jours entre aujourd'hui et la date. */
 export function dayOffset(date: Date): number {
-  return Math.round((startOfDay(date).getTime() - startOfDay(DEMO_TODAY).getTime()) / DAY_MS);
+  return Math.round((startOfDay(date).getTime() - startOfDay(today()).getTime()) / DAY_MS);
 }
 
 export function addDays(date: Date, days: number): Date {
@@ -52,7 +62,7 @@ export function formatTime(date: Date): string {
 
 /** « 16 mai », ou « 16 mai 2025 » hors de l'année en cours. */
 export function formatDay(date: Date): string {
-  const sameYear = date.getFullYear() === DEMO_TODAY.getFullYear();
+  const sameYear = date.getFullYear() === today().getFullYear();
   return `${date.getDate()} ${MONTHS[date.getMonth()]}${sameYear ? '' : ` ${date.getFullYear()}`}`;
 }
 

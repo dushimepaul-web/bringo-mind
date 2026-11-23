@@ -1,24 +1,28 @@
 // S-09 - Détail d'une tâche | Module M04 Tâches | Phase S4
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icon';
+import { ErrorState, LoadingState } from '@/components/ui/states';
+import { useQuery } from '@/hooks/use-query';
+import { isApiError } from '@/lib/api';
 import { DARK, LIGHT, useScopedColors, type AppColors } from '@/constants/app-colors';
 import { FontFamily, Radius, Space } from '@/constants/design';
 
-import { BottomSheet, CheckCircle, IconButton, PrimaryButton, PriorityBadge, SecondaryButton, SheetOption, Tag, TopBar, UndoToast, useTaskStyles } from '../components/task-ui';
+import { BottomSheet, IconButton, PrimaryButton, PriorityBadge, SecondaryButton, SheetOption, Tag, TopBar, UndoToast, useTaskStyles } from '../components/task-ui';
 import {
-  CATEGORY_ICONS,
+  categoryIcon,
+  categoryLabel,
   formatDay,
   formatDueLong,
   formatLongDay,
+  initialsOf,
   lateDays,
-  remindersOf,
   remindersSummary,
 } from '../data';
-import { taskActions, useTask } from '../store';
+import { ensureTask, taskActions, useTask, useTaskContext } from '../store';
 
 type Sheet = 'menu' | 'postpone' | 'delete' | null;
 type Toast = { text: string; undo?: () => void };
@@ -36,7 +40,32 @@ export default function TaskDetailScreen() {
   const task = useTask(id);
   const [sheet, setSheet] = useState<Sheet>(null);
   const [toast, setToast] = useState<Toast | null>(null);
-  const [newStep, setNewStep] = useState('');
+  const { household } = useTaskContext();
+  // Tâche ouverte depuis un autre écran sans passer par la liste : on la demande au serveur.
+  const load = useQuery(`task-${id ?? ''}`, () => ensureTask(id));
+
+  if (!task && load.status === 'loading') {
+    return (
+      <SafeAreaView style={taskStyles.safe} edges={['top']}>
+        <TopBar title="Détail de la tâche" fallback="/tasks" />
+        <View style={taskStyles.content}>
+          <LoadingState rows={3} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Erreur autre qu'une tâche introuvable (réseau, serveur) : on propose de réessayer.
+  if (!task && load.status === 'error' && !(isApiError(load.error) && load.error.status === 404)) {
+    return (
+      <SafeAreaView style={taskStyles.safe} edges={['top']}>
+        <TopBar title="Détail de la tâche" fallback="/tasks" />
+        <View style={taskStyles.content}>
+          <ErrorState error={load.error} onRetry={load.reload} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (!task) {
     return (
@@ -56,7 +85,10 @@ export default function TaskDetailScreen() {
 
   const open = task.status === 'open';
   const late = lateDays(task);
-  const doneSubtasks = task.subtasks.filter((sub) => sub.done).length;
+  const awaitingAnswer = task.assignedToMe && task.assignmentStatus === 'pending';
+  const sharedWith = household && task.householdId === household.id
+    ? household.members.map((member) => (member.you ? 'Vous' : member.name)).join(' · ')
+    : 'Tous les membres du foyer';
   const editHref = { pathname: '/tasks/edit', params: { id: task.id } } as const;
 
   const status: { label: string; tone: StatusTone; icon: string } = !open
@@ -65,7 +97,7 @@ export default function TaskDetailScreen() {
       : { label: 'Archivée', tone: 'gray', icon: 'inventory_2' }
     : late > 0
       ? { label: late === 1 ? 'En retard d’1 jour' : `En retard de ${late} jours`, tone: 'red', icon: 'warning' }
-      : doneSubtasks > 0
+      : task.inProgress
         ? { label: 'En cours', tone: 'blue', icon: 'schedule' }
         : { label: 'À faire', tone: 'gray', icon: 'radio_button_unchecked' };
 
@@ -97,10 +129,14 @@ export default function TaskDetailScreen() {
     else router.replace('/tasks');
   };
 
-  const addStep = () => {
-    if (!newStep.trim()) return;
-    taskActions.addSubtask(task.id, newStep);
-    setNewStep('');
+  const keepSuggestion = () => {
+    taskActions.confirm(task.id);
+    setToast({ text: 'Tâche gardée dans votre liste.' });
+  };
+
+  const answer = (accept: boolean) => {
+    taskActions.respond(task.id, accept);
+    setToast({ text: accept ? 'Vous vous chargez de cette tâche.' : 'Attribution refusée.' });
   };
 
   const toggleDone = () => {
@@ -138,6 +174,23 @@ export default function TaskDetailScreen() {
         <Text style={[styles.title, !open && styles.titleDone]}>{task.title}</Text>
         <Text style={styles.context}>{task.context}</Text>
 
+        {task.suggested && open ? (
+          <View style={[taskStyles.card, styles.block, styles.notice]}>
+            <Text style={styles.description}>
+              Kora a repéré cette démarche. Vérifiez-la, puis gardez-la dans votre liste.
+            </Text>
+            <PrimaryButton label="Garder la tâche" icon="check" onPress={keepSuggestion} />
+          </View>
+        ) : null}
+
+        {awaitingAnswer && open ? (
+          <View style={[taskStyles.card, styles.block, styles.notice]}>
+            <Text style={styles.description}>Un membre du foyer vous a confié cette tâche.</Text>
+            <PrimaryButton label="Je m’en charge" icon="check" onPress={() => answer(true)} />
+            <SecondaryButton label="Refuser" icon="close" onPress={() => answer(false)} />
+          </View>
+        ) : null}
+
         {task.description ? (
           <>
             <SectionTitle icon="notes" title="Description" />
@@ -152,24 +205,26 @@ export default function TaskDetailScreen() {
           <InfoRow
             icon="event"
             label="Échéance"
-            value={formatDueLong(task)}
+            value={task.hasDue ? formatDueLong(task) : 'Sans échéance'}
             danger={late > 0}
           />
-          <InfoRow icon={CATEGORY_ICONS[task.category]} label="Catégorie" value={task.category} />
-          <InfoRow
-            icon="person"
-            label="Assignée à"
-            value={task.assignee === 'Claire' ? 'Claire Martin (vous)' : `${task.assignee} Martin`}
-            avatar={task.assignee.charAt(0)}
-          />
+          <InfoRow icon={categoryIcon(task.category)} label="Catégorie" value={categoryLabel(task.category)} />
+          {task.household ? (
+            <InfoRow
+              icon="person"
+              label="Assignée à"
+              value={task.assignee || 'Personne pour l’instant'}
+              avatar={task.assignee ? initialsOf(task.assignee) : undefined}
+            />
+          ) : null}
           <InfoRow
             icon={task.household ? 'group' : 'lock'}
-            label={task.household ? 'Partagée avec' : 'Espace'}
-            value={task.household ? ['Claire (vous)', ...task.sharedWith].join(' · ') : 'Personnel, visible par vous seule'}
+            label={task.household ? `Partagée avec ${task.household}` : 'Espace'}
+            value={task.household ? sharedWith : 'Personnel, visible par vous seule'}
           />
           <InfoRow
             icon="notifications_active"
-            label={remindersOf(task).length > 1 ? 'Rappels' : 'Rappel'}
+            label={task.reminderAt.length > 1 ? 'Rappels' : 'Rappel'}
             value={remindersSummary(task)}
           />
           <InfoRow
@@ -179,70 +234,6 @@ export default function TaskDetailScreen() {
             last
           />
         </View>
-
-        <SectionTitle
-          icon="checklist"
-          title="Étapes"
-          aside={task.subtasks.length ? `${doneSubtasks}/${task.subtasks.length}` : undefined}
-        />
-        <View style={[taskStyles.card, styles.subtasks]}>
-          {task.subtasks.length > 0 ? (
-            <View style={styles.progressTrack}>
-              <View style={[styles.progressFill, { width: `${(doneSubtasks / task.subtasks.length) * 100}%` }]} />
-            </View>
-          ) : null}
-          {task.subtasks.map((sub, index) => (
-            <Pressable
-              key={sub.id}
-              style={[styles.subRow, index > 0 && styles.subRowBorder]}
-              // La case à cocher porte le rôle accessible ; la ligne élargit seulement la zone tactile.
-              onPress={() => taskActions.toggleSubtask(task.id, sub.id)}>
-              <CheckCircle checked={sub.done} label={sub.title} onPress={() => taskActions.toggleSubtask(task.id, sub.id)} />
-              <Text style={[styles.subText, sub.done && styles.subTextDone]}>{sub.title}</Text>
-            </Pressable>
-          ))}
-          <View style={[styles.addStep, task.subtasks.length > 0 && styles.subRowBorder]}>
-            <Icon name="add" size={22} color={c.link} />
-            <TextInput
-              style={styles.addStepInput}
-              placeholder="Ajouter une étape"
-              placeholderTextColor={c.muted}
-              selectionColor={c.link}
-              value={newStep}
-              onChangeText={setNewStep}
-              returnKeyType="done"
-              submitBehavior="blurAndSubmit"
-              onSubmitEditing={addStep}
-              accessibilityLabel="Nouvelle étape"
-            />
-            {newStep.trim() ? (
-              <Pressable hitSlop={8} accessibilityRole="button" accessibilityLabel="Ajouter l’étape" onPress={addStep}>
-                <Icon name="check_circle" size={24} color={c.link} filled />
-              </Pressable>
-            ) : null}
-          </View>
-        </View>
-
-        {task.document ? (
-          <>
-            <SectionTitle icon="attach_file" title="Document lié" />
-            <Pressable
-              style={({ pressed }) => [taskStyles.card, styles.docRow, pressed && taskStyles.cardPressed]}
-              accessibilityRole="button"
-              onPress={() => router.push('/documents/detail')}>
-              <View style={styles.docIcon}>
-                <Icon name="picture_as_pdf" size={24} color={c.text} />
-              </View>
-              <View style={styles.flexMin}>
-                <Text style={taskStyles.title} numberOfLines={2}>
-                  {task.document.name}
-                </Text>
-                <Text style={taskStyles.muted}>{task.document.meta}</Text>
-              </View>
-              <Icon name="chevron_right" size={22} color={c.muted} />
-            </Pressable>
-          </>
-        ) : null}
 
         {task.household ? (
           <Text style={styles.privacy}>
@@ -476,6 +467,10 @@ function makeStyles(c: AppColors) {
       lineHeight: 21,
       color: c.muted,
       marginTop: 6,
+    },
+    notice: {
+      gap: Space.sm,
+      marginTop: Space.md,
     },
     block: {
       marginTop: Space.md,

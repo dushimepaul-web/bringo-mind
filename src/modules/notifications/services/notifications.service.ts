@@ -2,7 +2,7 @@
 // vers le modèle des écrans. `NotificationOut` n'a pas de type : on déduit le lien depuis `link`.
 import type { Href } from 'expo-router';
 
-import { api, getAll } from '@/lib/api';
+import { api, getPage } from '@/lib/api';
 
 import type { AppNotification, NotificationKind } from '../store';
 
@@ -36,6 +36,21 @@ function hrefOf(dto: NotificationDto): Href {
   return '/notifications';
 }
 
+/** Préférences telles que renvoyées par l'API (`PreferencesOut`). */
+export type PreferencesDto = {
+  channels: ('in_app' | 'email' | 'web_push')[];
+  default_offsets: number[];
+  same_day_reminder?: boolean;
+  quiet_hours_start: string | null;
+  quiet_hours_end: string | null;
+  all_day_reminder_time: string;
+  repeat_unresolved_hours: number | null;
+  daily_summary: boolean;
+  weekly_summary: boolean;
+  escalate_critical: boolean;
+  category_overrides: Record<string, unknown>;
+};
+
 export function toNotification(dto: NotificationDto): AppNotification {
   return {
     id: dto.id,
@@ -49,8 +64,8 @@ export function toNotification(dto: NotificationDto): AppNotification {
 }
 
 export const notificationsApi = {
-  /** NOT-001 : les notifications, de la plus récente à la plus ancienne. */
-  list: () => getAll<NotificationDto>('/notifications', { page_size: 50 }),
+  /** API-NOT-005 : les 100 notifications les plus récentes. */
+  list: async () => (await getPage<NotificationDto>('/notifications', { limit: 100 })).items,
   /** NOT-003 : marquer une notification comme lue (pas de « non lue » côté serveur). */
   read: (id: string) => api.post(`/notifications/${id}/read`),
   /** NOT-004 : tout marquer comme lu. */
@@ -59,7 +74,7 @@ export const notificationsApi = {
   remove: (id: string) => api.delete(`/notifications/${id}`),
   /** Nombre de notifications non lues. */
   unreadCount: () => api.get<number>('/notifications/unread-count'),
-  /** Préférences de notification (channels, offsets, heures calmes…). */
-  preferences: () => api.get<Record<string, unknown>>('/notifications/preferences'),
-  savePreferences: (body: Record<string, unknown>) => api.put('/notifications/preferences', body),
+  /** API-NOT-003 / 004 : préférences de notification (canaux, heures de silence, résumés…). */
+  preferences: () => api.get<PreferencesDto>('/notifications/preferences'),
+  savePreferences: (body: Partial<PreferencesDto>) => api.put<PreferencesDto>('/notifications/preferences', body),
 };

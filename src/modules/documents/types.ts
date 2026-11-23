@@ -25,4 +25,6 @@ export type DocItem = {
   confidence?: number;
   /** Élément d'un autre module lié à ce document. */
   linked?: { kind: 'task' | 'event'; id: string; title: string };
+  /** Version de la ligne côté serveur (verrouillage optimiste, mode « api »). */
+  version?: number;
 };

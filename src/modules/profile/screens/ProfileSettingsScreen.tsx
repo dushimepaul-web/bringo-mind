@@ -1,6 +1,6 @@
 // S-20 - Profil et paramètres | Module M09 Profil | Phase S8
-import { router, useFocusEffect, type Href } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { router, useFocusEffect, useLocalSearchParams, type Href } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -8,6 +8,7 @@ import { AppHeader } from '@/components/app-header';
 import { Icon } from '@/components/icon';
 import { BottomSheet, PrimaryButton, SecondaryButton, SheetOption, Tag, UndoToast, useKitStyles } from '@/components/ui/kit';
 import { SettingsRow, SettingsSection, ToggleSwitch } from '@/components/ui/settings';
+import { userMessage } from '@/lib/api';
 import { IS_DEMO } from '@/lib/config';
 import { appLock } from '@/lib/app-lock';
 import { DEMO_STATES, setDemoState, useDemoState } from '@/lib/demo-state';
@@ -17,15 +18,15 @@ import { DARK, LIGHT, useScopedColors, type AppColors } from '@/constants/app-co
 import { FontFamily, Radius } from '@/constants/design';
 import { formatLongDay } from '@/lib/demo-dates';
 
-import { LANGUAGES, USER } from '../data';
+import { LANGUAGES } from '../data';
 import { initialsOf, profileActions, syncProfile, useProfileState } from '../store';
 
-type Sheet = 'logout' | 'twoFactorOff' | 'sessions' | 'demo' | 'launch' | null;
+type Sheet = 'logout' | 'password' | 'mfaSetup' | 'mfaCodes' | 'twoFactorOff' | 'sessions' | 'demo' | 'launch' | null;
 
 /** Réglages trouvables par la recherche. */
 const SEARCH_INDEX: { title: string; keywords: string; icon: string; tint: string; href: Href }[] = [
-  { title: 'Informations personnelles', keywords: 'nom prénom téléphone adresse photo e-mail naissance', icon: 'badge', tint: '#2F7BE0', href: '/profile/complete' },
-  { title: 'Mot de passe', keywords: 'sécurité changer', icon: 'lock', tint: '#6B7280', href: '/reset-password' },
+  { title: 'Informations personnelles', keywords: 'nom prénom e-mail adresse', icon: 'badge', tint: '#2F7BE0', href: '/profile/complete' },
+  { title: 'Mot de passe', keywords: 'sécurité changer', icon: 'lock', tint: '#6B7280', href: { pathname: '/profile', params: { open: 'password' } } },
   { title: 'Face ID', keywords: 'biométrie empreinte verrouillage déverrouillage', icon: 'fingerprint', tint: '#16A34A', href: '/profile/biometric' },
   { title: 'Langue et région', keywords: 'français anglais fuseau horaire devise date heure', icon: 'language', tint: '#2F7BE0', href: '/profile/preferences' },
   { title: 'Affichage', keywords: 'thème sombre clair taille texte calendrier', icon: 'palette', tint: '#E0518E', href: '/profile/preferences' },
@@ -45,6 +46,49 @@ export default function ProfileSettingsScreen() {
   const [sheet, setSheet] = useState<Sheet>(null);
   const [toast, setToast] = useState<{ text: string; undo?: () => void } | null>(null);
   const demoState = useDemoState();
+  const { open } = useLocalSearchParams<{ open?: string }>();
+  // Champs des feuilles « mot de passe » et « double authentification ».
+  const [current, setCurrent] = useState('');
+  const [next, setNext] = useState('');
+  const [confirmNext, setConfirmNext] = useState('');
+  const [code, setCode] = useState('');
+  const [mfaSecret, setMfaSecret] = useState<string | null>(null);
+  const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [sheetError, setSheetError] = useState<string | null>(null);
+
+  const openSheet = (name: Sheet) => {
+    setCurrent('');
+    setNext('');
+    setConfirmNext('');
+    setCode('');
+    setSheetError(null);
+    setSheet(name);
+  };
+
+  // Lien « Changer mon mot de passe » depuis un autre écran.
+  useEffect(() => {
+    if (open === 'password') openSheet('password');
+  }, [open]);
+
+  /** Lance une action d'une feuille : erreur affichée dans la feuille, sinon fermeture. */
+  const run = (action: () => Promise<unknown>, done: () => void) => {
+    if (busy) return;
+    setBusy(true);
+    setSheetError(null);
+    action()
+      .then(done)
+      .catch((error: unknown) => setSheetError(userMessage(error)))
+      .finally(() => setBusy(false));
+  };
+
+  const passwordError =
+    next.length > 0 && next.length < 8
+      ? 'Au moins 8 caractères.'
+      : confirmNext.length > 0 && confirmNext !== next
+        ? 'Les deux mots de passe ne correspondent pas.'
+        : null;
+  const canChangePassword = current.length > 0 && next.length >= 8 && next === confirmNext;
 
   useFocusEffect(
     useCallback(() => {
@@ -55,10 +99,10 @@ export default function ProfileSettingsScreen() {
     }, [flash]),
   );
 
-  // Mode API : rafraîchit profil, réglages et consentements à l'arrivée sur l'écran.
+  // Rafraîchit compte, réglages, sessions et consentements à l'arrivée sur l'écran.
   useFocusEffect(
     useCallback(() => {
-      if (!IS_DEMO) void syncProfile();
+      void syncProfile().catch((error: unknown) => setToast({ text: userMessage(error) }));
     }, []),
   );
 
@@ -134,10 +178,14 @@ export default function ProfileSettingsScreen() {
               {fullName}
             </Text>
             <Text style={kitStyles.muted} numberOfLines={1}>
-              {USER.email}
+              {user.email}
             </Text>
             <View style={styles.tags}>
-              <Tag label={USER.plan} icon="workspace_premium" tone="teal" />
+              {user.emailVerified ? (
+                <Tag label="E-mail vérifié" icon="verified" tone="teal" />
+              ) : (
+                <Tag label="E-mail à vérifier" icon="schedule" />
+              )}
             </View>
           </View>
           <Icon name="chevron_right" size={24} color={c.muted} />
@@ -155,7 +203,7 @@ export default function ProfileSettingsScreen() {
             icon="lock"
             tint="#6B7280"
             title="Mot de passe"
-            onPress={() => router.push('/reset-password')}
+            onPress={() => openSheet('password')}
           />
         </SettingsSection>
 
@@ -183,11 +231,15 @@ export default function ProfileSettingsScreen() {
                 label="Double authentification"
                 onValueChange={(value) => {
                   if (!value) {
-                    setSheet('twoFactorOff');
+                    openSheet('twoFactorOff');
                     return;
                   }
-                  profileActions.setTwoFactor(true);
-                  setToast({ text: 'Double authentification activée' });
+                  openSheet('mfaSetup');
+                  setMfaSecret(null);
+                  profileActions
+                    .startTwoFactor()
+                    .then((setup) => setMfaSecret(setup.secret))
+                    .catch((error: unknown) => setSheetError(userMessage(error)));
                 }}
               />
             }
@@ -269,7 +321,7 @@ export default function ProfileSettingsScreen() {
         )}
 
         <SecondaryButton label="Se déconnecter" icon="logout" danger style={styles.logout} onPress={() => setSheet('logout')} />
-        <Text style={styles.version}>Bringo Mind 1.0.0 • version de démonstration</Text>
+        <Text style={styles.version}>Bringo Mind 1.0.0</Text>
       </ScrollView>
 
       {/* Déconnexion */}
@@ -294,18 +346,155 @@ export default function ProfileSettingsScreen() {
       <BottomSheet
         visible={sheet === 'twoFactorOff'}
         title="Désactiver la double authentification ?"
-        subtitle="Votre compte sera protégé uniquement par votre mot de passe."
+        subtitle="Votre compte sera protégé uniquement par votre mot de passe. Confirmez avec votre mot de passe."
         onClose={() => setSheet(null)}>
+        <TextInput
+          style={kitStyles.input}
+          value={current}
+          onChangeText={setCurrent}
+          secureTextEntry
+          autoCapitalize="none"
+          autoComplete="current-password"
+          placeholder="Mot de passe"
+          placeholderTextColor={c.muted}
+          selectionColor={c.link}
+          accessibilityLabel="Mot de passe"
+        />
+        {sheetError ? <Text style={styles.sheetError}>{sheetError}</Text> : null}
         <SecondaryButton
-          label="Désactiver"
+          label={busy ? 'Désactivation…' : 'Désactiver'}
           danger
+          style={!current || busy ? styles.disabledButton : undefined}
           onPress={() => {
-            profileActions.setTwoFactor(false);
-            setSheet(null);
-            setToast({ text: 'Double authentification désactivée', undo: () => profileActions.setTwoFactor(true) });
+            if (!current) return;
+            run(
+              () => profileActions.disableTwoFactor(current),
+              () => {
+                setSheet(null);
+                setToast({ text: 'Double authentification désactivée' });
+              },
+            );
           }}
         />
         <SecondaryButton label="Garder activée" onPress={() => setSheet(null)} />
+      </BottomSheet>
+
+      {/* Changer le mot de passe */}
+      <BottomSheet
+        visible={sheet === 'password'}
+        title="Changer le mot de passe"
+        subtitle="Les autres appareils resteront connectés. Déconnectez-les ensuite si besoin."
+        onClose={() => setSheet(null)}>
+        <TextInput
+          style={kitStyles.input}
+          value={current}
+          onChangeText={setCurrent}
+          secureTextEntry
+          autoCapitalize="none"
+          autoComplete="current-password"
+          placeholder="Mot de passe actuel"
+          placeholderTextColor={c.muted}
+          selectionColor={c.link}
+          accessibilityLabel="Mot de passe actuel"
+        />
+        <TextInput
+          style={kitStyles.input}
+          value={next}
+          onChangeText={setNext}
+          secureTextEntry
+          autoCapitalize="none"
+          autoComplete="new-password"
+          placeholder="Nouveau mot de passe (8 caractères au moins)"
+          placeholderTextColor={c.muted}
+          selectionColor={c.link}
+          accessibilityLabel="Nouveau mot de passe"
+        />
+        <TextInput
+          style={kitStyles.input}
+          value={confirmNext}
+          onChangeText={setConfirmNext}
+          secureTextEntry
+          autoCapitalize="none"
+          autoComplete="new-password"
+          placeholder="Confirmer le nouveau mot de passe"
+          placeholderTextColor={c.muted}
+          selectionColor={c.link}
+          accessibilityLabel="Confirmer le nouveau mot de passe"
+        />
+        {passwordError || sheetError ? <Text style={styles.sheetError}>{passwordError ?? sheetError}</Text> : null}
+        <PrimaryButton
+          label={busy ? 'Enregistrement…' : 'Changer le mot de passe'}
+          icon="lock_reset"
+          disabled={!canChangePassword || busy}
+          onPress={() =>
+            run(
+              () => profileActions.changePassword(current, next),
+              () => {
+                setSheet(null);
+                setToast({ text: 'Mot de passe changé' });
+              },
+            )
+          }
+        />
+        <SecondaryButton label="Annuler" onPress={() => setSheet(null)} />
+      </BottomSheet>
+
+      {/* Activer la double authentification : clé, puis code de l'application d'authentification */}
+      <BottomSheet
+        visible={sheet === 'mfaSetup'}
+        title="Activer la double authentification"
+        subtitle="Ajoutez cette clé dans votre application d’authentification (Google Authenticator, Microsoft Authenticator…), puis saisissez le code à 6 chiffres."
+        onClose={() => setSheet(null)}>
+        <View style={styles.secretBox}>
+          <Text selectable style={styles.secretText}>
+            {mfaSecret ?? (sheetError ? '—' : 'Préparation de la clé…')}
+          </Text>
+        </View>
+        <TextInput
+          style={kitStyles.input}
+          value={code}
+          onChangeText={(value) => setCode(value.replace(/\D/g, '').slice(0, 6))}
+          keyboardType="number-pad"
+          autoComplete="one-time-code"
+          placeholder="Code à 6 chiffres"
+          placeholderTextColor={c.muted}
+          selectionColor={c.link}
+          accessibilityLabel="Code à 6 chiffres"
+        />
+        {sheetError ? <Text style={styles.sheetError}>{sheetError}</Text> : null}
+        <PrimaryButton
+          label={busy ? 'Vérification…' : 'Activer'}
+          icon="verified_user"
+          disabled={!mfaSecret || code.length !== 6 || busy}
+          onPress={() =>
+            run(
+              async () => setRecoveryCodes(await profileActions.enableTwoFactor(code)),
+              () => setSheet('mfaCodes'),
+            )
+          }
+        />
+        <SecondaryButton label="Annuler" onPress={() => setSheet(null)} />
+      </BottomSheet>
+
+      {/* Codes de secours : affichés une seule fois */}
+      <BottomSheet
+        visible={sheet === 'mfaCodes'}
+        title="Double authentification activée"
+        subtitle="Notez ces codes de secours et gardez-les en lieu sûr : chacun permet une connexion si vous perdez votre téléphone. Ils ne seront plus affichés."
+        onClose={() => setSheet(null)}>
+        <View style={styles.secretBox}>
+          <Text selectable style={styles.secretText}>
+            {recoveryCodes.length ? recoveryCodes.join('\n') : 'Aucun code renvoyé'}
+          </Text>
+        </View>
+        <PrimaryButton
+          label="J’ai noté mes codes"
+          icon="check"
+          onPress={() => {
+            setRecoveryCodes([]);
+            setSheet(null);
+          }}
+        />
       </BottomSheet>
 
       {/* Appareils connectés */}
@@ -321,9 +510,7 @@ export default function ProfileSettingsScreen() {
             </View>
             <View style={styles.flex}>
               <Text style={styles.sessionTitle}>{session.device}</Text>
-              <Text style={styles.sessionMeta}>
-                {session.place} • {session.when}
-              </Text>
+              <Text style={styles.sessionMeta}>{session.detail}</Text>
             </View>
             {session.current ? (
               <Tag label="Cet appareil" tone="teal" />
@@ -332,9 +519,9 @@ export default function ProfileSettingsScreen() {
                 hitSlop={8}
                 accessibilityRole="button"
                 onPress={() => {
-                  const undo = profileActions.signOutSession(session.id);
+                  profileActions.signOutSession(session.id);
                   setSheet(null);
-                  setToast({ text: `${session.device} a été déconnecté`, undo });
+                  setToast({ text: `${session.device} a été déconnecté` });
                 }}>
                 <Text style={styles.sessionAction}>Déconnecter</Text>
               </Pressable>
@@ -426,6 +613,30 @@ export default function ProfileSettingsScreen() {
 
 function makeStyles(c: AppColors) {
   return StyleSheet.create({
+    sheetError: {
+      fontFamily: FontFamily.body,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.error,
+    },
+    disabledButton: {
+      opacity: 0.45,
+    },
+    secretBox: {
+      borderRadius: Radius.md,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.soft,
+      padding: 14,
+    },
+    secretText: {
+      fontFamily: FontFamily.bodySemiBold,
+      fontSize: 16,
+      lineHeight: 24,
+      letterSpacing: 1,
+      color: c.text,
+      textAlign: 'center',
+    },
     pageTitle: {
       marginTop: 12,
       fontFamily: FontFamily.headingBold,

@@ -14,8 +14,8 @@ import { FontFamily, Radius } from '@/constants/design';
 import { useQuery } from '@/hooks/use-query';
 
 import { BottomSheet, SheetOption, SwipeRow, UndoToast, useTaskStyles } from '../components/task-ui';
-import { CATEGORY_ICONS, HOUSEHOLD, dayOffset, formatDay } from '../data';
-import { syncTasks, taskActions, useFlash, useTasks } from '../store';
+import { categoryIcon, categoryLabel, dayOffset, formatDay, initialsOf } from '../data';
+import { syncTasks, taskActions, useFlash, useTaskContext, useTasks } from '../store';
 import { TASK_VIEWS, setTaskView, useTaskView, type TaskView } from '../view-mode';
 import type { Task } from '../types';
 
@@ -23,22 +23,26 @@ type Space = 'personal' | 'household';
 type Status = 'todo' | 'doing' | 'done';
 type Toast = { text: string; undo?: () => void };
 
-const SPACES: { key: Space; label: string }[] = [
-  { key: 'personal', label: 'Personnel' },
-  { key: 'household', label: `Foyer · Famille ${HOUSEHOLD.name.replace('Foyer ', '')}` },
-];
+/** Onglets Personnel / Foyer (le nom du foyer vient de l'API). */
+function spacesOf(householdName: string | null): { key: Space; label: string }[] {
+  return [
+    { key: 'personal', label: 'Personnel' },
+    { key: 'household', label: householdName ? `Foyer · ${householdName}` : 'Foyer' },
+  ];
+}
 
 const STATUS_LABELS: Record<Status, string> = { todo: 'À faire', doing: 'En cours', done: 'Terminées' };
 
-/** « En cours » : au moins une étape faite ; « Terminées » : tâche terminée. */
+/** « En cours » : statut `in_progress` du serveur ; « Terminées » : tâche terminée. */
 function statusOf(task: Task): Status | null {
   if (task.status === 'done') return 'done';
   if (task.status !== 'open') return null;
-  return task.subtasks.some((step) => step.done) ? 'doing' : 'todo';
+  return task.inProgress ? 'doing' : 'todo';
 }
 
 /** « Aujourd'hui », « Demain », « Hier », sinon « 16 mai ». */
 function dueText(task: Task): string {
+  if (!task.hasDue && task.status !== 'done') return 'Sans échéance';
   const date = task.status === 'done' ? (task.completedAt ?? task.dueAt) : task.dueAt;
   const offset = dayOffset(date);
   if (offset === 0) return 'Aujourd’hui';
@@ -52,6 +56,7 @@ export default function TaskListScreen() {
   const taskStyles = useTaskStyles();
   const tasks = useTasks();
   const flash = useFlash();
+  const { household } = useTaskContext();
   const [space, setSpace] = useState<Space>('personal');
   const [searching, setSearching] = useState(false);
   const [query, setQuery] = useState('');
@@ -79,7 +84,7 @@ export default function TaskListScreen() {
     const mine = tasks.filter((task) => {
       const inSpace = space === 'personal' ? task.household === null : task.household !== null;
       const inQuery =
-        !term || [task.title, task.category, task.context].some((value) => value.toLowerCase().includes(term));
+        !term || [task.title, categoryLabel(task.category), task.context].some((value) => value.toLowerCase().includes(term));
       return inSpace && inQuery;
     });
     return (['todo', 'doing', 'done'] as Status[]).map((status) => ({
@@ -171,7 +176,7 @@ export default function TaskListScreen() {
         ) : null}
 
         <View style={styles.segments} accessibilityRole="tablist">
-          {SPACES.map((entry) => {
+          {spacesOf(household?.name ?? null).map((entry) => {
             const selected = space === entry.key;
             return (
               <Pressable
@@ -414,7 +419,7 @@ function TaskRow({
 }) {
   const { c, styles } = useLook();
   const tone = useStatusTone(status);
-  const late = task.status === 'open' && dayOffset(task.dueAt) < 0;
+  const late = task.status === 'open' && task.hasDue && dayOffset(task.dueAt) < 0;
   const done = status === 'done';
 
   const row = (
@@ -505,7 +510,7 @@ function TaskPills({ task, done }: { task: Task; done: boolean }) {
 
 function DueLabel({ task }: { task: Task }) {
   const { c, styles } = useLook();
-  const late = task.status === 'open' && dayOffset(task.dueAt) < 0;
+  const late = task.status === 'open' && task.hasDue && dayOffset(task.dueAt) < 0;
   return (
     <View style={styles.dueInline}>
       <Icon name="calendar_month" size={16} color={late ? c.error : c.muted} />
@@ -518,7 +523,7 @@ function DueLabel({ task }: { task: Task }) {
 
 function Initials({ name }: { name: string }) {
   const { styles } = useLook();
-  const initials = name === 'Thomas' ? 'TM' : name.slice(0, 2).toUpperCase();
+  const initials = initialsOf(name);
   return (
     <View style={styles.initials} accessibilityLabel={`Confiée à ${name}`}>
       <Text style={styles.initialsText}>{initials}</Text>
@@ -526,12 +531,10 @@ function Initials({ name }: { name: string }) {
   );
 }
 
-/** Vue « Cartes » : une carte par tâche, avec catégorie, étapes et personne. */
+/** Vue « Cartes » : une carte par tâche, avec catégorie et personne. */
 function TaskCard({ task, status, onCheck, onPostpone, onMenu }: { task: Task; status: Status; onCheck: () => void; onPostpone: () => void; onMenu: () => void }) {
   const { c, styles } = useLook();
   const done = status === 'done';
-  const steps = task.subtasks.length;
-  const stepsDone = task.subtasks.filter((step) => step.done).length;
   const card = (
     <Pressable
       style={({ pressed }) => [styles.taskCard, pressed && styles.rowPressed]}
@@ -546,17 +549,9 @@ function TaskCard({ task, status, onCheck, onPostpone, onMenu }: { task: Task; s
         <View style={styles.cardMeta}>
           <DueLabel task={task} />
           <View style={styles.dueInline}>
-            <Icon name={CATEGORY_ICONS[task.category]} size={16} color={c.muted} />
-            <Text style={styles.dueText}>{task.category}</Text>
+            <Icon name={categoryIcon(task.category)} size={16} color={c.muted} />
+            <Text style={styles.dueText}>{categoryLabel(task.category)}</Text>
           </View>
-          {steps > 0 ? (
-            <View style={styles.dueInline}>
-              <Icon name="checklist" size={16} color={c.muted} />
-              <Text style={styles.dueText}>
-                {stepsDone}/{steps} étapes
-              </Text>
-            </View>
-          ) : null}
         </View>
         <View style={styles.cardPills}>
           <TaskPills task={task} done={done} />
@@ -566,7 +561,7 @@ function TaskCard({ task, status, onCheck, onPostpone, onMenu }: { task: Task; s
         <Pressable hitSlop={10} accessibilityRole="button" accessibilityLabel={`Actions pour ${task.title}`} onPress={onMenu}>
           <Icon name="more_vert" size={22} color={c.text} />
         </Pressable>
-        {task.assignee !== 'Claire' ? <Initials name={task.assignee} /> : null}
+        {task.assignee && !task.assignedToMe ? <Initials name={task.assignee} /> : null}
       </View>
     </Pressable>
   );

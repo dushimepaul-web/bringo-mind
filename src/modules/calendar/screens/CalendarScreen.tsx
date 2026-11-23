@@ -15,11 +15,11 @@ import { QueryView } from '@/components/ui/states';
 import { DARK, LIGHT, useScopedColors, type AppColors } from '@/constants/app-colors';
 import { FontFamily, Radius } from '@/constants/design';
 import { useQuery } from '@/hooks/use-query';
-import { DEMO_TODAY, addDays, dayOffset, formatTime, startOfDay } from '@/lib/demo-dates';
+import { addDays, dayOffset, formatTime, startOfDay, today } from '@/lib/demo-dates';
 
 import { itemsForDay, type DayItem, type SpaceFilter } from '../components/calendar-ui';
-import { MONTHS, TASK_DEADLINES, TONES, WEEKDAY_LETTERS, durationOf, monthGrid, sameDay, weekOf } from '../data';
-import { eventActions, syncEvents, useCalendarState } from '../store';
+import { MONTHS, TONES, WEEKDAY_LETTERS, durationOf, monthGrid, sameDay, weekOf } from '../data';
+import { eventActions, syncMonth, useCalendarState } from '../store';
 import type { CalendarEvent } from '../types';
 
 const FILTERS: { key: SpaceFilter; label: string; icon: string }[] = [
@@ -42,9 +42,10 @@ function startMinutes(item: DayItem): number {
 export default function CalendarScreen() {
   const { c, styles } = useLook();
   const kit = useKitStyles();
-  const { events, flash } = useCalendarState();
-  const sync = useQuery('events', syncEvents);
-  const [selected, setSelected] = useState(() => startOfDay(DEMO_TODAY));
+  const { events, deadlines, flash } = useCalendarState();
+  const [selected, setSelected] = useState(() => startOfDay(today()));
+  // Chargement du mois affiché (rechargé en tirant vers le bas, et à chaque changement de mois).
+  const sync = useQuery(`events-${selected.getFullYear()}-${selected.getMonth()}`, () => syncMonth(selected));
   const [monthOpen, setMonthOpen] = useState(false);
   const [yearOpen, setYearOpen] = useState(false);
   const [filter, setFilter] = useState<SpaceFilter>('all');
@@ -64,13 +65,14 @@ export default function CalendarScreen() {
   );
 
   const visibleEvents = useMemo(() => events.filter((event) => !event.cancelled), [events]);
-  const items = useMemo(() => itemsForDay(selected, visibleEvents, TASK_DEADLINES, filter), [selected, visibleEvents, filter]);
+  const items = useMemo(() => itemsForDay(selected, visibleEvents, deadlines, filter), [selected, visibleEvents, deadlines, filter]);
   const week = useMemo(() => weekOf(selected), [selected]);
   const grid = useMemo(() => monthGrid(selected.getFullYear(), selected.getMonth()), [selected]);
-  const hasItems = (day: Date) => itemsForDay(day, visibleEvents, TASK_DEADLINES, filter).length > 0;
+  const hasItems = (day: Date) => itemsForDay(day, visibleEvents, deadlines, filter).length > 0;
 
   // Ligne de l'heure actuelle : seulement aujourd'hui, avant le premier élément qui commence après.
-  const nowMinutes = DEMO_TODAY.getHours() * 60 + DEMO_TODAY.getMinutes();
+  const now = today();
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
   const isToday = dayOffset(selected) === 0;
   const nowIndex = isToday ? items.findIndex((item) => startMinutes(item) > nowMinutes) : -2;
   const nowAt = nowIndex === -1 ? items.length : nowIndex;
@@ -101,7 +103,7 @@ export default function CalendarScreen() {
   const cancelEvent = (event: CalendarEvent) => {
     setMenuEvent(null);
     eventActions.cancel(event.id);
-    setToast({ text: 'Événement annulé.', undo: () => eventActions.restore(event.id) });
+    setToast({ text: 'Événement annulé.' });
   };
 
   return (
@@ -332,15 +334,29 @@ export default function CalendarScreen() {
       <BottomSheet visible={menuEvent !== null} title={menuEvent?.title ?? ''} onClose={() => setMenuEvent(null)}>
         {menuEvent ? (
           <>
-            <SheetOption
-              icon="edit"
-              label="Modifier"
-              onPress={() => {
-                setMenuEvent(null);
-                router.push({ pathname: '/calendar/edit', params: { id: menuEvent.id } });
-              }}
-            />
-            <SheetOption icon="event_busy" label="Annuler l’événement" danger onPress={() => cancelEvent(menuEvent)} />
+            {menuEvent.readOnly ? (
+              <SheetOption
+                icon="visibility"
+                label="Voir le détail"
+                hint="Événement d’un agenda connecté : modifiable depuis cet agenda"
+                onPress={() => {
+                  setMenuEvent(null);
+                  router.push({ pathname: '/calendar/detail', params: { id: menuEvent.id } });
+                }}
+              />
+            ) : (
+              <>
+                <SheetOption
+                  icon="edit"
+                  label="Modifier"
+                  onPress={() => {
+                    setMenuEvent(null);
+                    router.push({ pathname: '/calendar/edit', params: { id: menuEvent.id } });
+                  }}
+                />
+                <SheetOption icon="event_busy" label="Annuler l’événement" danger onPress={() => cancelEvent(menuEvent)} />
+              </>
+            )}
           </>
         ) : null}
       </BottomSheet>
@@ -352,7 +368,7 @@ export default function CalendarScreen() {
 function NowLine() {
   const { styles } = useLook();
   return (
-    <View style={styles.nowRow} accessibilityLabel={`Maintenant, ${formatTime(DEMO_TODAY)}`}>
+    <View style={styles.nowRow} accessibilityLabel={`Maintenant, ${formatTime(today())}`}>
       <View style={styles.timeCol} />
       <View style={styles.nowDot} />
       <View style={styles.nowLine} />
@@ -420,11 +436,9 @@ function TimelineRow({ item, upcoming, onMenu }: { item: DayItem; upcoming: bool
 
 /** Couleur de la barre de chaque catégorie (couleurs de l'app). */
 const TONE_BARS: Record<CalendarEvent['tone'], string> = {
-  health: '#0FB5A3',
-  work: '#1D6FE0',
-  family: '#F2B01E',
   admin: '#5B5BD6',
-  leisure: '#E0518E',
+  family: '#F2B01E',
+  work: '#1D6FE0',
 };
 
 function makeStyles(c: AppColors) {

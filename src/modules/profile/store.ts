@@ -1,15 +1,25 @@
-// Mémoire du Profil et des Paramètres.
-// Mode « demo » : données de démonstration. Mode « api » : profil, réglages et consentements distants.
+// Mémoire du Profil et des Paramètres, alimentée par l'API (contrat 2.11.0) :
+// compte (GET/PATCH /accounts/me), sessions, double authentification, réglages (GET/PATCH /settings),
+// consentements et demandes RGPD (/privacy). L'apparence, la vue du calendrier, les vibrations
+// et le verrouillage restent des réglages de l'appareil.
 import { useSyncExternalStore } from 'react';
 
 import { userMessage } from '@/lib/api';
 import { appLock } from '@/lib/app-lock';
-import { IS_DEMO } from '@/lib/config';
-import { DEMO_TODAY, addDays } from '@/lib/demo-dates';
+import { sessionStore, type SessionUser } from '@/lib/session';
 import { getThemeMode, setThemeMode, subscribeTheme, type ThemeMode } from '@/lib/theme';
 
-import { DELETION_GRACE_DAYS, SESSIONS, type ConsentKey } from './data';
-import { privacyApi, profileApi, settingsApi } from './services/profile.service';
+import { CONSENT_META } from './data';
+import {
+  privacyApi,
+  profileApi,
+  settingsApi,
+  type ConsentDto,
+  type MfaSetupDto,
+  type PrivacyRequestDto,
+  type SessionDto,
+  type SettingsDto,
+} from './services/profile.service';
 
 export type Preferences = {
   language: string;
@@ -28,63 +38,85 @@ export type Preferences = {
 export type PersonalInfo = {
   firstName: string;
   lastName: string;
-  phone: string;
-  birthdate: Date;
-  address: string;
-  city: string;
-  hasPhoto: boolean;
+  email: string;
+  emailVerified: boolean;
+  memberSince: Date | null;
 };
 
 export type LockDelay = 'now' | '1min' | '5min';
 
+export type DeviceSession = { id: string; device: string; detail: string; icon: string; current: boolean };
+
+export type Consent = { purpose: string; granted: boolean; required: boolean; icon: string; title: string; subtitle: string };
+
 type Snapshot = {
+  loaded: boolean;
   preferences: Preferences;
+  settingsVersion: number | null;
   user: PersonalInfo;
   biometric: boolean;
-  /** Réglages liés à la biométrie. */
   confirmSensitive: boolean;
   fallbackCode: boolean;
   lockDelay: LockDelay;
   twoFactor: boolean;
-  sessions: typeof SESSIONS;
-  consents: Record<ConsentKey, boolean>;
+  sessions: DeviceSession[];
+  consents: Consent[];
   deletionAt: Date | null;
+  /** Dernière demande d'export (statut affiché sur l'écran Confidentialité). */
+  lastExport: PrivacyRequestDto | null;
   flash: { text: string; undo?: () => void } | null;
 };
 
-let state: Snapshot = {
-  preferences: {
-    language: 'fr',
-    timezone: 'Europe/Paris',
-    dateFormat: 'dmy',
-    timeFormat: '24h',
-    currency: 'EUR',
-    weekStart: 'monday',
-    theme: getThemeMode(),
-    textSize: 'normal',
-    calendarView: 'month',
-    reduceMotion: false,
-    haptics: true,
-  },
-  user: {
-    firstName: 'Claire',
-    lastName: 'Martin',
-    phone: '+33 6 12 34 56 78',
-    birthdate: new Date(1988, 2, 14),
-    address: '12 rue de la Roquette',
-    city: '75011 Paris',
-    hasPhoto: false,
-  },
-  biometric: true,
-  confirmSensitive: true,
-  fallbackCode: true,
-  lockDelay: '1min',
-  twoFactor: false,
-  sessions: SESSIONS,
-  consents: { aiDocuments: true, suggestions: true, product: false, anonymous: false },
-  deletionAt: null,
-  flash: null,
-};
+const MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+
+function splitName(fullName: string): { firstName: string; lastName: string } {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  return { firstName: parts[0] ?? '', lastName: parts.slice(1).join(' ') };
+}
+
+function userFrom(me: SessionUser | null): PersonalInfo {
+  return {
+    ...splitName(me?.full_name ?? ''),
+    email: me?.email ?? '',
+    emailVerified: Boolean(me?.email_verified_at),
+    memberSince: me?.created_at ? new Date(me.created_at) : null,
+  };
+}
+
+function initialState(): Snapshot {
+  const me = sessionStore.getUser();
+  return {
+    loaded: false,
+    preferences: {
+      language: me?.locale ?? 'fr',
+      timezone: me?.timezone ?? 'UTC',
+      dateFormat: 'dmy',
+      timeFormat: '24h',
+      currency: me?.currency ?? 'EUR',
+      weekStart: 'monday',
+      theme: getThemeMode(),
+      textSize: 'normal',
+      calendarView: 'month',
+      reduceMotion: false,
+      haptics: true,
+    },
+    settingsVersion: null,
+    user: userFrom(me),
+    // Verrouillage biométrique : désactivé tant que la vraie reconnaissance n'est pas intégrée.
+    biometric: false,
+    confirmSensitive: true,
+    fallbackCode: true,
+    lockDelay: '1min',
+    twoFactor: Boolean(me?.mfa_enabled),
+    sessions: [],
+    consents: [],
+    deletionAt: null,
+    lastExport: null,
+    flash: null,
+  };
+}
+
+let state: Snapshot = initialState();
 const listeners = new Set<() => void>();
 
 function emit(next: Partial<Snapshot>) {
@@ -101,6 +133,16 @@ function subscribe(listener: () => void) {
 
 const getSnapshot = () => state;
 
+// Connexion / déconnexion : on repart du compte de la session.
+sessionStore.subscribe((session) => {
+  if (!session) {
+    state = initialState();
+    for (const listener of listeners) listener();
+  } else if (session.user && session.user.id && !state.loaded) {
+    emit({ user: userFrom(session.user), twoFactor: Boolean(session.user.mfa_enabled) });
+  }
+});
+
 // L'apparence peut aussi changer depuis le bouton soleil/lune de l'accueil : on la reflète ici.
 subscribeTheme(() => {
   const theme = getThemeMode();
@@ -111,91 +153,159 @@ export function useProfileState(): Snapshot {
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
 
-/** Mode « api » : envoie la requête ; en cas d'échec, annule la modification locale. */
-function remote(call: () => Promise<unknown>, rollback?: () => void) {
-  if (IS_DEMO) return;
-  call().catch((error: unknown) => {
-    rollback?.();
-    emit({ flash: { text: userMessage(error) } });
-  });
+/** Envoie la requête ; en cas d'échec, annule la modification locale et explique pourquoi. */
+function remote<T>(call: () => Promise<T>, onSuccess?: (result: T) => void, rollback?: () => void) {
+  call()
+    .then((result) => onSuccess?.(result))
+    .catch((error: unknown) => {
+      rollback?.();
+      emit({ flash: { text: userMessage(error) } });
+    });
 }
 
-/** Charge profil, réglages et consentements depuis l'API (mode « api »). */
+function preferencesFrom(settings: SettingsDto): Partial<Preferences> {
+  const formats = settings.formats ?? {};
+  const pick = (value: string | null | undefined, fallback: string) => (value && value !== 'auto' ? value : fallback);
+  return {
+    language: settings.locale,
+    timezone: settings.timezone,
+    currency: settings.currency,
+    dateFormat: pick(formats.date_format, 'dmy'),
+    timeFormat: pick(formats.time_format, '24h'),
+    weekStart: formats.first_day_of_week === 'sunday' ? 'sunday' : 'monday',
+    textSize: settings.accessibility?.text_size ?? 'normal',
+    reduceMotion: settings.accessibility?.reduced_motion === 'reduce',
+  };
+}
+
+function iconOf(session: SessionDto): string {
+  const agent = `${session.device_name ?? ''} ${session.user_agent ?? ''}`.toLowerCase();
+  if (/iphone|android|mobile|expo|okhttp|cfnetwork/.test(agent)) return 'phone_iphone';
+  if (/ipad|tablet/.test(agent)) return 'tablet_mac';
+  return 'laptop_mac';
+}
+
+function deviceLabel(session: SessionDto): string {
+  if (session.device_name) return session.device_name;
+  const agent = session.user_agent ?? '';
+  const browser = /Edg\//.test(agent) ? 'Edge' : /Chrome\//.test(agent) ? 'Chrome' : /Firefox\//.test(agent) ? 'Firefox' : /Safari\//.test(agent) ? 'Safari' : '';
+  const system = /iPhone/.test(agent) ? 'iPhone' : /Android/.test(agent) ? 'Android' : /Mac OS/.test(agent) ? 'Mac' : /Windows/.test(agent) ? 'Windows' : '';
+  return [system, browser].filter(Boolean).join(' • ') || 'Appareil inconnu';
+}
+
+function whenLabel(iso: string | null): string {
+  if (!iso) return 'Date inconnue';
+  const date = new Date(iso);
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${date.getDate()} ${MONTHS[date.getMonth()]} à ${pad(date.getHours())}h${pad(date.getMinutes())}`;
+}
+
+function toSession(dto: SessionDto): DeviceSession {
+  return {
+    id: dto.id,
+    device: deviceLabel(dto),
+    detail: dto.current
+      ? 'Cet appareil • actif maintenant'
+      : `${dto.ip_address ? `${dto.ip_address} • ` : ''}dernière activité le ${whenLabel(dto.last_used_at ?? dto.created_at)}`,
+    icon: iconOf(dto),
+    current: Boolean(dto.current),
+  };
+}
+
+function toConsent(dto: ConsentDto): Consent {
+  const meta = CONSENT_META[dto.purpose] ?? { icon: 'toggle_on', title: dto.purpose.replace(/_/g, ' '), subtitle: '' };
+  return { purpose: dto.purpose, granted: dto.granted, required: Boolean(dto.required), ...meta };
+}
+
+/** Date de suppression prévue d'après les demandes RGPD en cours. */
+function deletionFrom(requests: PrivacyRequestDto[]): Date | null {
+  const pending = requests.find(
+    (request) => request.request_type.includes('delet') && !['cancelled', 'canceled', 'completed', 'rejected'].includes(request.status),
+  );
+  return pending?.scheduled_for ? new Date(pending.scheduled_for) : null;
+}
+
+function latestExport(requests: PrivacyRequestDto[]): PrivacyRequestDto | null {
+  return (
+    requests
+      .filter((request) => request.request_type.includes('export'))
+      .sort((a, b) => b.created_at.localeCompare(a.created_at))[0] ?? null
+  );
+}
+
+/** Charge compte, réglages, sessions, consentements et demandes RGPD. */
 export async function syncProfile(): Promise<void> {
-  if (IS_DEMO) return;
-  try {
-    const [me, settings, consents] = await Promise.all([
-      profileApi.me(),
-      settingsApi.get(),
-      privacyApi.consents(),
-    ]);
-    const names = (me.full_name ?? '').trim().split(/\s+/);
-    const dateFormat = settings.formats.date_format === 'auto' ? 'dmy' : settings.formats.date_format;
-    const timeFormat = settings.formats.time_format === 'auto' ? '24h' : settings.formats.time_format;
-    const weekStart = settings.formats.first_day_of_week === 'sunday' ? 'sunday' : 'monday';
-    const aiConsent = consents.find((consent) => consent.purpose === 'ai_processing');
-    emit({
-      user: {
-        firstName: names[0] ?? '',
-        lastName: names.slice(1).join(' ') ?? '',
-        phone: '',
-        birthdate: new Date(1988, 2, 14),
-        address: '',
-        city: '',
-        hasPhoto: false,
-      },
-      preferences: {
-        ...state.preferences,
-        language: settings.locale,
-        timezone: settings.timezone,
-        currency: settings.currency,
-        dateFormat,
-        timeFormat,
-        weekStart,
-        textSize: settings.accessibility.text_size ?? 'normal',
-        reduceMotion: settings.accessibility.reduced_motion === 'reduce',
-      },
-      consents: {
-        aiDocuments: aiConsent?.granted ?? false,
-        suggestions: state.consents.suggestions,
-        product: state.consents.product,
-        anonymous: state.consents.anonymous,
-      },
-    });
-  } catch (error) {
-    emit({ flash: { text: userMessage(error) } });
-  }
+  const [me, settings, consents, sessions, requests] = await Promise.all([
+    profileApi.me(),
+    settingsApi.get(),
+    privacyApi.consents().catch(() => null),
+    profileApi.sessions().catch(() => null),
+    privacyApi.requests().catch(() => null),
+  ]);
+  emit({
+    loaded: true,
+    user: userFrom(me),
+    twoFactor: Boolean(me.mfa_enabled),
+    preferences: { ...state.preferences, ...preferencesFrom(settings) },
+    settingsVersion: settings.version,
+    ...(consents ? { consents: consents.map(toConsent) } : {}),
+    ...(sessions ? { sessions: sessions.map(toSession).sort((a, b) => Number(b.current) - Number(a.current)) } : {}),
+    ...(requests ? { deletionAt: deletionFrom(requests), lastExport: latestExport(requests) } : {}),
+  });
 }
 
 export const profileActions = {
   savePreferences(preferences: Preferences) {
+    const before = state.preferences;
     emit({ preferences });
     setThemeMode(preferences.theme as ThemeMode);
-    remote(() =>
-      settingsApi.update({
-        locale: preferences.language,
-        timezone: preferences.timezone,
-        currency: preferences.currency,
-        formats: {
-          date_format: preferences.dateFormat,
-          time_format: preferences.timeFormat,
-          first_day_of_week: preferences.weekStart,
-        },
-        accessibility: { text_size: preferences.textSize, reduced_motion: preferences.reduceMotion ? 'reduce' : 'no-preference' },
-      }),
+    remote(
+      () =>
+        settingsApi.update({
+          ...(state.settingsVersion !== null ? { version: state.settingsVersion } : {}),
+          locale: preferences.language,
+          timezone: preferences.timezone,
+          currency: preferences.currency,
+          formats: {
+            date_format: preferences.dateFormat,
+            time_format: preferences.timeFormat,
+            first_day_of_week: preferences.weekStart,
+          },
+          accessibility: { text_size: preferences.textSize, reduced_motion: preferences.reduceMotion ? 'reduce' : 'no-preference' },
+        }),
+      (settings) => emit({ preferences: { ...state.preferences, ...preferencesFrom(settings) }, settingsVersion: settings.version }),
+      () => emit({ preferences: before }),
     );
+  },
+  /** Prénom et nom (enregistrés ensemble dans `full_name`). */
+  saveName(firstName: string, lastName: string) {
+    const before = state.user;
+    emit({ user: { ...state.user, firstName, lastName } });
+    remote(
+      () => profileApi.updateMe({ full_name: `${firstName} ${lastName}`.trim() }),
+      (me) => emit({ user: userFrom(me) }),
+      () => emit({ user: before }),
+    );
+  },
+  /** Demande de changement d'e-mail : un lien de confirmation part à la nouvelle adresse. */
+  changeEmail: (newEmail: string, password: string) => profileApi.changeEmail(newEmail, password),
+  changePassword: (current: string, next: string) => profileApi.changePassword(current, next),
+  resendVerification: () => profileApi.resendVerification(),
+  /** Double authentification : 1. clé à saisir dans l'application d'authentification… */
+  startTwoFactor: (): Promise<MfaSetupDto> => profileApi.mfaSetup(),
+  /** … 2. code à 6 chiffres ; renvoie les codes de secours. */
+  async enableTwoFactor(code: string): Promise<string[]> {
+    const result = await profileApi.mfaEnable(code);
+    emit({ twoFactor: true });
+    return result.recovery_codes ?? [];
+  },
+  async disableTwoFactor(password: string): Promise<void> {
+    await profileApi.mfaDisable(password);
+    emit({ twoFactor: false });
   },
   setBiometric(biometric: boolean) {
     emit({ biometric });
     appLock.configure({ enabled: biometric });
-  },
-  saveUser(user: PersonalInfo) {
-    emit({ user });
-    const fullName = `${user.firstName} ${user.lastName}`.trim();
-    if (fullName.length >= 2) remote(() => profileApi.updateMe({ full_name: fullName }));
-  },
-  setPhoto(hasPhoto: boolean) {
-    emit({ user: { ...state.user, hasPhoto } });
   },
   setConfirmSensitive(confirmSensitive: boolean) {
     emit({ confirmSensitive });
@@ -207,28 +317,42 @@ export const profileActions = {
     emit({ lockDelay });
     appLock.configure({ delay: lockDelay });
   },
-  setTwoFactor(twoFactor: boolean) {
-    emit({ twoFactor });
-  },
-  signOutSession(id: string): () => void {
+  /** Déconnecte un autre appareil (définitif côté serveur). */
+  signOutSession(id: string) {
     const previous = state.sessions;
     emit({ sessions: state.sessions.filter((session) => session.id !== id) });
-    remote(() => profileApi.revokeSession(id), () => emit({ sessions: previous }));
-    return () => emit({ sessions: previous });
+    remote(() => profileApi.revokeSession(id), undefined, () => emit({ sessions: previous }));
   },
-  /** Change un consentement et renvoie de quoi l'annuler. */
-  setConsent(key: ConsentKey, value: boolean): () => void {
-    emit({ consents: { ...state.consents, [key]: value } });
-    // Le backend ne connaît qu'un consentement à l'analyse par l'IA (`ai_processing`).
-    if (key === 'aiDocuments') remote(() => privacyApi.setConsent('ai_processing', value));
-    return () => emit({ consents: { ...state.consents, [key]: !value } });
+  setConsent(purpose: string, granted: boolean) {
+    const previous = state.consents;
+    emit({ consents: state.consents.map((consent) => (consent.purpose === purpose ? { ...consent, granted } : consent)) });
+    remote(
+      () => privacyApi.setConsent(purpose, granted),
+      (list) => {
+        if (Array.isArray(list)) emit({ consents: list.map(toConsent) });
+      },
+      () => emit({ consents: previous }),
+    );
   },
-  requestDeletion() {
-    emit({ deletionAt: addDays(DEMO_TODAY, DELETION_GRACE_DAYS) });
+  /** Export de toutes les données (archive préparée par le serveur). */
+  async requestExport(): Promise<PrivacyRequestDto> {
+    const request = await privacyApi.requestExport();
+    emit({ lastExport: request });
+    return request;
+  },
+  /** Suppression du compte (mot de passe requis) ; renvoie la date prévue. */
+  async requestDeletion(password: string): Promise<Date | null> {
+    const request = await privacyApi.requestDeletion(password);
+    const deletionAt = request.scheduled_for ? new Date(request.scheduled_for) : null;
+    emit({ deletionAt });
+    return deletionAt;
   },
   cancelDeletion() {
+    const before = state.deletionAt;
     emit({ deletionAt: null });
+    remote(() => privacyApi.cancelDeletion(), undefined, () => emit({ deletionAt: before }));
   },
+  ownedHouseholds: () => privacyApi.ownedHouseholds(),
   setFlash(flash: Snapshot['flash']) {
     emit({ flash });
   },
@@ -240,5 +364,5 @@ export const LOCK_DELAYS: { key: LockDelay; label: string }[] = [
   { key: '5min', label: 'Après 5 min' },
 ];
 
-export const initialsOf = (user: PersonalInfo) =>
-  `${user.firstName.trim()[0] ?? ''}${user.lastName.trim()[0] ?? ''}`.toUpperCase();
+export const initialsOf = (user: Pick<PersonalInfo, 'firstName' | 'lastName' | 'email'>) =>
+  (`${user.firstName.trim()[0] ?? ''}${user.lastName.trim()[0] ?? ''}` || user.email.charAt(0) || '?').toUpperCase();

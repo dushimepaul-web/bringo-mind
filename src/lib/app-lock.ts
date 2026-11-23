@@ -15,7 +15,8 @@ type State = {
   backgroundAt: number | null;
 };
 
-let state: State = { enabled: true, delay: '1min', locked: true, backgroundAt: null };
+// Désactivé par défaut : la reconnaissance biométrique réelle (expo-local-authentication) n'est pas encore intégrée.
+let state: State = { enabled: false, delay: '1min', locked: false, backgroundAt: null };
 const listeners = new Set<() => void>();
 
 function emit(next: Partial<State>) {

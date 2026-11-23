@@ -1,22 +1,5 @@
-// Données de démonstration du Profil et des Paramètres (cohérentes avec les autres modules).
-import { DEMO_TODAY, addDays } from '@/lib/demo-dates';
-
-export const USER = {
-  firstName: 'Claire',
-  name: 'Claire Martin',
-  email: 'claire.martin@email.fr',
-  phone: '+33 6 12 34 56 78',
-  memberSince: 'mai 2023',
-  plan: 'Premium',
-  household: { name: 'Foyer Martin', role: 'Propriétaire', members: 3 },
-};
-
-/** Chiffres de la démo (mêmes volumes que les modules Tâches, Calendrier et Documents). */
-export const STATS = [
-  { key: 'tasks', label: 'Tâches', value: 9, href: '/tasks' as const },
-  { key: 'events', label: 'Événements', value: 12, href: '/calendar' as const },
-  { key: 'household', label: 'Membres', value: 3, href: '/household' as const },
-];
+// Listes de choix du Profil et des Paramètres (aucune donnée de démonstration : le compte vient de l'API).
+import { deviceTimeZone } from '@/lib/device-info';
 
 export const LANGUAGES = [
   { key: 'fr', badge: 'FR', title: 'Français', subtitle: 'Langue de l’interface et des notifications' },
@@ -24,13 +7,44 @@ export const LANGUAGES = [
   { key: 'es', badge: 'ES', title: 'Español', subtitle: 'Idioma de la interfaz y notificaciones' },
 ];
 
-export const TIMEZONES = [
-  { key: 'Europe/Paris', title: 'Europe/Paris', subtitle: 'UTC+2 • Heure d’été' },
-  { key: 'Europe/Brussels', title: 'Europe/Bruxelles', subtitle: 'UTC+2 • Heure d’été' },
-  { key: 'Africa/Kigali', title: 'Afrique/Kigali', subtitle: 'UTC+2' },
-  { key: 'Africa/Kinshasa', title: 'Afrique/Kinshasa', subtitle: 'UTC+1' },
-  { key: 'America/Montreal', title: 'Amérique/Montréal', subtitle: 'UTC−4 • Heure d’été' },
+const BASE_TIMEZONES = [
+  'Africa/Bujumbura',
+  'Africa/Kigali',
+  'Africa/Kinshasa',
+  'Africa/Lubumbashi',
+  'Africa/Nairobi',
+  'Africa/Dar_es_Salaam',
+  'Africa/Kampala',
+  'Africa/Abidjan',
+  'Africa/Dakar',
+  'Europe/Paris',
+  'Europe/Brussels',
+  'America/Montreal',
+  'UTC',
 ];
+
+/** Décalage actuel d'un fuseau (« UTC+2 »), calculé par le téléphone. */
+function offsetOf(zone: string): string {
+  try {
+    const part = new Intl.DateTimeFormat('en-US', { timeZone: zone, timeZoneName: 'shortOffset' })
+      .formatToParts(new Date())
+      .find((entry) => entry.type === 'timeZoneName')?.value;
+    return part ? part.replace('GMT', 'UTC') : zone;
+  } catch {
+    return zone;
+  }
+}
+
+/** Fuseaux proposés : celui du téléphone, celui du compte, puis une liste courante. */
+export function timezoneOptions(current: string): { key: string; title: string; subtitle: string }[] {
+  const device = deviceTimeZone();
+  const keys = [...new Set([device, current, ...BASE_TIMEZONES].filter(Boolean))];
+  return keys.map((key) => ({
+    key,
+    title: key.replace(/_/g, ' '),
+    subtitle: `${offsetOf(key)}${key === device ? ' • fuseau du téléphone' : ''}`,
+  }));
+}
 
 export const DATE_FORMATS = [
   { key: 'dmy', label: 'JJ/MM/AAAA', sample: '14/05/2024' },
@@ -48,6 +62,8 @@ export const CURRENCIES = [
   { key: 'USD', label: '$ Dollar', sample: '$148.50' },
   { key: 'XOF', label: 'FCFA', sample: '97 400 FCFA' },
   { key: 'RWF', label: 'FRw Franc rwandais', sample: '211 000 FRw' },
+  { key: 'BIF', label: 'FBu Franc burundais', sample: '440 000 FBu' },
+  { key: 'CDF', label: 'FC Franc congolais', sample: '420 000 FC' },
 ];
 
 export const WEEK_STARTS = [
@@ -75,34 +91,11 @@ export const CALENDAR_VIEWS = [
   { key: 'year', label: 'Année' },
 ];
 
-export const CONSENTS = [
-  { key: 'aiDocuments', icon: 'auto_awesome', title: 'Analyse des documents par Kora', subtitle: 'Repérer les dates et montants dans vos documents' },
-  { key: 'suggestions', icon: 'tips_and_updates', title: 'Suggestions personnalisées', subtitle: 'Priorités et rappels proposés par Kora' },
-  { key: 'product', icon: 'campaign', title: 'Communications produit', subtitle: 'Nouveautés et conseils d’utilisation' },
-  { key: 'anonymous', icon: 'insights', title: 'Statistiques anonymisées', subtitle: 'Aider à améliorer Bringo Mind' },
-] as const;
-
-export type ConsentKey = (typeof CONSENTS)[number]['key'];
-
-export const EXPORT_ITEMS = [
-  { key: 'tasks', label: 'Tâches et sous-tâches', icon: 'task_alt' },
-  { key: 'reminders', label: 'Rappels', icon: 'notifications' },
-  { key: 'events', label: 'Événements du calendrier', icon: 'event' },
-  { key: 'documents', label: 'Documents et fichiers', icon: 'folder' },
-  { key: 'preferences', label: 'Préférences et réglages', icon: 'tune' },
-];
-
-export const SESSIONS = [
-  { id: 'iphone', device: 'iPhone 15', place: 'Paris', when: 'Cet appareil • actif maintenant', icon: 'phone_iphone', current: true },
-  { id: 'mac', device: 'MacBook Air • Chrome', place: 'Paris', when: 'Hier à 21h40', icon: 'laptop_mac', current: false },
-];
-
-export const LOGIN_HISTORY = [
-  { id: 'l1', device: 'iPhone 15', detail: 'Paris • aujourd’hui à 07h52', icon: 'phone_iphone' },
-  { id: 'l2', device: 'MacBook Air • Chrome', detail: 'Paris • hier à 21h40', icon: 'laptop_mac' },
-  { id: 'l3', device: 'iPhone 15', detail: 'Lyon • samedi 11 mai à 18h05', icon: 'phone_iphone' },
-];
-
-/** Délai pendant lequel on peut annuler la suppression du compte. */
-export const DELETION_GRACE_DAYS = 30;
-export const deletionDate = () => addDays(DEMO_TODAY, DELETION_GRACE_DAYS);
+/** Présentation des consentements connus du backend ; un consentement inconnu garde son code. */
+export const CONSENT_META: Record<string, { icon: string; title: string; subtitle: string }> = {
+  ai_processing: { icon: 'auto_awesome', title: 'Analyse par Kora', subtitle: 'Repérer dates et montants dans vos documents, proposer des priorités' },
+  marketing: { icon: 'campaign', title: 'Communications produit', subtitle: 'Nouveautés et conseils d’utilisation' },
+  analytics: { icon: 'insights', title: 'Statistiques anonymisées', subtitle: 'Aider à améliorer Bringo Mind' },
+  terms: { icon: 'gavel', title: 'Conditions d’utilisation', subtitle: 'Obligatoire pour utiliser Bringo Mind' },
+  privacy: { icon: 'policy', title: 'Politique de confidentialité', subtitle: 'Obligatoire pour utiliser Bringo Mind' },
+};

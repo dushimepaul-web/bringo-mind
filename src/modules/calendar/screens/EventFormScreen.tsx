@@ -21,54 +21,58 @@ import { TimeWheelSheet } from '@/components/ui/wheel-picker';
 import { DARK, LIGHT, useScopedColors, type AppColors } from '@/constants/app-colors';
 import { FontFamily, Radius, Serene, Space } from '@/constants/design';
 import {
-  DEMO_TODAY,
   addDays,
   atTime,
   dayOffset,
   formatDay,
   formatLongDay,
   formatTime,
+  today,
 } from '@/lib/demo-dates';
 
 import {
-  RECURRENCE_LABELS,
   WEEKDAY_SHORT,
   REMINDER_OPTIONS,
-  TONES,
-  USER_TIMEZONE,
   conflictsFor,
   durationOf,
   formatDuration,
   freeSlots,
+  timeZoneLabel,
 } from '../data';
 import { eventActions, useCalendarState, useEvent } from '../store';
-import type { CalendarEvent, EventDraft, EventRecurrence, EventTone } from '../types';
+import type { CalendarEvent, EventDraft } from '../types';
 
-const TONE_KEYS: EventTone[] = ['health', 'admin', 'family', 'work', 'leisure'];
-const RECURRENCES: EventRecurrence[] = ['none', 'weekly', 'monthly'];
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-/** Démo : événement prérempli (demain 10h00, 45 min). */
-function demoDraft(day?: Date, start?: Date): EventDraft {
-  const startAt = start ?? atTime(day ?? addDays(DEMO_TODAY, 1), 10);
+/** Événement vide : demain 10h00, 1 h, rappel 1 h avant. */
+function emptyDraft(day?: Date, start?: Date): EventDraft {
+  const startAt = start ?? atTime(day ?? addDays(today(), 1), 10);
   return {
-    title: 'Retirer la carte d’identité de Léo',
+    title: '',
     start: startAt,
-    end: new Date(startAt.getTime() + 45 * 60000),
+    end: new Date(startAt.getTime() + 60 * 60000),
     allDay: false,
-    location: 'Mairie du 11e • Place Léon-Blum',
-    description: 'Apporter l’ancienne carte et le récépissé de demande.',
-    tone: 'admin',
+    location: '',
+    description: '',
     // Personnel par défaut : le partage avec le foyer est toujours un choix explicite.
     shared: false,
     members: [],
     reminder: 60,
-    recurrence: 'none',
   };
 }
 
 function draftOf(event: CalendarEvent): EventDraft {
-  const { id: _id, cancelled: _cancelled, ...draft } = event;
-  return draft;
+  return {
+    title: event.title,
+    start: event.start,
+    end: event.end,
+    allDay: event.allDay,
+    location: event.location,
+    description: event.description,
+    shared: event.shared,
+    members: event.shared ? [] : event.members,
+    reminder: event.reminder,
+  };
 }
 
 export default function EventFormScreen() {
@@ -84,8 +88,9 @@ export default function EventFormScreen() {
     description?: string;
   }>();
   const isEdit = pathname.includes('/edit');
-  const existing = useEvent(isEdit ? params.id : '__new__');
-  const { events } = useCalendarState();
+  const existing = useEvent(isEdit ? params.id : undefined);
+  const { events, household } = useCalendarState();
+  const [guestText, setGuestText] = useState('');
   const insets = useSafeAreaInsets();
 
   const [draft, setDraft] = useState<EventDraft>(() => {
@@ -93,7 +98,7 @@ export default function EventFormScreen() {
     const start = params.start ? new Date(params.start) : undefined;
     const day = params.date ? new Date(params.date) : undefined;
     // Un jour passé n'est pas proposé : on se cale sur demain.
-    const base = demoDraft(day && dayOffset(day) >= 0 ? day : undefined, start);
+    const base = emptyDraft(day && dayOffset(day) >= 0 ? day : undefined, start);
     // Événement créé depuis un document (ex. échéance d'une facture).
     if (params.title) {
       return {
@@ -138,8 +143,15 @@ export default function EventFormScreen() {
 
   const setEnd = (end: Date) => setDraft((current) => ({ ...current, end }));
 
-  const toggleShare = (value: boolean) =>
-    setDraft((current) => ({ ...current, shared: value, members: value ? ['Thomas'] : [] }));
+  const toggleShare = (value: boolean) => setDraft((current) => ({ ...current, shared: value, members: [] }));
+
+  const guestEmail = guestText.trim().toLowerCase();
+  const guestError = guestEmail.length > 0 && !EMAIL.test(guestEmail);
+  const addGuest = () => {
+    if (!guestEmail || guestError || draft.members.includes(guestEmail)) return;
+    set('members', [...draft.members, guestEmail]);
+    setGuestText('');
+  };
 
   const handleSave = () => {
     if (!canSave) {
@@ -160,8 +172,8 @@ export default function EventFormScreen() {
       eventActions.save(existing.id, clean);
       eventActions.setFlash({ text: 'Événement mis à jour.' });
     } else {
-      const newId = eventActions.create(clean);
-      eventActions.setFlash({ text: `Événement ajouté : ${when}.`, undo: eventActions.remove.bind(null, newId) });
+      eventActions.create(clean);
+      eventActions.setFlash({ text: `Événement ajouté : ${when}.` });
     }
     if (router.canGoBack()) router.back();
     else router.replace('/calendar');
@@ -177,26 +189,8 @@ export default function EventFormScreen() {
           contentContainerStyle={[kitStyles.content, styles.content]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled">
-          {/* Type */}
-          <Text style={[kitStyles.label, styles.gap]}>Type</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.typesScroll}
-            contentContainerStyle={styles.types}>
-            {TONE_KEYS.map((key) => (
-              <Chip
-                key={key}
-                label={TONES[key].label}
-                icon={TONES[key].icon}
-                selected={draft.tone === key}
-                onPress={() => set('tone', key)}
-              />
-            ))}
-          </ScrollView>
-
           {/* Titre */}
-          <Text style={[kitStyles.label, styles.spaced, styles.gap]}>
+          <Text style={[kitStyles.label, styles.gap]}>
             Titre <Text style={styles.required}>*</Text>
           </Text>
           <TextInput
@@ -267,9 +261,7 @@ export default function EventFormScreen() {
               ) : null}
               <View style={styles.footerItem}>
                 <Icon name="public" size={16} color={c.muted} />
-                <Text style={kitStyles.muted}>
-                  {USER_TIMEZONE.label} ({USER_TIMEZONE.offset})
-                </Text>
+                <Text style={kitStyles.muted}>{timeZoneLabel()}</Text>
               </View>
             </View>
           </View>
@@ -365,63 +357,72 @@ export default function EventFormScreen() {
             ))}
           </ScrollView>
 
-          {/* Récurrence */}
-          <Text style={[kitStyles.label, styles.spaced, styles.gap]}>Récurrence</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.typesScroll}
-            contentContainerStyle={styles.types}>
-            {RECURRENCES.map((recurrence) => (
-              <Chip
-                key={recurrence}
-                label={RECURRENCE_LABELS[recurrence]}
-                selected={draft.recurrence === recurrence}
-                onPress={() => set('recurrence', recurrence)}
-              />
-            ))}
-          </ScrollView>
-
-          {/* Partage — personnel par défaut */}
-          <View style={[kitStyles.card, styles.share]}>
-            <View style={styles.shareRow}>
-              <View style={[styles.shareIcon, draft.shared && styles.shareIconOn]}>
-                <Icon
-                  name={draft.shared ? 'group' : 'lock'}
-                  size={22}
-                  color={draft.shared ? c.link : c.text}
-                />
-              </View>
-              <View style={styles.flexMin}>
-                <Text style={styles.shareTitle}>Partager avec le foyer</Text>
-                <Text style={kitStyles.muted}>
-                  {draft.shared ? 'Visible par les membres invités' : 'Événement personnel, visible par vous seule'}
-                </Text>
-              </View>
-              <DemoSwitch value={draft.shared} onValueChange={toggleShare} label="Partager avec le foyer" />
-            </View>
-            {draft.shared ? (
-              <View style={styles.members}>
-                <Text style={styles.subLabel}>Invités</Text>
-                <View style={styles.wrap}>
-                  <View style={styles.me}>
-                    <View style={styles.avatar}>
-                      <Text style={styles.avatarText}>C</Text>
-                    </View>
-                    <Text style={styles.meText}>Claire (vous)</Text>
-                  </View>
-                  <Chip
-                    label="Thomas"
-                    icon={draft.members.includes('Thomas') ? 'check' : 'add'}
-                    selected={draft.members.includes('Thomas')}
-                    onPress={() =>
-                      set('members', draft.members.includes('Thomas') ? [] : ['Thomas'])
-                    }
-                  />
+          {/* Partage — personnel par défaut ; proposé si l'utilisateur a un foyer (pas de conversion après coup) */}
+          {household && (!isEdit || existing?.shared) ? (
+            <View style={[kitStyles.card, styles.share]}>
+              <View style={styles.shareRow}>
+                <View style={[styles.shareIcon, draft.shared && styles.shareIconOn]}>
+                  <Icon name={draft.shared ? 'group' : 'lock'} size={22} color={draft.shared ? c.link : c.text} />
                 </View>
+                <View style={styles.flexMin}>
+                  <Text style={styles.shareTitle}>Événement du foyer</Text>
+                  <Text style={kitStyles.muted}>
+                    {draft.shared ? `Visible par les membres de ${household.name}, prévenus à chaque changement` : 'Événement personnel, visible par vous seul'}
+                  </Text>
+                </View>
+                {isEdit ? null : <DemoSwitch value={draft.shared} onValueChange={toggleShare} label="Événement du foyer" />}
               </View>
-            ) : null}
-          </View>
+              {draft.shared ? (
+                <View style={styles.members}>
+                  <Text style={styles.subLabel}>Membres</Text>
+                  <View style={styles.wrap}>
+                    {household.members.map((name) => (
+                      <View key={name} style={styles.me}>
+                        <View style={styles.avatar}>
+                          <Text style={styles.avatarText}>{name.charAt(0).toUpperCase()}</Text>
+                        </View>
+                        <Text style={styles.meText}>{name}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+
+          {/* Invités par e-mail (événement personnel) */}
+          {!draft.shared ? (
+            <>
+              <Text style={[kitStyles.label, styles.spaced, styles.gap]}>Invités</Text>
+              <View style={styles.wrap}>
+                {draft.members.map((email) => (
+                  <Chip
+                    key={email}
+                    label={email}
+                    icon="close"
+                    selected
+                    onPress={() => set('members', draft.members.filter((entry) => entry !== email))}
+                  />
+                ))}
+              </View>
+              <TextInput
+                style={[kitStyles.input, styles.guestInput, guestError && kitStyles.inputError]}
+                value={guestText}
+                onChangeText={setGuestText}
+                onSubmitEditing={addGuest}
+                placeholder="Ajouter une adresse e-mail"
+                placeholderTextColor={c.muted}
+                selectionColor={c.link}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="done"
+                submitBehavior="submit"
+                accessibilityLabel="Adresse e-mail d’un invité"
+              />
+              {guestError ? <Text style={styles.guestError}>Adresse e-mail invalide.</Text> : null}
+            </>
+          ) : null}
         </ScrollView>
 
         <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, Space.md) }]}>
@@ -810,6 +811,15 @@ function makeStyles(c: AppColors) {
       fontSize: 16,
       lineHeight: 21,
       color: c.text,
+    },
+    guestInput: {
+      marginTop: 8,
+    },
+    guestError: {
+      marginTop: 6,
+      fontFamily: FontFamily.body,
+      fontSize: 13,
+      color: c.error,
     },
     members: {
       marginTop: 14,

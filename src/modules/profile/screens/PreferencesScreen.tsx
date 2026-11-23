@@ -19,7 +19,7 @@ import {
   TEXT_SIZES,
   THEMES,
   TIME_FORMATS,
-  TIMEZONES,
+  timezoneOptions,
   WEEK_STARTS,
 } from '../data';
 import { profileActions, useProfileState, type Preferences } from '../store';
@@ -30,6 +30,7 @@ export default function PreferencesScreen() {
   const saved = useProfileState().preferences;
   const [draft, setDraft] = useState<Preferences>(saved);
   const [zoneSheet, setZoneSheet] = useState(false);
+  const TIMEZONES = timezoneOptions(saved.timezone);
 
   const set = <K extends keyof Preferences>(key: K, value: Preferences[K]) =>
     setDraft((current) => ({ ...current, [key]: value }));

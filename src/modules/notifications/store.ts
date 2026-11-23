@@ -1,10 +1,9 @@
-// Notifications de démonstration (cohérentes avec Tâches, Calendrier, Documents, Foyer, Intégrations).
+// Centre de notifications, alimenté uniquement par l'API (contrat 2.11.0, API-NOT-005 à 009).
 import type { Href } from 'expo-router';
 import { useSyncExternalStore } from 'react';
 
 import { userMessage } from '@/lib/api';
-import { IS_DEMO } from '@/lib/config';
-import { DEMO_TODAY, addDays, atTime } from '@/lib/demo-dates';
+import { sessionStore } from '@/lib/session';
 
 import { notificationsApi, toNotification } from './services/notifications.service';
 
@@ -20,108 +19,20 @@ export type AppNotification = {
   href: Href;
 };
 
-const today = DEMO_TODAY;
+type Snapshot = { items: AppNotification[]; unread: number; error: string | null };
 
-const DEMO: AppNotification[] = [
-  {
-    id: 'n-attestation',
-    kind: 'task',
-    title: 'Échéance aujourd’hui à 17h00',
-    body: 'Renvoyer l’attestation de domicile signée',
-    at: atTime(today, 9, 0),
-    read: false,
-    href: { pathname: '/tasks/detail', params: { id: 'attestation' } },
-  },
-  {
-    id: 'n-engie',
-    kind: 'document',
-    title: 'Facture Engie à vérifier',
-    body: 'Kora a repéré 118,50 €, prélevés le 27 mai',
-    at: atTime(today, 8, 47),
-    read: false,
-    href: { pathname: '/documents/detail', params: { id: 'engie' } },
-  },
-  {
-    id: 'n-foncia',
-    kind: 'document',
-    title: 'Nouvel e-mail importé',
-    body: 'Foncia : votre attestation de domicile 2024',
-    at: atTime(today, 8, 42),
-    read: false,
-    href: { pathname: '/integrations/email', params: { id: 'foncia' } },
-  },
-  {
-    id: 'n-foot',
-    kind: 'household',
-    title: 'Thomas a ajouté un événement',
-    body: 'Match de football de Léo • samedi 18 mai à 10h00',
-    at: atTime(today, 8, 40),
-    read: true,
-    href: { pathname: '/calendar/detail', params: { id: 'foot' } },
-  },
-  {
-    id: 'n-ecole',
-    kind: 'event',
-    title: 'Aujourd’hui à 16h45',
-    body: 'Thomas récupère Léo à l’école Jean Moulin',
-    at: atTime(today, 7, 30),
-    read: true,
-    href: { pathname: '/calendar/detail', params: { id: 'leo-ecole' } },
-  },
-  {
-    id: 'n-jeanne',
-    kind: 'household',
-    title: 'Invitation envoyée',
-    body: 'jeanne.martin@email.fr n’a pas encore répondu',
-    at: atTime(addDays(today, -1), 18, 40),
-    read: true,
-    href: '/household/members',
-  },
-  {
-    id: 'n-caf',
-    kind: 'task',
-    title: 'Tâche en retard',
-    body: 'Répondre au courrier de la CAF • prévue hier',
-    at: atTime(addDays(today, -1), 18, 0),
-    read: false,
-    href: { pathname: '/tasks/detail', params: { id: 'caf' } },
-  },
-  {
-    id: 'n-ophtalmo',
-    kind: 'event',
-    title: 'Rappel : événement jeudi',
-    body: 'Contrôle ophtalmologique • 16 mai à 14h30',
-    at: atTime(addDays(today, -1), 9, 0),
-    read: true,
-    href: { pathname: '/calendar/detail', params: { id: 'ophtalmo' } },
-  },
-  {
-    id: 'n-cantine',
-    kind: 'household',
-    title: 'Tâche terminée par Thomas',
-    body: 'Régler la cantine scolaire du 2e trimestre',
-    at: atTime(addDays(today, -2), 10, 30),
-    read: true,
-    href: { pathname: '/tasks/detail', params: { id: 'cantine' } },
-  },
-];
+const EMPTY: Snapshot = { items: [], unread: 0, error: null };
 
-type Snapshot = { items: AppNotification[]; error: string | null };
+/** Délai avant la suppression définitive côté serveur (le temps de pouvoir annuler). */
+const DELETE_DELAY_MS = 5000;
 
-let state: Snapshot = { items: DEMO, error: null };
-
-/** Mode « api » : envoie la requête ; en cas d'échec, annule la modification locale. */
-function remote(call: () => Promise<unknown>, rollback: () => void) {
-  if (IS_DEMO) return;
-  call().catch((reason: unknown) => {
-    rollback();
-    emit({ error: userMessage(reason) });
-  });
-}
+let state: Snapshot = EMPTY;
 const listeners = new Set<() => void>();
+const pendingDeletes = new Map<string, ReturnType<typeof setTimeout>>();
 
 function emit(next: Partial<Snapshot>) {
   state = { ...state, ...next };
+  if (!('unread' in next) && next.items) state = { ...state, unread: next.items.filter((item) => !item.read).length };
   for (const listener of listeners) listener();
 }
 
@@ -134,35 +45,79 @@ function subscribe(listener: () => void) {
 
 const getSnapshot = () => state;
 
+// Déconnexion : on oublie les notifications du compte précédent.
+sessionStore.subscribe((session) => {
+  if (!session) {
+    pendingDeletes.forEach((timer) => clearTimeout(timer));
+    pendingDeletes.clear();
+    state = EMPTY;
+    for (const listener of listeners) listener();
+  }
+});
+
+/** Envoie la requête ; en cas d'échec, annule la modification locale et garde le message. */
+function remote(call: () => Promise<unknown>, rollback: () => void) {
+  call().catch((reason: unknown) => {
+    rollback();
+    emit({ error: userMessage(reason) });
+  });
+}
+
 export function useNotifications(): Snapshot {
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
 
 export const notificationActions = {
-  setRead(id: string, read: boolean) {
+  /** Marque comme lue (le serveur ne propose pas de repasser une notification en non lue). */
+  markRead(id: string) {
+    const item = state.items.find((entry) => entry.id === id);
+    if (!item || item.read) return;
     const previous = state.items;
-    emit({ items: state.items.map((item) => (item.id === id ? { ...item, read } : item)) });
-    // Le serveur ne connaît que « marquer comme lu » : pas d'appel pour repasser non lue.
-    if (read) remote(() => notificationsApi.read(id), () => emit({ items: previous }));
+    emit({ items: state.items.map((entry) => (entry.id === id ? { ...entry, read: true } : entry)) });
+    remote(() => notificationsApi.read(id), () => emit({ items: previous }));
   },
-  /** Marque tout comme lu et renvoie de quoi annuler. */
-  readAll(): () => void {
+  readAll() {
     const previous = state.items;
     emit({ items: state.items.map((item) => ({ ...item, read: true })) });
     remote(() => notificationsApi.readAll(), () => emit({ items: previous }));
-    return () => emit({ items: previous });
   },
+  /** Retire la notification ; la suppression part au serveur après quelques secondes, sauf « Annuler ». */
   remove(id: string): () => void {
-    const previous = state.items;
-    emit({ items: state.items.filter((item) => item.id !== id) });
-    remote(() => notificationsApi.remove(id), () => emit({ items: previous }));
-    return () => emit({ items: previous });
+    const index = state.items.findIndex((entry) => entry.id === id);
+    const item = state.items[index];
+    if (!item) return () => undefined;
+    emit({ items: state.items.filter((entry) => entry.id !== id) });
+    const putBack = () => {
+      if (state.items.some((entry) => entry.id === id)) return;
+      const copy = [...state.items];
+      copy.splice(Math.max(Math.min(index, copy.length), 0), 0, item);
+      emit({ items: copy });
+    };
+    const timer = setTimeout(() => {
+      pendingDeletes.delete(id);
+      remote(() => notificationsApi.remove(id), putBack);
+    }, DELETE_DELAY_MS);
+    pendingDeletes.set(id, timer);
+    return () => {
+      clearTimeout(timer);
+      pendingDeletes.delete(id);
+      putBack();
+    };
+  },
+  clearError() {
+    emit({ error: null });
   },
 };
 
-/** Charge les notifications depuis l'API (mode « api ») ; ne fait rien en démo. */
+/** Charge les notifications (les plus récentes d'abord). */
 export async function syncNotifications(): Promise<void> {
-  if (IS_DEMO) return;
   const items = await notificationsApi.list();
-  emit({ items: items.map(toNotification) });
+  // Les notifications en cours de suppression restent masquées.
+  emit({ items: items.map(toNotification).filter((item) => !pendingDeletes.has(item.id)) });
+}
+
+/** Nombre de notifications non lues (pastille de l'en-tête). */
+export async function syncUnreadCount(): Promise<void> {
+  const unread = await notificationsApi.unreadCount();
+  emit({ unread: typeof unread === 'number' ? unread : state.unread });
 }

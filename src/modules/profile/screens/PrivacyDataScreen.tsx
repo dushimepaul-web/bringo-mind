@@ -1,37 +1,102 @@
 // S-23 - Confidentialité et données | Module M09 Profil | Phase S8
-// Consentements réversibles, export choisi, suppression du compte confirmée avec 30 jours pour changer d'avis.
-import { router } from 'expo-router';
-import { useState } from 'react';
+// Consentements (/privacy/consents), export de toutes les données, appareils connectés,
+// suppression du compte confirmée par le mot de passe, avec un délai pour changer d'avis.
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icon';
-import { BottomSheet, CheckCircle, PrimaryButton, SecondaryButton, Tag, TopBar, UndoToast, useKitStyles } from '@/components/ui/kit';
+import { BottomSheet, PrimaryButton, SecondaryButton, Tag, TopBar, UndoToast, useKitStyles } from '@/components/ui/kit';
 import { SettingsRow, SettingsSection, ToggleSwitch } from '@/components/ui/settings';
 import { DARK, LIGHT, useScopedColors, type AppColors } from '@/constants/app-colors';
 import { FontFamily } from '@/constants/design';
+import { userMessage } from '@/lib/api';
 import { formatLongDay } from '@/lib/demo-dates';
 
-import { CONSENTS, DELETION_GRACE_DAYS, EXPORT_ITEMS, LOGIN_HISTORY, USER, deletionDate } from '../data';
-import { profileActions, useProfileState } from '../store';
+import { profileActions, syncProfile, useProfileState } from '../store';
 
 type Sheet = 'export' | 'history' | 'delete' | null;
 const CONFIRM_WORD = 'SUPPRIMER';
 
+const EXPORT_STATUS: Record<string, string> = {
+  pending: 'en préparation',
+  processing: 'en préparation',
+  queued: 'en préparation',
+  completed: 'prête',
+  ready: 'prête',
+  failed: 'échouée',
+  expired: 'expirée',
+};
+
 export default function PrivacyDataScreen() {
   const { c, styles } = useLook();
   const kitStyles = useKitStyles();
-  const { consents, deletionAt } = useProfileState();
+  const { consents, deletionAt, sessions, user, lastExport, flash } = useProfileState();
   const [sheet, setSheet] = useState<Sheet>(null);
   const [toast, setToast] = useState<{ text: string; undo?: () => void } | null>(null);
-  const [exportItems, setExportItems] = useState<string[]>(EXPORT_ITEMS.map((item) => item.key));
-  // Démo : confirmation préremplie, comme tous les champs.
-  const [typed, setTyped] = useState(CONFIRM_WORD);
-  const [focused, setFocused] = useState(false);
+  const [typed, setTyped] = useState('');
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [sheetError, setSheetError] = useState<string | null>(null);
+  const [owned, setOwned] = useState<string[]>([]);
 
-  const toggleExport = (key: string) =>
-    setExportItems((current) => (current.includes(key) ? current.filter((item) => item !== key) : [...current, key]));
-  const confirmed = typed.trim().toUpperCase() === CONFIRM_WORD;
+  useFocusEffect(
+    useCallback(() => {
+      void syncProfile().catch(() => undefined);
+    }, []),
+  );
+  useFocusEffect(
+    useCallback(() => {
+      if (flash) {
+        setToast(flash);
+        profileActions.setFlash(null);
+      }
+    }, [flash]),
+  );
+
+  const confirmed = typed.trim().toUpperCase() === CONFIRM_WORD && password.length > 0;
+  const exportLabel = lastExport ? EXPORT_STATUS[lastExport.status] ?? lastExport.status : null;
+
+  const openDelete = () => {
+    setTyped('');
+    setPassword('');
+    setSheetError(null);
+    setSheet('delete');
+    profileActions
+      .ownedHouseholds()
+      .then((list) => setOwned((list ?? []).map((entry) => entry.name)))
+      .catch(() => setOwned([]));
+  };
+
+  const startExport = () => {
+    setBusy(true);
+    profileActions
+      .requestExport()
+      .then(() => {
+        setSheet(null);
+        setToast({ text: `Export en préparation : vous serez prévenu à ${user.email}` });
+      })
+      .catch((error: unknown) => setToast({ text: userMessage(error) }))
+      .finally(() => setBusy(false));
+  };
+
+  const confirmDeletion = () => {
+    if (!confirmed || busy) return;
+    setBusy(true);
+    setSheetError(null);
+    profileActions
+      .requestDeletion(password)
+      .then((at) => {
+        setSheet(null);
+        setToast({ text: at ? `Suppression programmée le ${formatLongDay(at).toLowerCase()}` : 'Suppression du compte demandée' });
+      })
+      .catch((error: unknown) => setSheetError(userMessage(error)))
+      .finally(() => {
+        setBusy(false);
+        setPassword('');
+      });
+  };
 
   return (
     <SafeAreaView style={kitStyles.safe} edges={['top']}>
@@ -52,51 +117,44 @@ export default function PrivacyDataScreen() {
           </View>
         </View>
 
-        <SettingsSection
-          title="Vos consentements"
-          icon="toggle_on"
-          footer="Bringo Mind fonctionne aussi sans Kora : désactiver ces options ne bloque aucune fonction.">
-          {CONSENTS.map((consent, index) => (
-            <SettingsRow
-              key={consent.key}
-              first={index === 0}
-              icon={consent.icon}
-              title={consent.title}
-              subtitle={consent.subtitle}
-              right={
-                <ToggleSwitch
-                  value={consents[consent.key]}
-                  label={consent.title}
-                  onValueChange={(value) => {
-                    const undo = profileActions.setConsent(consent.key, value);
-                    setToast({ text: `${consent.title} : ${value ? 'activé' : 'désactivé'}`, undo });
-                  }}
-                />
-              }
-            />
-          ))}
-        </SettingsSection>
+        {consents.length > 0 ? (
+          <SettingsSection title="Vos consentements" icon="toggle_on" footer="Vous pouvez changer d’avis à tout moment.">
+            {consents.map((consent, index) => (
+              <SettingsRow
+                key={consent.purpose}
+                first={index === 0}
+                icon={consent.icon}
+                title={consent.title}
+                subtitle={consent.required ? `${consent.subtitle ? `${consent.subtitle} • ` : ''}obligatoire` : consent.subtitle || undefined}
+                right={
+                  <ToggleSwitch
+                    value={consent.granted}
+                    disabled={consent.required}
+                    label={consent.title}
+                    onValueChange={(value) => {
+                      profileActions.setConsent(consent.purpose, value);
+                      setToast({ text: `${consent.title} : ${value ? 'activé' : 'désactivé'}` });
+                    }}
+                  />
+                }
+              />
+            ))}
+          </SettingsSection>
+        ) : null}
 
         <SettingsSection title="Vos données" icon="database">
           <SettingsRow
             first
             icon="download"
             title="Exporter mes données"
-            subtitle="Tâches, événements, rappels, documents et préférences"
+            subtitle={exportLabel ? `Dernière demande : ${exportLabel}` : 'Toutes vos données dans une archive'}
             onPress={() => setSheet('export')}
           />
           <SettingsRow
-            icon="history"
-            title="Historique des connexions"
-            subtitle={LOGIN_HISTORY[0].detail}
+            icon="devices"
+            title="Appareils connectés"
+            subtitle={sessions.length ? `${sessions.length} appareil${sessions.length > 1 ? 's' : ''}` : undefined}
             onPress={() => setSheet('history')}
-          />
-          <SettingsRow
-            icon="description"
-            title="Politique de confidentialité"
-            subtitle="Version 2.1 • mise à jour le 1er mai 2024"
-            onPress={() => setToast({ text: 'Démo : ouverture de la politique de confidentialité' })}
-            right={<Icon name="open_in_new" size={20} color={c.muted} />}
           />
         </SettingsSection>
 
@@ -124,104 +182,102 @@ export default function PrivacyDataScreen() {
               danger
               icon="delete_forever"
               title="Supprimer mon compte"
-              subtitle={`Vous aurez ${DELETION_GRACE_DAYS} jours pour changer d’avis`}
-              onPress={() => setSheet('delete')}
+              subtitle="Vous aurez un délai pour changer d’avis"
+              onPress={openDelete}
             />
           )}
         </SettingsSection>
-
-        <Text style={styles.legal}>Responsable de traitement : Bringo Mind • Délégué à la protection des données : dpo@bringomind.app</Text>
       </ScrollView>
 
-      {/* Export : la personne choisit ce qu'elle exporte */}
+      {/* Export de toutes les données */}
       <BottomSheet
         visible={sheet === 'export'}
         title="Exporter mes données"
-        subtitle={`Une archive (fichiers + tableau) sera envoyée à ${USER.email}.`}
+        subtitle={`Le serveur prépare une archive de toutes vos données. Vous serez prévenu à ${user.email} quand elle sera prête.`}
         onClose={() => setSheet(null)}>
-        <View style={styles.list}>
-          {EXPORT_ITEMS.map((item, index) => {
-            const checked = exportItems.includes(item.key);
-            return (
-              <Pressable
-                key={item.key}
-                style={[styles.exportRow, index > 0 && styles.exportBorder]}
-                accessibilityRole="checkbox"
-                accessibilityState={{ checked }}
-                onPress={() => toggleExport(item.key)}>
-                <Icon name={item.icon} size={20} color={c.text} />
-                <Text style={styles.exportLabel}>{item.label}</Text>
-                <CheckCircle square checked={checked} label={item.label} onPress={() => toggleExport(item.key)} />
-              </Pressable>
-            );
-          })}
-        </View>
-        <PrimaryButton
-          label={exportItems.length ? 'Préparer l’export' : 'Choisissez au moins un élément'}
-          icon="download"
-          disabled={exportItems.length === 0}
-          onPress={() => {
-            setSheet(null);
-            setToast({ text: `Export en préparation : le lien arrivera sur ${USER.email}` });
-          }}
-        />
+        <PrimaryButton label={busy ? 'Demande en cours…' : 'Préparer l’export'} icon="download" disabled={busy} onPress={startExport} />
+        <SecondaryButton label="Plus tard" onPress={() => setSheet(null)} />
       </BottomSheet>
 
-      {/* Historique des connexions */}
+      {/* Appareils connectés */}
       <BottomSheet
         visible={sheet === 'history'}
-        title="Historique des connexions"
-        subtitle="Une connexion inconnue ? Changez votre mot de passe."
+        title="Appareils connectés"
+        subtitle="Un appareil inconnu ? Déconnectez-le et changez votre mot de passe."
         onClose={() => setSheet(null)}>
         <View style={styles.list}>
-          {LOGIN_HISTORY.map((entry, index) => (
+          {sessions.map((entry, index) => (
             <View key={entry.id} style={[styles.exportRow, index > 0 && styles.exportBorder]}>
               <Icon name={entry.icon} size={20} color={c.text} />
               <View style={styles.flex}>
                 <Text style={styles.exportLabel}>{entry.device}</Text>
                 <Text style={styles.meta}>{entry.detail}</Text>
               </View>
+              {entry.current ? null : (
+                <Pressable
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  onPress={() => {
+                    profileActions.signOutSession(entry.id);
+                    setToast({ text: `${entry.device} a été déconnecté` });
+                  }}>
+                  <Text style={styles.cancel}>Déconnecter</Text>
+                </Pressable>
+              )}
             </View>
           ))}
+          {sessions.length === 0 ? <Text style={styles.meta}>Aucun appareil à afficher.</Text> : null}
         </View>
         <SecondaryButton
           label="Changer mon mot de passe"
           icon="lock_reset"
           onPress={() => {
             setSheet(null);
-            router.push('/reset-password');
+            router.push({ pathname: '/profile', params: { open: 'password' } });
           }}
         />
       </BottomSheet>
 
-      {/* Suppression : conséquences, foyer, confirmation forte */}
+      {/* Suppression : foyer à transférer, mot de passe et confirmation forte */}
       <BottomSheet
         visible={sheet === 'delete'}
         title="Supprimer votre compte ?"
-        subtitle={`Votre compte sera supprimé le ${formatLongDay(deletionDate()).toLowerCase()}. D’ici là, vous pourrez annuler.`}
+        subtitle="Vos données personnelles seront effacées à la date prévue. D’ici là, vous pourrez annuler."
         onClose={() => setSheet(null)}>
-        <View style={styles.warning}>
-          <Icon name="family_restroom" size={20} color="#b45309" />
-          <Text style={styles.warningText}>
-            Vous êtes propriétaire de « {USER.household.name} ». Transférez-le d’abord, sinon il sera supprimé pour tous ses
-            membres.
-          </Text>
-        </View>
-        <SecondaryButton
-          label="Transférer le foyer d’abord"
-          icon="swap_horiz"
-          onPress={() => {
-            setSheet(null);
-            router.push('/household/transfer');
-          }}
+        {owned.length > 0 ? (
+          <>
+            <View style={styles.warning}>
+              <Icon name="family_restroom" size={20} color="#b45309" />
+              <Text style={styles.warningText}>
+                Vous êtes propriétaire de « {owned.join(' », « ')} ». Sans transfert, la propriété passera au membre actif le plus ancien.
+              </Text>
+            </View>
+            <SecondaryButton
+              label="Transférer le foyer d’abord"
+              icon="swap_horiz"
+              onPress={() => {
+                setSheet(null);
+                router.push('/household/transfer');
+              }}
+            />
+          </>
+        ) : null}
+        <Text style={styles.confirmLabel}>Mot de passe</Text>
+        <TextInput
+          style={kitStyles.input}
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+          autoCapitalize="none"
+          autoComplete="current-password"
+          selectionColor={c.link}
+          accessibilityLabel="Mot de passe"
         />
         <Text style={styles.confirmLabel}>Pour confirmer, saisissez {CONFIRM_WORD}</Text>
         <TextInput
-          style={[kitStyles.input, focused && kitStyles.inputFocused]}
+          style={kitStyles.input}
           value={typed}
           onChangeText={setTyped}
-          onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
           autoCapitalize="characters"
           autoCorrect={false}
           placeholder={CONFIRM_WORD}
@@ -229,17 +285,13 @@ export default function PrivacyDataScreen() {
           selectionColor={c.link}
           accessibilityLabel={`Saisissez ${CONFIRM_WORD} pour confirmer`}
         />
+        {sheetError ? <Text style={[styles.meta, { color: c.error }]}>{sheetError}</Text> : null}
         <SecondaryButton
-          label="Supprimer mon compte"
+          label={busy ? 'Demande en cours…' : 'Supprimer mon compte'}
           icon="delete_forever"
           danger
-          style={!confirmed ? styles.disabled : undefined}
-          onPress={() => {
-            if (!confirmed) return;
-            profileActions.requestDeletion();
-            setSheet(null);
-            setToast({ text: `Suppression programmée dans ${DELETION_GRACE_DAYS} jours`, undo: () => profileActions.cancelDeletion() });
-          }}
+          style={!confirmed || busy ? styles.disabled : undefined}
+          onPress={confirmDeletion}
         />
       </BottomSheet>
 

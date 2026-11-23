@@ -17,14 +17,14 @@ import { Icon } from '@/components/icon';
 import { Chip, IconButton, TopBar, useKitStyles } from '@/components/ui/kit';
 import { DARK, LIGHT, useScopedColors, type AppColors } from '@/constants/app-colors';
 import { FontFamily, Radius } from '@/constants/design';
-import { DEMO_TODAY, dayOffset, formatTime, startOfDay } from '@/lib/demo-dates';
+import { dayOffset, formatTime, startOfDay, today } from '@/lib/demo-dates';
 
 import { itemsForDay, type DayItem, type SpaceFilter, useTones } from '../components/calendar-ui';
-import { MONTHS, TASK_DEADLINES, WEEKDAY_SHORT, durationOf, formatDuration } from '../data';
+import { MONTHS, WEEKDAY_SHORT, durationOf, formatDuration } from '../data';
 import { QueryView } from '@/components/ui/states';
 import { useQuery } from '@/hooks/use-query';
 
-import { syncEvents, useCalendarState } from '../store';
+import { syncUpcoming, useCalendarState } from '../store';
 
 const FILTERS: { key: SpaceFilter; label: string; icon: string }[] = [
   { key: 'all', label: 'Tout', icon: 'calendar_view_month' },
@@ -39,8 +39,9 @@ type Row =
 export default function AgendaScreen() {
   const { c, styles } = useLook();
   const kitStyles = useKitStyles();
-  const { events } = useCalendarState();
-  const sync = useQuery('events', syncEvents);
+  const { events, deadlines } = useCalendarState();
+  // Le mois en cours et les deux suivants.
+  const sync = useQuery('events-upcoming', syncUpcoming);
   const [filter, setFilter] = useState<SpaceFilter>('all');
   const [showTasks, setShowTasks] = useState(true);
   const [query, setQuery] = useState('');
@@ -54,8 +55,8 @@ export default function AgendaScreen() {
     const term = query.trim().toLowerCase();
     const matches = (title: string, place = '') =>
       !term || title.toLowerCase().includes(term) || place.toLowerCase().includes(term);
-    const visibleEvents = events.filter((event) => matches(event.title, event.location));
-    const visibleTasks = showTasks ? TASK_DEADLINES.filter((task) => matches(task.title)) : [];
+    const visibleEvents = events.filter((event) => !event.cancelled && matches(event.title, event.location));
+    const visibleTasks = showTasks ? deadlines.filter((task) => matches(task.title)) : [];
 
     // Tous les jours qui ont quelque chose de prévu, plus aujourd'hui (toujours affiché).
     const keys = new Map<string, Date>();
@@ -63,7 +64,7 @@ export default function AgendaScreen() {
       const day = startOfDay(date);
       keys.set(day.toDateString(), day);
     }
-    if (!term) keys.set(startOfDay(DEMO_TODAY).toDateString(), startOfDay(DEMO_TODAY));
+    if (!term) keys.set(startOfDay(today()).toDateString(), startOfDay(today()));
 
     const days = [...keys.values()].sort((a, b) => a.getTime() - b.getTime());
     const result: Row[] = [];
@@ -79,7 +80,7 @@ export default function AgendaScreen() {
       result.push({ type: 'day', key: day.toDateString(), day, items });
     }
     return result;
-  }, [events, filter, showTasks, query]);
+  }, [events, deadlines, filter, showTasks, query]);
 
   const upcoming = rows.filter(
     (row): row is Extract<Row, { type: 'day' }> => row.type === 'day' && dayOffset(row.day) >= 0,
