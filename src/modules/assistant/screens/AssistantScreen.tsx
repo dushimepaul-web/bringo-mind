@@ -3,7 +3,7 @@
 // Kora aide sans décider à la place : chaque proposition ouvre le vrai formulaire, prérempli, à valider.
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -22,9 +22,11 @@ import { TURQUOISE } from '@/components/rings';
 import { BottomSheet, Chip, SheetOption, UndoToast } from '@/components/ui/kit';
 import { DARK, LIGHT, useAppColors, type AppColors } from '@/constants/app-colors';
 import { FontFamily, Radius } from '@/constants/design';
-import { DEMO_TODAY, formatTime } from '@/lib/demo-dates';
+import { IS_DEMO } from '@/lib/config';
+import { formatTime } from '@/lib/demo-dates';
 
-import { QUICK_QUESTIONS, answer, initialConversation, topicOf, type ActionCard, type Message, type Topic } from '../data';
+import { QUICK_QUESTIONS, type ActionCard } from '../data';
+import { newAssistantConversation, sendAssistantMessage, syncAssistant, useAssistant } from '../store';
 
 /** Couleurs des propositions, en clair et en sombre. */
 function toneOf(tone: ActionCard['tone'], dark: boolean): { bg: string; fg: string } {
@@ -45,26 +47,22 @@ function toneOf(tone: ActionCard['tone'], dark: boolean): { bg: string; fg: stri
 
 export default function AssistantScreen() {
   const { c, styles } = useLook();
-  const [messages, setMessages] = useState<Message[]>(initialConversation);
+  const { messages, busy } = useAssistant();
   const [scope, setScope] = useState<'personal' | 'household'>('personal');
   const [draft, setDraft] = useState('');
-  const [typing, setTyping] = useState(false);
   const [menu, setMenu] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const scrollRef = useRef<ScrollViewInstance>(null);
 
-  const ask = (text: string, topic: Topic = topicOf(text)) => {
+  useEffect(() => {
+    if (!IS_DEMO) void syncAssistant();
+  }, []);
+
+  const ask = (text: string) => {
     const clean = text.trim();
-    if (!clean || typing) return;
-    // Démo : l'heure avance d'une minute à chaque échange.
-    const at = new Date(DEMO_TODAY.getTime() + messages.length * 60000);
-    setMessages((current) => [...current, { id: `me-${current.length}`, from: 'me', text: clean, at }]);
+    if (!clean || busy) return;
     setDraft('');
-    setTyping(true);
-    setTimeout(() => {
-      setMessages((current) => [...current, { id: `kora-${current.length}`, from: 'kora', at, ...answer(topic) }]);
-      setTyping(false);
-    }, 700);
+    void sendAssistantMessage(clean);
   };
 
   const hasDraft = draft.trim().length > 0;
@@ -137,7 +135,7 @@ export default function AssistantScreen() {
               </View>
             ),
           )}
-          {typing ? (
+          {busy ? (
             <View style={styles.koraRow}>
               <View style={styles.koraDot}>
                 <Icon name="auto_awesome" size={14} color={TURQUOISE} />
@@ -155,7 +153,7 @@ export default function AssistantScreen() {
         <View style={styles.composer}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quick} keyboardShouldPersistTaps="handled">
             {QUICK_QUESTIONS.map((question) => (
-              <Chip key={question.topic} label={question.label} icon={question.icon} onPress={() => ask(question.label, question.topic)} />
+              <Chip key={question.label} label={question.label} icon={question.icon} onPress={() => ask(question.label)} />
             ))}
           </ScrollView>
           <View style={styles.inputRow}>
@@ -196,15 +194,7 @@ export default function AssistantScreen() {
           label="Nouvelle conversation"
           onPress={() => {
             setMenu(false);
-            setMessages([]);
-          }}
-        />
-        <SheetOption
-          icon="restart_alt"
-          label="Revoir la conversation d’exemple"
-          onPress={() => {
-            setMenu(false);
-            setMessages(initialConversation);
+            newAssistantConversation();
           }}
         />
       </BottomSheet>

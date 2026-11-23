@@ -1,65 +1,115 @@
-// Service d'authentification : endpoints AUTH-001 à AUTH-008 du guide d'API v1.0.
-// Passe par le client unique (enveloppe, erreurs, X-Request-Id, Idempotency-Key).
+// Service d'authentification : routes publiques /auth/* et première utilisation (/settings/onboarding).
+// Contrat 2.11.0 (docs/backend/modules/01_comptes_et_abonnements.md et 17_parametres.md).
+// Passe par le client unique : enveloppe, erreurs, Accept-Language, X-Request-Id, Idempotency-Key, cookie.
 import { api } from '@/lib/api';
-import type { TokenResponse } from '@/lib/session';
+import { deviceLocale, deviceName, deviceTimeZone } from '@/lib/device-info';
+import type { SessionUser, TokenResponse } from '@/lib/session';
 
-import type { LoginPayload, RegisterPayload, ResetPasswordPayload } from '../types';
+import type { LoginPayload, OnboardingState, PublicConfig, RegisterPayload, ResetPasswordPayload } from '../types';
 
-const ENDPOINTS = {
-  register: '/auth/register', // AUTH-001
-  verifyEmail: '/auth/verify-email', // AUTH-002
-  resendVerification: '/auth/resend-verification', // AUTH-003
-  login: '/auth/login', // AUTH-004
-  logout: '/auth/logout', // AUTH-006
-  passwordReset: '/auth/password-reset', // AUTH-007
-  passwordResetConfirm: '/auth/password-reset/confirm', // AUTH-008
-} as const;
+/** En-tête du jeton anti-robot (Cloudflare Turnstile), exigé si captcha_site_key est renseignée. */
+function captchaHeaders(captchaToken?: string): Record<string, string> | undefined {
+  return captchaToken ? { 'X-Captcha-Token': captchaToken } : undefined;
+}
 
-/** Version des conditions acceptées à l'inscription (à confirmer avec l'équipe produit). */
-const TERMS_VERSION = '2026-11-01';
+/** GET /auth/public-config : clé anti-robot, inscriptions ouvertes, message de maintenance, langues. */
+export function getPublicConfig() {
+  return api.get<PublicConfig>('/auth/public-config', { auth: false });
+}
 
-export function register(payload: RegisterPayload & { locale?: string; timeZone?: string }) {
-  return api.post<{ user_id: string; email_verification_required?: boolean }>(
-    ENDPOINTS.register,
+/**
+ * POST /auth/register → 202, sans session. Réponse identique que l'adresse soit libre ou déjà prise :
+ * l'utilisateur doit ouvrir le lien reçu par e-mail (24 h), puis se connecter.
+ * Anti-robot obligatoire si captcha_site_key est renseignée.
+ */
+export function register(payload: RegisterPayload, captchaToken?: string) {
+  return api.post<null>(
+    '/auth/register',
     {
-      email: payload.email,
+      email: payload.email.trim().toLowerCase(),
       password: payload.password,
-      locale: payload.locale ?? 'fr',
-      time_zone: payload.timeZone ?? 'Europe/Paris',
-      terms_accepted: true,
-      consents: [{ purpose_code: 'terms', policy_version: TERMS_VERSION, granted: true, source: 'mobile' }],
+      full_name: payload.fullName?.trim() || null,
+      locale: deviceLocale(),
+      timezone: deviceTimeZone(),
+      // Une seule case « conditions d'utilisation et politique de confidentialité » dans l'écran.
+      accept_terms: true,
+      accept_privacy: true,
+    },
+    { auth: false, headers: captchaHeaders(captchaToken) },
+  );
+}
+
+/** POST /auth/resend-verification → 202 (60 s entre deux envois, 5 par heure). Anti-robot obligatoire. */
+export function resendVerification(email: string, captchaToken?: string) {
+  return api.post<null>(
+    '/auth/resend-verification',
+    { email: email.trim().toLowerCase() },
+    { auth: false, headers: captchaHeaders(captchaToken) },
+  );
+}
+
+/** POST /auth/verify-email avec le jeton du lien reçu → utilisateur (aucune session ouverte). */
+export function verifyEmail(token: string) {
+  return api.post<SessionUser>('/auth/verify-email', { token }, { auth: false });
+}
+
+/**
+ * POST /auth/login → jeton d'accès (15 min) + utilisateur ; le cookie `bm_refresh` est déposé.
+ * Erreurs à gérer par l'écran (ApiError.details) :
+ * - 401 { mfa_required: true } : demander le code de double authentification ;
+ * - 401 { mfa_code: [...] } : code incorrect ;
+ * - 403 { email_not_verified: true } : adresse à confirmer ;
+ * - 423 { retry_after } : compte verrouillé 15 min après 5 échecs.
+ */
+export function login(payload: LoginPayload) {
+  return api.post<TokenResponse>(
+    '/auth/login',
+    {
+      email: payload.email.trim().toLowerCase(),
+      password: payload.password,
+      mfa_code: payload.mfaCode?.trim() || null,
+      remember_me: payload.rememberMe ?? true,
+      device_name: deviceName(),
     },
     { auth: false },
   );
 }
 
-/** Renvoie les jetons : à passer à `signIn` de la session. */
-export function verifyEmail(token: string) {
-  return api.post<TokenResponse | undefined>(ENDPOINTS.verifyEmail, { token }, { auth: false });
-}
-
-export function resendVerificationEmail(email: string) {
-  return api.post<void>(ENDPOINTS.resendVerification, { email }, { auth: false });
-}
-
-/** Renvoie les jetons (accès 15 min, rafraîchissement 30 j) et l'utilisateur. */
-export function login(payload: LoginPayload) {
-  return api.post<TokenResponse>(ENDPOINTS.login, payload, { auth: false });
-}
-
-export function logout(refreshToken: string) {
-  return api.post<void>(ENDPOINTS.logout, { refresh_token: refreshToken });
-}
-
-/** Répond toujours de la même façon, que l'adresse existe ou non. */
-export function requestPasswordReset(email: string) {
-  return api.post<void>(ENDPOINTS.passwordReset, { email }, { auth: false });
-}
-
-export function resetPassword(payload: ResetPasswordPayload) {
-  return api.post<void>(
-    ENDPOINTS.passwordResetConfirm,
-    { token: payload.token, new_password: payload.password },
-    { auth: false },
+/** POST /auth/forgot-password → 202, réponse identique que le compte existe ou non. Anti-robot obligatoire. */
+export function forgotPassword(email: string, captchaToken?: string) {
+  return api.post<null>(
+    '/auth/forgot-password',
+    { email: email.trim().toLowerCase() },
+    { auth: false, headers: captchaHeaders(captchaToken) },
   );
+}
+
+/** POST /auth/reset-password avec le jeton du lien (valable 60 min, usage unique). */
+export function resetPassword(payload: ResetPasswordPayload) {
+  return api.post<null>('/auth/reset-password', { token: payload.token, password: payload.password }, { auth: false });
+}
+
+/** POST /auth/confirm-email-change avec le jeton reçu à la nouvelle adresse → utilisateur à jour. */
+export function confirmEmailChange(token: string) {
+  return api.post<SessionUser>('/auth/confirm-email-change', { token }, { auth: false });
+}
+
+/** GET /settings/onboarding : l'assistant de première utilisation est-il à proposer ? */
+export function getOnboarding() {
+  return api.get<OnboardingState>('/settings/onboarding');
+}
+
+/** POST /settings/onboarding/complete : assistant terminé ou passé, il ne sera plus proposé. */
+export function completeOnboarding() {
+  return api.post<OnboardingState>('/settings/onboarding/complete');
+}
+
+/**
+ * Extrait le jeton d'un lien reçu par e-mail (…/verify-email?token=…, …/reset-password?token=…,
+ * …/confirm-email?token=…) ou renvoie la saisie telle quelle si c'est déjà un jeton.
+ */
+export function tokenFromLink(input: string): string {
+  const value = input.trim();
+  const match = /[?&]token=([^&#\s]+)/.exec(value);
+  return match ? decodeURIComponent(match[1]) : value;
 }

@@ -267,6 +267,19 @@ export function InfoNote({
   );
 }
 
+/** Message d'erreur sous un formulaire (réponse du serveur, réseau…). Rien si `message` est vide. */
+export function FormError({ message }: { message?: string | null }) {
+  const formStyles = useFormStyles();
+  const { c } = useLook();
+  if (!message) return null;
+  return (
+    <View style={formStyles.errorRow} accessibilityLiveRegion="polite" accessibilityRole="alert">
+      <Icon name="error" size={16} color={c.error} />
+      <Text style={formStyles.errorText}>{message}</Text>
+    </View>
+  );
+}
+
 /** Séparateur « ou ». */
 export function Divider({ label }: { label: string }) {
   const { styles } = useLook();

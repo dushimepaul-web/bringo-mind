@@ -1,25 +1,41 @@
-export type AuthTokens = {
-  accessToken: string;
-  refreshToken: string;
+/**
+ * Utilisateur renvoyé par le backend (`UserOut`) : POST /auth/login, POST /auth/refresh,
+ * GET /accounts/me, POST /auth/verify-email (contrat 2.11.0, docs/backend/openapi.json).
+ */
+export type SessionUser = {
+  id: string;
+  email: string;
+  full_name: string;
+  locale: string;
+  timezone: string;
+  currency: string;
+  status: string;
+  role: string;
+  is_admin: boolean;
+  mfa_enabled: boolean;
+  email_verified_at: string | null;
+  inbox_alias?: string | null;
+  dashboard_preferences?: Record<string, unknown> | null;
+  created_at: string;
 };
 
 /**
- * Contenu de `data` renvoyé par POST /auth/login (AUTH-004), /auth/refresh (AUTH-005)
- * et /auth/verify-email (guide d'API v1.0). Accès 15 min, rafraîchissement 30 jours, tourné à chaque usage.
+ * `result` de POST /auth/login et POST /auth/refresh (`TokenOut`).
+ * Le jeton de renouvellement n'est jamais dans le corps : il est dans le cookie httpOnly `bm_refresh`,
+ * conservé par le magasin de cookies natif (iOS / Android) et renvoyé automatiquement à /api/v1/auth.
  */
 export type TokenResponse = {
-  token_type?: 'Bearer' | 'bearer';
   access_token: string;
-  expires_in?: number;
-  refresh_token: string;
-  refresh_expires_in?: number;
-  user?: {
-    id: string;
-    email: string;
-    status?: string;
-    locale?: string;
-    time_zone?: string;
-  };
+  token_type?: string;
+  /** Durée de validité du jeton d'accès, en secondes (900 = 15 min). */
+  expires_in: number;
+  user: SessionUser;
+};
+
+/** Session locale : jeton d'accès (15 min) et utilisateur connecté. */
+export type StoredSession = {
+  accessToken: string;
+  user: SessionUser | null;
 };
 
 export type SessionStatus = 'loading' | 'authenticated' | 'unauthenticated';

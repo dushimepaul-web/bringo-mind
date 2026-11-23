@@ -1,50 +1,64 @@
 /**
- * Outils communs du contrat d'API (guide v1.0) : listes paginées (§ 2.7), travaux asynchrones
- * (§ 2.8 et annexe B) et envoi de fichiers par URL signée (§ 2.10).
+ * Outils communs du contrat d'API (contrat 2.11.0) : listes paginées par curseur,
+ * travaux asynchrones et envoi de fichiers par URL signée.
+ *
+ * Pagination du backend : `result` est `{ items, total, page, page_size, next_cursor }`
+ * (page/page_size peuvent être absents pour les listes en curseur pur, ex. documents).
  */
 import { CryptoDigestAlgorithm, digest } from 'expo-crypto';
 
 import { apiRequest, apiRequestEnvelope, type RequestOptions } from './client';
 import { NetworkError } from './errors';
 
-/** Métadonnées de pagination renvoyées dans data.pagination et meta. */
-export type Pagination = { page: number; per_page: number; total: number; total_pages: number };
+/** Métadonnées de pagination renvoyées dans `result`. */
+export type Pagination = { total: number | null; next_cursor: string | null };
 
-export type Page<T> = { items: T[]; pagination: Pagination };
+export type Page<T> = { items: T[]; total: number | null; next_cursor: string | null };
 
-/** Paramètres communs des listes : page commence à 1, per_page de 1 à 100 (20 par défaut). */
-export type ListParams = { page?: number; per_page?: number; sort?: string; q?: string };
+/** Paramètres communs des listes (le backend ignore les paramètres qu'il ne connaît pas). */
+export type ListParams = {
+  page?: number;
+  page_size?: number;
+  limit?: number;
+  cursor?: string;
+  sort?: string;
+  q?: string;
+};
 
-/** Récupère une page d'une liste. */
+/** Récupère une page d'une liste. Accepte un `result` tableau ou `{ items, next_cursor, total? }`. */
 export async function getPage<T>(
   path: string,
   query: Record<string, string | number | boolean | null | undefined> = {},
   options: Omit<RequestOptions, 'method' | 'body' | 'query'> = {},
 ): Promise<Page<T>> {
-  const { data } = await apiRequestEnvelope<{ items?: T[]; pagination?: Pagination } | T[]>(path, {
-    ...options,
-    method: 'GET',
-    query,
-  });
+  const { data } = await apiRequestEnvelope<
+    { items?: T[]; next_cursor?: string | null; total?: number | null } | T[]
+  >(path, { ...options, method: 'GET', query });
   if (Array.isArray(data)) {
-    return { items: data, pagination: { page: 1, per_page: data.length, total: data.length, total_pages: 1 } };
+    return { items: data, total: data.length, next_cursor: null };
   }
-  const items = data.items ?? [];
   return {
-    items,
-    pagination: data.pagination ?? { page: 1, per_page: items.length, total: items.length, total_pages: 1 },
+    items: data.items ?? [],
+    total: data.total ?? null,
+    next_cursor: data.next_cursor ?? null,
   };
 }
 
-/** Récupère toutes les pages (à réserver aux petites listes : catégories, membres…). */
-export async function getAll<T>(path: string, query: Record<string, string | number | boolean | null | undefined> = {}): Promise<T[]> {
+/** Récupère toutes les pages d'une liste en suivant `next_cursor` (réservé aux petites listes). */
+export async function getAll<T>(
+  path: string,
+  query: Record<string, string | number | boolean | null | undefined> = {},
+  options: Omit<RequestOptions, 'method' | 'body' | 'query'> = {},
+): Promise<T[]> {
   const items: T[] = [];
-  let page = 1;
+  let cursor: string | null = null;
   for (;;) {
-    const result = await getPage<T>(path, { ...query, page, per_page: 100 });
+    const result: Page<T> = await getPage<T>(path, { ...query, ...(cursor ? { cursor } : {}) }, options);
     items.push(...result.items);
-    if (page >= result.pagination.total_pages || result.items.length === 0) return items;
-    page += 1;
+    if (!result.next_cursor || result.items.length === 0 || result.next_cursor === cursor) {
+      return items;
+    }
+    cursor = result.next_cursor;
   }
 }
 
@@ -81,15 +95,26 @@ export async function pollJob<T extends JobState>(
   throw new NetworkError(true);
 }
 
-/** Réponse de DOC-001 POST /documents/uploads. */
-type UploadInit = { document_id: string; upload_url: string; upload_method?: 'PUT'; headers?: Record<string, string>; expires_at?: string };
+/** Réponse de DOC-001 POST /documents/uploads (`UploadOut`). */
+type UploadInit = {
+  upload_id: string;
+  upload_url: string;
+  expires_at?: string;
+  duplicate_of?: string | null;
+};
+
+/** Réponse de DOC-002 POST /documents/uploads/{upload_id}/confirm (`ConfirmedOut`). */
+type ConfirmedOut = {
+  document: { id: string };
+  duplicate: boolean;
+};
 
 function toHex(buffer: ArrayBuffer): string {
   return Array.from(new Uint8Array(buffer), (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
 /**
- * Envoie un document en trois temps (DOC-001 → PUT signé → DOC-002) :
+ * Envoie un document en trois temps (DOC-001 → PUT signé → confirm) :
  * 1. le serveur vérifie type, taille et quota puis renvoie une URL signée de courte durée ;
  * 2. l'app envoie les octets directement au stockage (jamais à travers l'API) ;
  * 3. l'app confirme ; le serveur vérifie taille et SHA-256 puis lance analyse et OCR.
@@ -110,15 +135,14 @@ export async function uploadDocument(file: {
   });
 
   const put = await fetch(init.upload_url, {
-    method: init.upload_method ?? 'PUT',
-    headers: { 'Content-Type': file.mimeType, ...init.headers },
+    method: 'PUT',
+    headers: { 'Content-Type': file.mimeType },
     body: blob,
   });
   if (!put.ok) throw new NetworkError();
 
-  await apiRequest(`/documents/${init.document_id}/complete-upload`, {
+  const confirmed = await apiRequest<ConfirmedOut>(`/documents/uploads/${init.upload_id}/confirm`, {
     method: 'POST',
-    body: { size_bytes: bytes.byteLength, sha256 },
   });
-  return { documentId: init.document_id };
+  return { documentId: confirmed.document.id };
 }

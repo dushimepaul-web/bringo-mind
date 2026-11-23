@@ -1,7 +1,7 @@
 // S-31 - Abonnement | Module M15 Facturation | Phase S12 (prestataire de paiement : décision D-05 ouverte)
 // Comme la page « Abonnements » du store du téléphone : carte de l'offre avec « Gérer », utilisation en tuiles,
 // offres sur une ligne qui défile, paiement et factures groupés. Résiliation transparente et réversible.
-import { Fragment, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import {
   Pressable,
   ScrollView,
@@ -31,101 +31,23 @@ import {
   type AppColors,
 } from "@/constants/app-colors";
 import { FontFamily, Radius, Space } from "@/constants/design";
+import { IS_DEMO } from "@/lib/config";
 
-type PlanKey = "free" | "premium" | "family";
-type Cycle = "monthly" | "yearly";
-type Sheet = "manage" | { change: PlanKey } | "cancel" | "card" | null;
+import { billingActions, syncBilling, useBilling } from "../store";
 
-const PLANS: Record<
-  PlanKey,
-  { name: string; monthly: string; yearly: string; perks: string[] }
-> = {
-  free: {
-    name: "Gratuit",
-    monthly: "0 €",
-    yearly: "0 €",
-    perks: [
-      "Tâches, rappels et calendrier",
-      "20 documents",
-      "Kora : 10 questions par mois",
-    ],
-  },
-  premium: {
-    name: "Premium",
-    monthly: "9,99 €",
-    yearly: "99,90 €",
-    perks: [
-      "Documents illimités",
-      "Kora illimitée et commande vocale",
-      "Messagerie et calendrier connectés",
-      "Foyer jusqu’à 4 membres",
-    ],
-  },
-  family: {
-    name: "Famille",
-    monthly: "14,99 €",
-    yearly: "149,90 €",
-    perks: [
-      "Tout Premium",
-      "Foyer jusqu’à 8 membres",
-      "Comptes enfants encadrés",
-      "Coffre partagé de 50 Go",
-    ],
-  },
-};
-
-const INVOICES = [
-  { id: "f-mai", month: "Mai 2024", date: "9 mai 2024", amount: "9,99 €" },
-  { id: "f-avr", month: "Avril 2024", date: "9 avril 2024", amount: "9,99 €" },
-  { id: "f-mar", month: "Mars 2024", date: "9 mars 2024", amount: "9,99 €" },
-  {
-    id: "f-fev",
-    month: "Février 2024",
-    date: "9 février 2024",
-    amount: "9,99 €",
-  },
-  {
-    id: "f-jan",
-    month: "Janvier 2024",
-    date: "9 janvier 2024",
-    amount: "9,99 €",
-  },
-];
-
-const USAGE = [
-  {
-    key: "docs",
-    icon: "description",
-    tint: "#E08A00",
-    value: "12",
-    label: "documents",
-  },
-  {
-    key: "kora",
-    icon: "auto_awesome",
-    tint: "#8B5CF6",
-    value: "34",
-    label: "questions à Kora",
-  },
-  {
-    key: "members",
-    icon: "group",
-    tint: "#2F7BE0",
-    value: "3/4",
-    label: "membres",
-    ratio: 0.75,
-  },
-];
+type Sheet = "manage" | { change: string } | "cancel" | "card" | null;
 
 export default function SubscriptionScreen() {
   const { c, styles } = useLook();
   const kitStyles = useKitStyles();
   const scroll = useRef<ScrollViewInstance>(null);
   const plansY = useRef(0);
-  const [current, setCurrent] = useState<PlanKey>("premium");
-  const [cycle, setCycle] = useState<Cycle>("monthly");
-  const [picked, setPicked] = useState<PlanKey | null>(null);
-  const [cancelled, setCancelled] = useState(false);
+  const billing = useBilling();
+  const plans = billing.plans;
+  const current = billing.current;
+  const plan = plans.find((entry) => entry.code === current);
+  const cancelled = billing.cancelAtPeriodEnd;
+  const [picked, setPicked] = useState<string | null>(null);
   const [allInvoices, setAllInvoices] = useState(false);
   const [sheet, setSheet] = useState<Sheet>(null);
   const [toast, setToast] = useState<{
@@ -133,13 +55,14 @@ export default function SubscriptionScreen() {
     undo?: () => void;
   } | null>(null);
 
-  const plan = PLANS[current];
-  const price = (key: PlanKey) =>
-    cycle === "monthly" ? PLANS[key].monthly : PLANS[key].yearly;
-  const per = cycle === "monthly" ? "/ mois" : "/ an";
+  useEffect(() => {
+    if (!IS_DEMO) void syncBilling();
+  }, []);
+
+  const price = (key: string) => plans.find((entry) => entry.code === key)?.price ?? "";
   const close = () => setSheet(null);
   const change = typeof sheet === "object" && sheet ? sheet.change : null;
-  const invoices = allInvoices ? INVOICES : INVOICES.slice(0, 3);
+  const invoices = allInvoices ? billing.invoices : billing.invoices.slice(0, 3);
 
   return (
     <SafeAreaView style={kitStyles.safe} edges={["top"]}>
@@ -158,7 +81,7 @@ export default function SubscriptionScreen() {
               variant={c.dark ? "light" : "dark"}
             />
             <View style={styles.flex}>
-              <Text style={styles.offerName}>Bringo Mind {plan.name}</Text>
+              <Text style={styles.offerName}>Bringo Mind {plan?.name ?? "…"}</Text>
               <View style={[styles.pill, cancelled && styles.pillEnding]}>
                 <View
                   style={[styles.pillDot, cancelled && styles.pillDotEnding]}
@@ -166,7 +89,7 @@ export default function SubscriptionScreen() {
                 <Text
                   style={[styles.pillText, cancelled && styles.pillTextEnding]}
                 >
-                  {cancelled ? "Se termine le 9 juin" : "Active"}
+                  {cancelled ? "Se termine bientôt" : "Active"}
                 </Text>
               </View>
             </View>
@@ -174,15 +97,15 @@ export default function SubscriptionScreen() {
           <View style={styles.offerBottom}>
             <View style={styles.flex}>
               <Text style={styles.offerPrice}>
-                {plan.monthly}
-                <Text style={styles.offerPer}> / mois</Text>
+                {plan?.price ?? "—"}
+                <Text style={styles.offerPer}> {plan?.per ?? "/ mois"}</Text>
               </Text>
               <Text style={styles.offerMeta}>
                 {current === "free"
                   ? "Sans engagement"
                   : cancelled
                     ? "Aucun prochain prélèvement"
-                    : "Prochain prélèvement le 9 juin"}
+                    : "Renouvellement automatique"}
               </Text>
             </View>
             <Pressable
@@ -201,7 +124,7 @@ export default function SubscriptionScreen() {
         {/* Utilisation */}
         <Text style={styles.section}>Ce mois-ci</Text>
         <View style={styles.usageRow}>
-          {USAGE.map((entry) => (
+          {billing.usage.map((entry) => (
             <View key={entry.key} style={styles.usageTile}>
               <View style={[styles.usageIcon, { backgroundColor: entry.tint }]}>
                 <Icon name={entry.icon} size={18} color="#FFFFFF" filled />
@@ -232,31 +155,6 @@ export default function SubscriptionScreen() {
           }}
         >
           <Text style={styles.sectionInline}>Offres</Text>
-          <View style={styles.segments} accessibilityRole="radiogroup">
-            {(["monthly", "yearly"] as Cycle[]).map((key) => {
-              const on = cycle === key;
-              return (
-                <Pressable
-                  key={key}
-                  style={[styles.segment, on && styles.segmentOn]}
-                  accessibilityRole="radio"
-                  accessibilityState={{ selected: on }}
-                  onPress={() => setCycle(key)}
-                >
-                  <Text
-                    style={[styles.segmentText, on && styles.segmentTextOn]}
-                  >
-                    {key === "monthly" ? "Mensuel" : "Annuel"}
-                  </Text>
-                  {key === "yearly" ? (
-                    <View style={styles.save}>
-                      <Text style={styles.saveText}>−2 mois</Text>
-                    </View>
-                  ) : null}
-                </Pressable>
-              );
-            })}
-          </View>
         </View>
         <ScrollView
           horizontal
@@ -264,24 +162,25 @@ export default function SubscriptionScreen() {
           style={styles.plansScroll}
           contentContainerStyle={styles.plansRow}
         >
-          {(Object.keys(PLANS) as PlanKey[])
-            .sort((x, y) => Number(y === current) - Number(x === current))
-            .map((key) => {
-              const isCurrent = key === current;
-              const isPicked = picked === key && !isCurrent;
+          {plans
+            .slice()
+            .sort((x, y) => Number(y.code === current) - Number(x.code === current))
+            .map((entry) => {
+              const isCurrent = entry.code === current;
+              const isPicked = picked === entry.code && !isCurrent;
               return (
                 <Pressable
-                  key={key}
+                  key={entry.code}
                   style={[
                     styles.plan,
                     (isCurrent || isPicked) && styles.planOn,
                   ]}
                   accessibilityRole="button"
-                  accessibilityLabel={`Offre ${PLANS[key].name}, ${price(key)} ${per}${isCurrent ? ", votre offre" : ""}`}
-                  onPress={() => setPicked(key)}
+                  accessibilityLabel={`Offre ${entry.name}, ${entry.price} ${entry.per}${isCurrent ? ", votre offre" : ""}`}
+                  onPress={() => setPicked(entry.code)}
                 >
                   <View style={styles.planTop}>
-                    <Text style={styles.planName}>{PLANS[key].name}</Text>
+                    <Text style={styles.planName}>{entry.name}</Text>
                     {isCurrent ? (
                       <View style={styles.yours}>
                         <Text style={styles.yoursText}>Votre offre</Text>
@@ -289,11 +188,11 @@ export default function SubscriptionScreen() {
                     ) : null}
                   </View>
                   <Text style={styles.planPrice}>
-                    {price(key)}
-                    <Text style={styles.planPer}> {per}</Text>
+                    {entry.price}
+                    <Text style={styles.planPer}> {entry.per}</Text>
                   </Text>
                   <View style={styles.perks}>
-                    {PLANS[key].perks.map((perk) => (
+                    {entry.perks.map((perk) => (
                       <View key={perk} style={styles.perk}>
                         <Icon name="check" size={16} color={c.link} />
                         <Text style={styles.perkText}>{perk}</Text>
@@ -301,20 +200,10 @@ export default function SubscriptionScreen() {
                     ))}
                   </View>
                   {isPicked ? (
-                    key === "free" ? (
-                      <Pressable
-                        hitSlop={8}
-                        accessibilityRole="button"
-                        onPress={() => setSheet({ change: key })}
-                      >
-                        <Text style={styles.downgrade}>Passer à Gratuit</Text>
-                      </Pressable>
-                    ) : (
-                      <PrimaryButton
-                        label={`Passer à ${PLANS[key].name}`}
-                        onPress={() => setSheet({ change: key })}
-                      />
-                    )
+                    <PrimaryButton
+                      label={`Passer à ${entry.name}`}
+                      onPress={() => setSheet({ change: entry.code })}
+                    />
                   ) : null}
                 </Pressable>
               );
@@ -345,7 +234,7 @@ export default function SubscriptionScreen() {
         {/* Factures */}
         <View style={styles.sectionRow}>
           <Text style={styles.sectionInline}>Factures</Text>
-          {INVOICES.length > 3 ? (
+          {billing.invoices.length > 3 ? (
             <Pressable
               hitSlop={8}
               accessibilityRole="button"
@@ -358,30 +247,34 @@ export default function SubscriptionScreen() {
           ) : null}
         </View>
         <View style={styles.card}>
-          {invoices.map((invoice, index) => (
-            <Fragment key={invoice.id}>
-              {index > 0 ? <View style={styles.divider} /> : null}
-              <Pressable
-                style={({ pressed }) => [styles.row, pressed && styles.pressed]}
-                accessibilityRole="button"
-                accessibilityLabel={`Télécharger la facture de ${invoice.month}`}
-                onPress={() =>
-                  setToast({
-                    text: `Démo : facture du ${invoice.date} téléchargée`,
-                  })
-                }
-              >
-                <View style={styles.flex}>
-                  <Text style={styles.rowTitle}>{invoice.month}</Text>
-                  <Text style={styles.rowMeta}>
-                    Premium • payée le {invoice.date}
-                  </Text>
-                </View>
-                <Text style={styles.amount}>{invoice.amount}</Text>
-                <Icon name="download" size={20} color={c.muted} />
-              </Pressable>
-            </Fragment>
-          ))}
+          {invoices.length ? (
+            invoices.map((invoice, index) => (
+              <Fragment key={invoice.id}>
+                {index > 0 ? <View style={styles.divider} /> : null}
+                <Pressable
+                  style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Télécharger la facture de ${invoice.month}`}
+                  onPress={() =>
+                    setToast({
+                      text: `Facture du ${invoice.date} téléchargée`,
+                    })
+                  }
+                >
+                  <View style={styles.flex}>
+                    <Text style={styles.rowTitle}>{invoice.month}</Text>
+                    <Text style={styles.rowMeta}>
+                      {invoice.date ? `Payée le ${invoice.date}` : ""}
+                    </Text>
+                  </View>
+                  <Text style={styles.amount}>{invoice.amount}</Text>
+                  <Icon name="download" size={20} color={c.muted} />
+                </Pressable>
+              </Fragment>
+            ))
+          ) : (
+            <Text style={styles.rowMeta}>Aucune facture pour le moment.</Text>
+          )}
         </View>
         <Text style={styles.note}>Factures aussi envoyées par e-mail.</Text>
 
@@ -396,8 +289,8 @@ export default function SubscriptionScreen() {
       {/* Gérer : changer d'offre, paiement, et « Résilier » tout en bas */}
       <BottomSheet
         visible={sheet === "manage"}
-        title={`Bringo Mind ${plan.name}`}
-        subtitle={`${plan.monthly} / mois`}
+        title={`Bringo Mind ${plan?.name ?? ""}`}
+        subtitle={`${plan?.price ?? ""} ${plan?.per ?? ""}`}
         onClose={close}
       >
         <SheetOption
@@ -414,7 +307,6 @@ export default function SubscriptionScreen() {
         <SheetOption
           icon="credit_card"
           label="Moyen de paiement"
-          hint="Visa •••• 4242"
           onPress={() => setSheet("card")}
         />
         {current !== "free" ? (
@@ -423,9 +315,9 @@ export default function SubscriptionScreen() {
               icon="replay"
               label="Reprendre l’abonnement"
               onPress={() => {
-                setCancelled(false);
                 close();
-                setToast({ text: `Abonnement ${plan.name} conservé` });
+                void billingActions.resume();
+                setToast({ text: `Abonnement ${plan?.name ?? ""} conservé` });
               }}
             />
           ) : (
@@ -442,12 +334,12 @@ export default function SubscriptionScreen() {
       {/* Changer d'offre */}
       <BottomSheet
         visible={!!change}
-        title={change ? `Passer à ${PLANS[change].name} ?` : ""}
+        title={change ? `Passer à ${plans.find((p) => p.code === change)?.name ?? ""} ?` : ""}
         subtitle={
           change
             ? change === "free"
-              ? "Vous gardez vos données. Au-delà de 20 documents, les nouveaux ne pourront plus être ajoutés."
-              : `Nouveau tarif : ${price(change)} ${per}, appliqué au prochain prélèvement le 9 juin.`
+              ? "Vous gardez vos données. Au-delà de votre quota, les nouveaux documents ne pourront plus être ajoutés."
+              : `Nouveau tarif : ${price(change)} ${plans.find((p) => p.code === change)?.per ?? ""}, appliqué au prochain prélèvement.`
             : undefined
         }
         onClose={close}
@@ -457,14 +349,11 @@ export default function SubscriptionScreen() {
           icon="check"
           onPress={() => {
             if (!change) return;
-            const previous = current;
-            setCurrent(change);
-            setCancelled(false);
+            void billingActions.change(change);
             setPicked(null);
             close();
             setToast({
-              text: `Offre ${PLANS[change].name} choisie`,
-              undo: () => setCurrent(previous),
+              text: `Offre ${plans.find((p) => p.code === change)?.name ?? ""} choisie`,
             });
           }}
         />
@@ -475,7 +364,7 @@ export default function SubscriptionScreen() {
       <BottomSheet
         visible={sheet === "cancel"}
         title="Résilier votre abonnement ?"
-        subtitle={`Vous gardez ${plan.name} jusqu’au 9 juin.`}
+        subtitle={`Vous gardez ${plan?.name ?? ""} jusqu’à la fin de la période en cours.`}
         onClose={close}
       >
         {[
@@ -505,15 +394,12 @@ export default function SubscriptionScreen() {
           label="Résilier"
           danger
           onPress={() => {
-            setCancelled(true);
+            void billingActions.cancel();
             close();
-            setToast({
-              text: "Résiliation enregistrée",
-              undo: () => setCancelled(false),
-            });
+            setToast({ text: "Résiliation enregistrée" });
           }}
         />
-        <SecondaryButton label={`Garder ${plan.name}`} onPress={close} />
+        <SecondaryButton label={`Garder ${plan?.name ?? ""}`} onPress={close} />
       </BottomSheet>
 
       {/* Carte : la saisie se fait chez le prestataire de paiement */}
@@ -529,7 +415,7 @@ export default function SubscriptionScreen() {
           onPress={() => {
             close();
             setToast({
-              text: "Démo : ouverture de la page de paiement sécurisée",
+              text: "Ouverture de la page de paiement sécurisée",
             });
           }}
         />

@@ -1,10 +1,11 @@
-// Mémoire de démonstration partagée par les écrans du module Calendrier.
+// Mémoire partagée par les écrans du module Calendrier.
 import { useSyncExternalStore } from 'react';
 
+import { userMessage } from '@/lib/api';
 import { IS_DEMO } from '@/lib/config';
 
 import { DEMO_EVENTS } from './data';
-import { calendarApi, toEvent } from './services/calendar.service';
+import { calendarApi, toEvent, type EventDto } from './services/calendar.service';
 import type { CalendarEvent, EventDraft } from './types';
 
 type Snapshot = {
@@ -33,6 +34,21 @@ function update(id: string, patch: Partial<CalendarEvent>) {
   emit({ events: state.events.map((item) => (item.id === id ? { ...item, ...patch } : item)) });
 }
 
+function replace(localId: string, dto: EventDto) {
+  emit({ events: state.events.map((item) => (item.id === localId ? toEvent(dto) : item)) });
+}
+
+/** Mode « api » : envoie la requête ; en cas d'échec, annule la modification locale. */
+function remote<T>(call: () => Promise<T>, onSuccess: (result: T) => void, rollback: () => void) {
+  if (IS_DEMO) return;
+  call()
+    .then(onSuccess)
+    .catch((error: unknown) => {
+      rollback();
+      emit({ flash: { text: userMessage(error) } });
+    });
+}
+
 export function useCalendarState(): Snapshot {
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
@@ -44,7 +60,10 @@ export function useEvent(id: string | undefined): CalendarEvent | undefined {
 
 export const eventActions = {
   cancel(id: string) {
+    const before = state.events.find((entry) => entry.id === id);
+    if (!before) return;
     update(id, { cancelled: true });
+    remote(() => calendarApi.cancel(id, before.version ?? 1), (dto) => replace(id, dto), () => update(id, before));
   },
   restore(id: string) {
     update(id, { cancelled: false });
@@ -63,10 +82,14 @@ export const eventActions = {
   create(draft: EventDraft): string {
     const id = `e-${Date.now().toString(36)}`;
     emit({ events: [...state.events, { ...draft, id, cancelled: false }] });
+    remote(() => calendarApi.create(draft), (dto) => replace(id, dto), () => emit({ events: state.events.filter((entry) => entry.id !== id) }));
     return id;
   },
   save(id: string, draft: EventDraft) {
+    const before = state.events.find((entry) => entry.id === id);
+    if (!before) return;
     update(id, draft);
+    remote(() => calendarApi.update(id, before.version ?? 1, draft), (dto) => replace(id, dto), () => update(id, before));
   },
   setFlash(flash: Snapshot['flash']) {
     emit({ flash });

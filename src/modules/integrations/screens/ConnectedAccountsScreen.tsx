@@ -14,7 +14,7 @@ import { FontFamily, Radius, Space } from '@/constants/design';
 import { DEMO_TODAY } from '@/lib/demo-dates';
 
 import { CALENDARS, GMAIL_ADDRESS, PERMISSIONS } from '../data';
-import { integrationActions, useIntegrationsState } from '../store';
+import { integrationActions, syncIntegrations, useIntegrationsState } from '../store';
 
 type Account = 'gmail' | 'calendar' | 'outlook';
 type Sheet = { account: Account } | { disconnect: Account } | 'outlook' | 'sender' | null;
@@ -62,6 +62,13 @@ export default function ConnectedAccountsScreen() {
         integrationActions.setFlash(null);
       }
     }, [state.flash]),
+  );
+
+  // Mode API : rafraîchit l'état des comptes connectés à l'arrivée sur l'écran.
+  useFocusEffect(
+    useCallback(() => {
+      void syncIntegrations();
+    }, []),
   );
 
   const toReview = state.emails.filter((email) => email.status === 'review').length;

@@ -10,6 +10,9 @@ import { Chip, PrimaryButton, SecondaryButton, TopBar, useKitStyles } from '@/co
 import { DARK, LIGHT, useScopedColors, type AppColors } from '@/constants/app-colors';
 import { FontFamily, Radius } from '@/constants/design';
 import { DEMO_TODAY, addDays, atTime } from '@/lib/demo-dates';
+import { IS_DEMO } from '@/lib/config';
+
+import { syncVoiceCapabilities, useVoiceCapabilities } from '../store';
 
 type Phase = 'idle' | 'listening' | 'transcribing' | 'understood';
 
@@ -65,11 +68,16 @@ const BARS = [10, 18, 28, 16, 34, 22, 12, 26, 38, 20, 14, 30, 18, 10];
 export default function VoiceCommandScreen() {
   const { c, styles } = useLook();
   const kitStyles = useKitStyles();
+  const caps = useVoiceCapabilities();
   const [phase, setPhase] = useState<Phase>('idle');
   const [command, setCommand] = useState<Command>(COMMANDS[0]);
   const [words, setWords] = useState(0);
   const [reduceMotion, setReduceMotion] = useState(false);
   const [pulse] = useState(() => new Animated.Value(0));
+
+  useEffect(() => {
+    if (!IS_DEMO) void syncVoiceCapabilities();
+  }, []);
 
   useEffect(() => {
     AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion).catch(() => undefined);
@@ -108,6 +116,23 @@ export default function VoiceCommandScreen() {
     loop.start();
     return () => loop.stop();
   }, [phase, pulse, reduceMotion]);
+
+  // Mode « api » : si l'assistant vocal est désactivé côté serveur, on l'explique au lieu de simuler.
+  if (!IS_DEMO && caps.loaded && caps.capabilities && !caps.capabilities.enabled) {
+    return (
+      <SafeAreaView style={kitStyles.safe} edges={['top']}>
+        <TopBar title="Assistant vocal" fallback="/dashboard" />
+        <View style={styles.disabled}>
+          <Icon name="mic_off" size={48} color={c.muted} />
+          <Text style={styles.disabledTitle}>Assistant vocal désactivé</Text>
+          <Text style={styles.disabledText}>
+            La commande vocale n’est pas activée pour votre compte. Vous pouvez écrire à Kora depuis l’onglet Assistant.
+          </Text>
+          <PrimaryButton label="Ouvrir l’assistant" onPress={() => router.push('/assistant')} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   const start = (next: Command) => {
     setCommand(next);
@@ -213,6 +238,27 @@ export default function VoiceCommandScreen() {
 
 function makeStyles(c: AppColors) {
   return StyleSheet.create({
+    disabled: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 12,
+      paddingHorizontal: 32,
+    },
+    disabledTitle: {
+      fontFamily: FontFamily.headingBold,
+      fontSize: 19,
+      lineHeight: 25,
+      color: c.text,
+      textAlign: 'center',
+    },
+    disabledText: {
+      fontFamily: FontFamily.body,
+      fontSize: 15,
+      lineHeight: 21,
+      color: c.muted,
+      textAlign: 'center',
+    },
     liveText: {
       minHeight: 56,
       paddingHorizontal: 12,

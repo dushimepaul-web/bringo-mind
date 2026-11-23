@@ -1,9 +1,11 @@
-// Mémoire de démonstration du module Intégrations.
+// Mémoire du module Intégrations.
 import { useSyncExternalStore } from 'react';
 
+import { IS_DEMO } from '@/lib/config';
 import { DEMO_TODAY } from '@/lib/demo-dates';
 
 import { DEMO_CONFLICTS, DEMO_EMAILS, SENDERS, type PermissionKey } from './data';
+import { calendarLinksApi, mailApi } from './services/integrations.service';
 import type { CalendarKey, ImportedEmail, SyncConflict } from './types';
 
 type Snapshot = {
@@ -55,6 +57,23 @@ const getSnapshot = () => state;
 
 export function useIntegrationsState(): Snapshot {
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+}
+
+/** Charge les comptes connectés (e-mail et calendrier) depuis l'API (mode « api »). */
+export async function syncIntegrations(): Promise<void> {
+  if (IS_DEMO) return;
+  try {
+    const [accounts, links] = await Promise.all([mailApi.accounts(), calendarLinksApi.list()]);
+    emit({
+      gmail: accounts.some((account) => account.provider === 'gmail'),
+      outlook: accounts.some((account) => account.provider === 'outlook'),
+      calendar: links.length > 0,
+      lastSync: new Date(),
+    });
+  } catch {
+    // Fonction désactivée (403) ou hors ligne : rien n'est connecté.
+    emit({ gmail: false, outlook: false, calendar: false });
+  }
 }
 
 export const integrationActions = {

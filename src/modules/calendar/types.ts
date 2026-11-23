@@ -24,6 +24,8 @@ export type CalendarEvent = {
   reminder: number | null;
   recurrence: EventRecurrence;
   cancelled: boolean;
+  /** Version de la ligne côté serveur (verrouillage optimiste, mode « api »). */
+  version?: number;
 };
 
 export type EventDraft = Omit<CalendarEvent, 'id' | 'cancelled'>;

@@ -1,7 +1,7 @@
 // État du démarrage : animation d'ouverture (une fois par démarrage à froid, rejouable en démo)
 // et mémorisation de la présentation déjà vue (première ouverture).
 import * as SecureStore from 'expo-secure-store';
-import { useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 
 let introVisible = true;
 const listeners = new Set<() => void>();
@@ -50,4 +50,20 @@ export async function markOnboarded(): Promise<void> {
   } catch {
     // Web ou stockage indisponible : la présentation pourra simplement réapparaître.
   }
+}
+
+/** null pendant la lecture, puis true si la présentation a déjà été vue sur cet appareil. */
+export function useOnboarded(enabled = true): boolean | null {
+  const [onboarded, setOnboarded] = useState<boolean | null>(enabled ? null : true);
+  useEffect(() => {
+    if (!enabled) return;
+    let active = true;
+    void hasOnboarded().then((value) => {
+      if (active) setOnboarded(value);
+    });
+    return () => {
+      active = false;
+    };
+  }, [enabled]);
+  return onboarded;
 }

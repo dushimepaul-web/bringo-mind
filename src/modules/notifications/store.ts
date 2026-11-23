@@ -142,7 +142,8 @@ export const notificationActions = {
   setRead(id: string, read: boolean) {
     const previous = state.items;
     emit({ items: state.items.map((item) => (item.id === id ? { ...item, read } : item)) });
-    remote(() => notificationsApi.setRead(id, read), () => emit({ items: previous }));
+    // Le serveur ne connaît que « marquer comme lu » : pas d'appel pour repasser non lue.
+    if (read) remote(() => notificationsApi.read(id), () => emit({ items: previous }));
   },
   /** Marque tout comme lu et renvoie de quoi annuler. */
   readAll(): () => void {

@@ -1,6 +1,7 @@
 import { API_BASE_URL, REQUEST_TIMEOUT_MS } from '@/lib/config';
+import { deviceLocale } from '@/lib/device-info';
 import { newId } from '@/lib/id';
-import { sessionStore, toAuthTokens } from '@/lib/session/session-store';
+import { sessionStore, toStoredSession } from '@/lib/session/session-store';
 import type { TokenResponse } from '@/lib/session/types';
 
 import { ApiError, NetworkError, parseProblem } from './errors';
@@ -10,14 +11,15 @@ import { ApiError, NetworkError, parseProblem } from './errors';
  * Seuls les services des modules (src/modules/<domaine>/services) l'appellent ;
  * un écran ou un hook ne fait jamais fetch directement.
  *
- * Conventions appliquées (guide d'API v1.0, partie II) :
- * - préfixe /api/v1, JSON UTF-8 ;
- * - Authorization: Bearer <access_token> ;
- * - X-Request-Id sur chaque requête ;
- * - Idempotency-Key sur chaque POST ;
- * - rafraîchissement automatique du jeton sur 401 (POST /auth/refresh), une seule fois ;
- * - enveloppe de succès { success, message, data, meta } : `apiRequest` renvoie `data` ;
- * - enveloppe d'erreur { success:false, message, error:{ code, details }, request_id } → ApiError.
+ * Conventions du backend BringoMind (contrat 2.11.0, docs/backend/CONVENTIONS.md) :
+ * - préfixe /api/v1, JSON UTF-8, langue dans Accept-Language (messages déjà traduits) ;
+ * - Authorization: Bearer <access_token> (15 min) ;
+ * - X-Request-Id sur chaque requête, Idempotency-Key (8 à 80 caractères) sur chaque POST ;
+ * - jeton de renouvellement dans le cookie httpOnly `bm_refresh` (chemin /api/v1/auth) :
+ *   `credentials: 'include'` le laisse au magasin de cookies natif ; sur 401, un seul
+ *   POST /auth/refresh sans corps, puis nouvel essai ;
+ * - enveloppe { statusCode, httpStatus, message, result } : `apiRequest` renvoie `result` ;
+ * - erreurs : même enveloppe, `result` = détails ({ champ: [messages] } pour une 422) → ApiError.
  */
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -39,6 +41,8 @@ export type RequestOptions = {
   idempotencyKey?: string;
   signal?: AbortSignal;
   timeoutMs?: number;
+  /** En-têtes supplémentaires (ex. X-Captcha-Token). */
+  headers?: Record<string, string>;
 };
 
 const REFRESH_PATH = '/auth/refresh';
@@ -82,7 +86,8 @@ async function fetchWithTimeout(
   external?.addEventListener('abort', onExternalAbort);
 
   try {
-    return await fetch(url, { ...init, signal: controller.signal });
+    // credentials: le cookie de session `bm_refresh` est déposé et renvoyé par le magasin natif.
+    return await fetch(url, { credentials: 'include', ...init, signal: controller.signal });
   } catch (error) {
     if (external?.aborted) {
       throw error;
@@ -124,13 +129,13 @@ type RefreshResult = 'ok' | 'rejected' | 'network';
 
 let refreshInFlight: Promise<RefreshResult> | null = null;
 
-/** Rafraîchit les jetons. Les appels simultanés partagent la même requête. */
-function refreshTokens(): Promise<RefreshResult> {
+/**
+ * Renouvelle le jeton d'accès à partir du cookie `bm_refresh` (POST /auth/refresh, sans corps).
+ * Les appels simultanés partagent la même requête : le backend fait tourner le cookie à chaque
+ * usage et révoque toute la session si un ancien cookie est réutilisé.
+ */
+export function refreshSession(): Promise<RefreshResult> {
   refreshInFlight ??= (async (): Promise<RefreshResult> => {
-    const refreshToken = sessionStore.getTokens()?.refreshToken;
-    if (!refreshToken) {
-      return 'rejected';
-    }
     try {
       const response = await fetchWithTimeout(
         buildUrl(REFRESH_PATH),
@@ -138,18 +143,17 @@ function refreshTokens(): Promise<RefreshResult> {
           method: 'POST',
           headers: {
             Accept: 'application/json',
-            'Content-Type': 'application/json',
+            'Accept-Language': currentLocale(),
             'X-Request-Id': newId(),
           },
-          body: JSON.stringify({ refresh_token: refreshToken }),
         },
         REQUEST_TIMEOUT_MS,
       );
       if (!response.ok) {
-        return 'rejected';
+        return response.status >= 500 ? 'network' : 'rejected';
       }
       const envelope = (await response.json()) as unknown;
-      await sessionStore.setTokens(toAuthTokens(unwrap<TokenResponse>(envelope).data));
+      await sessionStore.set(toStoredSession(unwrap<TokenResponse>(envelope).data));
       return 'ok';
     } catch {
       return 'network';
@@ -161,6 +165,27 @@ function refreshTokens(): Promise<RefreshResult> {
   return refreshInFlight;
 }
 
+/**
+ * Au démarrage : rouvre la session à partir du cookie.
+ * - « authenticated » : nouveau jeton obtenu ;
+ * - « offline » : pas de réseau mais une session était enregistrée (l'app s'ouvre, les données
+ *   se rechargeront au retour du réseau) ;
+ * - « unauthenticated » : pas de session, ou session refusée (expirée, révoquée).
+ */
+export async function restoreSession(): Promise<'authenticated' | 'offline' | 'unauthenticated'> {
+  const stored = await sessionStore.hydrate();
+  const result = await refreshSession();
+  if (result === 'ok') return 'authenticated';
+  if (result === 'network' && stored) return 'offline';
+  await sessionStore.clear();
+  return 'unauthenticated';
+}
+
+/** Langue des messages du serveur : celle du compte, sinon celle du téléphone. */
+function currentLocale(): string {
+  return sessionStore.getUser()?.locale ?? deviceLocale();
+}
+
 /** Réponse complète : `data` plus les métadonnées (pagination) et le message du serveur. */
 export type ApiEnvelope<T> = { data: T; meta: unknown; message?: string };
 
@@ -168,8 +193,19 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-/** Retire l'enveloppe { success, message, data, meta } si elle est présente. */
+/**
+ * Retire l'enveloppe du backend { statusCode, httpStatus, message, result }.
+ * Tolère l'ancien format { success, data, meta } et les réponses sans enveloppe
+ * (téléchargements, GET /health, export du compte).
+ */
 function unwrap<T>(body: unknown): ApiEnvelope<T> {
+  if (isRecord(body) && typeof body.statusCode === 'number' && 'httpStatus' in body) {
+    return {
+      data: (body.result ?? undefined) as T,
+      meta: null,
+      message: typeof body.message === 'string' ? body.message : undefined,
+    };
+  }
   if (isRecord(body) && body.success === true && 'data' in body) {
     return {
       data: body.data as T,
@@ -198,6 +234,7 @@ async function send(path: string, options: RequestOptions): Promise<unknown> {
     auth = true,
     signal,
     timeoutMs = REQUEST_TIMEOUT_MS,
+    headers: extraHeaders,
   } = options;
   const url = buildUrl(path, query);
   const requestId = newId();
@@ -211,7 +248,9 @@ async function send(path: string, options: RequestOptions): Promise<unknown> {
   const attempt = () => {
     const headers: Record<string, string> = {
       Accept: 'application/json',
+      'Accept-Language': currentLocale(),
       'X-Request-Id': requestId,
+      ...extraHeaders,
     };
     if (body !== undefined) {
       headers['Content-Type'] = 'application/json';
@@ -219,7 +258,7 @@ async function send(path: string, options: RequestOptions): Promise<unknown> {
     if (idempotencyKey) {
       headers['Idempotency-Key'] = idempotencyKey;
     }
-    const accessToken = auth ? sessionStore.getTokens()?.accessToken : undefined;
+    const accessToken = auth ? sessionStore.getAccessToken() : undefined;
     if (accessToken) {
       headers.Authorization = `Bearer ${accessToken}`;
     }
@@ -233,8 +272,8 @@ async function send(path: string, options: RequestOptions): Promise<unknown> {
 
   let response = await attempt();
 
-  if (response.status === 401 && auth && sessionStore.getTokens()) {
-    const result = await refreshTokens();
+  if (response.status === 401 && auth && sessionStore.getAccessToken()) {
+    const result = await refreshSession();
     if (result === 'ok') {
       // Même Request-Id et même Idempotency-Key : c'est le même envoi.
       response = await attempt();

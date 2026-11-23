@@ -1,6 +1,6 @@
 // S-03 - Connexion | Module M01 Comptes et authentification | Phase S2
 import { router } from 'expo-router';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { TextInputInstance } from 'react-native';
 import {
   ActivityIndicator,
@@ -20,10 +20,22 @@ import { BrandFullLogo } from '@/components/brand-logo';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Icon } from '@/components/icon';
 import { appLock } from '@/lib/app-lock';
+import { displayMessage, isApiError } from '@/lib/api';
+import { IS_DEMO } from '@/lib/config';
+import { useSession } from '@/lib/session';
 import { DARK, LIGHT, useAppColors, type AppColors } from '@/constants/app-colors';
 import { FontFamily, Radius, Space } from '@/constants/design';
 
+import { login } from '../services/auth.service';
+
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** Formate un délai d'attente en « 4 min 30 s » ou « 45 s ». */
+function formatLock(seconds: number): string {
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  return minutes > 0 ? `${minutes} min ${String(rest).padStart(2, '0')} s` : `${rest} s`;
+}
 
 /** Libellé biométrique adapté au téléphone. */
 const BIOMETRIC =
@@ -40,28 +52,82 @@ function openApp() {
 
 export default function LoginScreen() {
   const { c, styles } = useLook();
-  const [email, setEmail] = useState('claire.martin@email.fr');
-  const [password, setPassword] = useState('demo123456');
+  const { signIn } = useSession();
+  // Démo : identifiants préremplis. API : champs vides.
+  const [email, setEmail] = useState(IS_DEMO ? 'claire.martin@email.fr' : '');
+  const [password, setPassword] = useState(IS_DEMO ? 'demo123456' : '');
+  // Double authentification : demandée par le serveur (401 { mfa_required: true }).
+  const [mfaRequired, setMfaRequired] = useState(false);
+  const [mfaCode, setMfaCode] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
+  const [emailNotVerified, setEmailNotVerified] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(true);
-  const [focusedField, setFocusedField] = useState<'email' | 'password' | null>(null);
+  const [focusedField, setFocusedField] = useState<'email' | 'password' | 'mfa' | null>(null);
   const [emailTouched, setEmailTouched] = useState(false);
   const [loading, setLoading] = useState(false);
+  /** Secondes restantes avant de pouvoir réessayer après un 423 (compte verrouillé) ou un 429. */
+  const [lockSeconds, setLockSeconds] = useState(0);
   const passwordRef = useRef<TextInputInstance>(null);
+  const mfaRef = useRef<TextInputInstance>(null);
+
+  useEffect(() => {
+    if (lockSeconds <= 0) return;
+    const timer = setTimeout(() => setLockSeconds((value) => Math.max(0, value - 1)), 1000);
+    return () => clearTimeout(timer);
+  }, [lockSeconds]);
 
   const emailValid = EMAIL_PATTERN.test(email.trim());
   const emailError = emailTouched && email.length > 0 && !emailValid;
-  const valid = emailValid && password.length > 0;
-  const canSubmit = valid && !loading;
+  const valid = emailValid && password.length > 0 && (!mfaRequired || mfaCode.trim().length >= 6);
+  const locked = lockSeconds > 0;
+  const canSubmit = valid && !loading && !locked;
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!canSubmit) return;
     setLoading(true);
-    // Démo : simule l'appel réseau avant d'ouvrir le tableau de bord.
-    setTimeout(() => openApp(), 700);
+    setFormError(null);
+    setEmailNotVerified(false);
+    if (IS_DEMO) {
+      // Démo : simule l'appel réseau avant d'ouvrir le tableau de bord.
+      setTimeout(() => openApp(), 700);
+      return;
+    }
+    try {
+      const session = await login({
+        email,
+        password,
+        mfaCode: mfaRequired ? mfaCode : undefined,
+        rememberMe: remember,
+      });
+      await signIn(session);
+      openApp();
+    } catch (error) {
+      setLoading(false);
+      if (isApiError(error) && error.details.mfa_required === true) {
+        // Identifiants corrects, code de double authentification attendu.
+        setMfaRequired(true);
+        setTimeout(() => mfaRef.current?.focus(), 50);
+        return;
+      }
+      if (isApiError(error) && error.details.email_not_verified === true) {
+        setEmailNotVerified(true);
+      }
+      if (isApiError(error) && error.fieldErrors().mfa_code) {
+        setMfaCode('');
+      }
+      // 423 (compte verrouillé) ou 429 : le serveur indique le délai avant un nouvel essai.
+      const retryAfter = isApiError(error)
+        ? (error.retryAfter ?? Number(error.details.retry_after))
+        : NaN;
+      if (isApiError(error) && (error.status === 423 || error.status === 429) && retryAfter > 0) {
+        setLockSeconds(Math.ceil(retryAfter));
+      }
+      setFormError(displayMessage(error));
+    }
   };
 
-  const iconColor = (field: 'email' | 'password') =>
+  const iconColor = (field: 'email' | 'password' | 'mfa') =>
     focusedField === field ? c.link : c.muted;
 
   return (
@@ -171,6 +237,57 @@ export default function LoginScreen() {
               </Pressable>
             </View>
 
+            {mfaRequired ? (
+              <>
+                <Text style={[styles.fieldLabel, styles.fieldLabelSpaced]}>Code de vérification</Text>
+                <View style={[styles.inputRow, focusedField === 'mfa' && styles.inputRowFocused]}>
+                  <Icon name="pin" size={20} color={iconColor('mfa')} />
+                  <TextInput
+                    ref={mfaRef}
+                    style={styles.inputInline}
+                    placeholder="Code à 6 chiffres ou code de secours"
+                    placeholderTextColor={c.muted}
+                    value={mfaCode}
+                    onChangeText={setMfaCode}
+                    onFocus={() => setFocusedField('mfa')}
+                    onBlur={() => setFocusedField(null)}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    autoComplete="one-time-code"
+                    textContentType="oneTimeCode"
+                    returnKeyType="go"
+                    onSubmitEditing={handleSubmit}
+                    selectionColor={c.link}
+                    accessibilityLabel="Code de double authentification"
+                  />
+                </View>
+                <Text style={styles.mfaHint}>
+                  Ouvrez votre application d’authentification et saisissez le code affiché.
+                </Text>
+              </>
+            ) : null}
+
+            {formError ? (
+              <View style={styles.errorRow} accessibilityLiveRegion="polite" accessibilityRole="alert">
+                <Icon name="error" size={16} color={c.error} />
+                <Text style={styles.errorText}>{formError}</Text>
+              </View>
+            ) : null}
+            {locked ? (
+              <Text style={styles.lockHint} accessibilityLiveRegion="polite">
+                Nouvelle tentative possible dans {formatLock(lockSeconds)}.
+              </Text>
+            ) : null}
+            {emailNotVerified ? (
+              <Pressable
+                style={({ pressed }) => [pressed && styles.linkPressed]}
+                hitSlop={8}
+                accessibilityRole="link"
+                onPress={() => router.push({ pathname: '/verify-email', params: { email: email.trim() } })}>
+                <Text style={styles.forgotText}>Renvoyer le lien de confirmation</Text>
+              </Pressable>
+            ) : null}
+
             <View style={styles.optionsRow}>
               <Pressable
                 style={styles.rememberRow}
@@ -226,6 +343,11 @@ export default function LoginScreen() {
             </Pressable>
           </View>
 
+          {/* Connexion Google / Apple et déverrouillage biométrique : démo seulement.
+              Le backend n'a pas de connexion sociale (OAuth) ; la biométrie ne remplace pas
+              une première connexion par mot de passe. */}
+          {IS_DEMO ? (
+          <>
           <View style={styles.dividerRow}>
             <View style={styles.divider} />
             <Text style={styles.dividerText}>Ou se connecter avec</Text>
@@ -268,6 +390,8 @@ export default function LoginScreen() {
             <Text style={styles.biometricText}>{BIOMETRIC.label}</Text>
             <Icon name={BIOMETRIC.icon} size={24} color={c.link} />
           </Pressable>
+          </>
+          ) : null}
 
           <View style={styles.footer}>
             <Text style={styles.footerText}>Pas encore de compte ?</Text>
@@ -418,10 +542,25 @@ function makeStyles(c: AppColors) {
       marginTop: 8,
     },
     errorText: {
+      flexShrink: 1,
       fontFamily: FontFamily.bodyMedium,
       fontSize: 13,
       lineHeight: 18,
       color: c.error,
+    },
+    lockHint: {
+      fontFamily: FontFamily.bodyMedium,
+      fontSize: 13,
+      lineHeight: 18,
+      color: c.muted,
+      marginTop: 8,
+    },
+    mfaHint: {
+      fontFamily: FontFamily.body,
+      fontSize: 12,
+      lineHeight: 17,
+      color: c.muted,
+      marginTop: 6,
     },
     inputRow: {
       flexDirection: 'row',

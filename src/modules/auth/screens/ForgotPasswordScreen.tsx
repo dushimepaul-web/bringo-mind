@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Icon } from '@/components/icon';
+import { displayMessage, isApiError } from '@/lib/api';
+import { IS_DEMO } from '@/lib/config';
 import { DARK, LIGHT, useAppColors, type AppColors } from '@/constants/app-colors';
 import { FontFamily, Radius, Space } from '@/constants/design';
 
@@ -12,18 +14,25 @@ import {
   AuthIconTile,
   AuthScreen,
   AuthTitle,
+  FormError,
   InfoNote,
   PrimaryButton,
   TextLink,
   useFormStyles,
 } from '../components/auth-ui';
+import { forgotPassword } from '../services/auth.service';
+
+/** Message si le serveur exige l'anti-robot (Cloudflare Turnstile), pas encore affiché par l'app. */
+const CAPTCHA_MESSAGE =
+  'Le serveur exige une vérification anti-robot que l’application ne sait pas encore afficher. Faites la demande depuis app.bringomind.com.';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function ForgotPasswordScreen() {
   const formStyles = useFormStyles();
   const { c, styles } = useLook();
-  const [email, setEmail] = useState('claire.martin@email.fr');
+  const [email, setEmail] = useState(IS_DEMO ? 'claire.martin@email.fr' : '');
+  const [error, setError] = useState<string | null>(null);
   const [focused, setFocused] = useState(false);
   const [touched, setTouched] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -33,14 +42,33 @@ export default function ForgotPasswordScreen() {
   const valid = EMAIL_PATTERN.test(email.trim());
   const emailError = touched && email.length > 0 && !valid;
 
-  const handleSend = () => {
+  /** Envoie (ou renvoie) le lien. Réponse 202 identique que le compte existe ou non. */
+  const send = async (): Promise<boolean> => {
+    setError(null);
+    if (IS_DEMO) return true;
+    try {
+      await forgotPassword(email);
+      return true;
+    } catch (reason) {
+      setError(isApiError(reason) && reason.fieldErrors().captcha ? CAPTCHA_MESSAGE : displayMessage(reason));
+      return false;
+    }
+  };
+
+  const handleSend = async () => {
     if (!valid || loading) return;
     setLoading(true);
-    // Démo : simule l'envoi du lien.
-    setTimeout(() => {
-      setLoading(false);
-      setSent(true);
-    }, 700);
+    if (IS_DEMO) {
+      // Démo : simule l'envoi du lien.
+      setTimeout(() => {
+        setLoading(false);
+        setSent(true);
+      }, 700);
+      return;
+    }
+    const ok = await send();
+    setLoading(false);
+    if (ok) setSent(true);
   };
 
   if (sent) {
@@ -52,8 +80,9 @@ export default function ForgotPasswordScreen() {
           accent="boîte mail"
           subtitle={
             <>
-              Un lien de réinitialisation a été envoyé à{' '}
-              <Text style={styles.emailStrong}>{email}</Text>. Il est valable 30 minutes.
+              Si un compte existe pour{' '}
+              <Text style={styles.emailStrong}>{email}</Text>, un lien de réinitialisation vient
+              d’être envoyé. Il est valable 60 minutes.
             </>
           }
         />
@@ -71,11 +100,18 @@ export default function ForgotPasswordScreen() {
             Un nouvel e-mail vient d’être envoyé.
           </InfoNote>
         ) : null}
+        <FormError message={error} />
 
         <PrimaryButton label="J’ai reçu le lien" onPress={() => router.push('/reset-password')} />
 
         <View style={styles.links}>
-          <TextLink label="Renvoyer l’e-mail" icon="refresh" onPress={() => setResent(true)} />
+          <TextLink
+            label="Renvoyer l’e-mail"
+            icon="refresh"
+            onPress={() => {
+              void send().then((ok) => setResent(ok));
+            }}
+          />
           <TextLink
             label="Utiliser une autre adresse e-mail"
             muted
@@ -149,10 +185,11 @@ export default function ForgotPasswordScreen() {
           loading={loading}
           onPress={handleSend}
         />
+        <FormError message={error} />
       </AuthCard>
 
       <InfoNote icon="info">
-        Pensez à vérifier vos courriers indésirables. Le lien expire au bout de 30 minutes pour
+        Pensez à vérifier vos courriers indésirables. Le lien expire au bout de 60 minutes pour
         votre sécurité.
       </InfoNote>
 

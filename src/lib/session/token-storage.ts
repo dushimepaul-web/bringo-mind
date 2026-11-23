@@ -1,58 +1,49 @@
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 
-import type { AuthTokens } from './types';
+import type { StoredSession } from './types';
 
 /**
- * Persistance des jetons.
- * - iOS / Android : Keychain / Keystore via expo-secure-store.
- * - Web : mémoire uniquement. Aucun jeton n'est écrit dans localStorage ;
- *   la session web ne survit donc pas à un rechargement (à revoir avec l'équipe Web).
+ * Persistance de la session locale (jeton d'accès + utilisateur) :
+ * - iOS / Android : Keychain / Keystore via expo-secure-store ;
+ * - Web : mémoire uniquement (aucun jeton dans localStorage).
+ *
+ * Le jeton de renouvellement n'est pas ici : le backend le garde dans un cookie httpOnly.
+ * Ce stockage sert à rouvrir l'app sans réseau et à savoir qu'une session existait.
  */
-const ACCESS_KEY = 'bringomind.access_token';
-const REFRESH_KEY = 'bringomind.refresh_token';
+const SESSION_KEY = 'bringomind.session';
+/** Clés de l'ancien format (jetons séparés), effacées au passage. */
+const LEGACY_KEYS = ['bringomind.access_token', 'bringomind.refresh_token'];
 
 const isNative = Platform.OS === 'ios' || Platform.OS === 'android';
 
-let memory: AuthTokens | null = null;
+let memory: StoredSession | null = null;
 
-export async function readTokens(): Promise<AuthTokens | null> {
-  if (!isNative) {
-    return memory;
-  }
-
+export async function readSession(): Promise<StoredSession | null> {
+  if (!isNative) return memory;
   try {
-    const [accessToken, refreshToken] = await Promise.all([
-      SecureStore.getItemAsync(ACCESS_KEY),
-      SecureStore.getItemAsync(REFRESH_KEY),
-    ]);
-    return accessToken && refreshToken ? { accessToken, refreshToken } : null;
+    const raw = await SecureStore.getItemAsync(SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as StoredSession;
+    return typeof parsed?.accessToken === 'string' ? parsed : null;
   } catch {
-    // Trousseau illisible (ex. restauration d'appareil) : on repart d'une session vide.
+    // Trousseau illisible (restauration d'appareil, données corrompues) : session vide.
     return null;
   }
 }
 
-export async function writeTokens(tokens: AuthTokens): Promise<void> {
+export async function writeSession(session: StoredSession): Promise<void> {
   if (!isNative) {
-    memory = tokens;
+    memory = session;
     return;
   }
-
-  await Promise.all([
-    SecureStore.setItemAsync(ACCESS_KEY, tokens.accessToken),
-    SecureStore.setItemAsync(REFRESH_KEY, tokens.refreshToken),
-  ]);
+  await SecureStore.setItemAsync(SESSION_KEY, JSON.stringify(session));
 }
 
-export async function deleteTokens(): Promise<void> {
+export async function deleteSession(): Promise<void> {
   if (!isNative) {
     memory = null;
     return;
   }
-
-  await Promise.all([
-    SecureStore.deleteItemAsync(ACCESS_KEY),
-    SecureStore.deleteItemAsync(REFRESH_KEY),
-  ]);
+  await Promise.all([SESSION_KEY, ...LEGACY_KEYS].map((key) => SecureStore.deleteItemAsync(key).catch(() => undefined)));
 }

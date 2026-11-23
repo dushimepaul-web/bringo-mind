@@ -1,26 +1,24 @@
-// Lecture de l'API Calendrier (guide d'API v1.0, module 05 : CAL-002 / CAL-003) et conversion
-// vers le modèle des écrans. Les modifications restent locales tant que le backend n'est pas prêt.
-import { getAll } from '@/lib/api';
+// API Calendrier (contrat 2.11.0, docs/backend/modules/07_planification_et_calendrier.md) et conversion
+// vers le modèle des écrans. GET /events renvoie la vue demandée (`day` | `week` | `month`) autour d'une date.
+import { api } from '@/lib/api';
 
-import type { CalendarEvent } from '../types';
+import type { CalendarEvent, EventDraft } from '../types';
 
-/** Événement tel que renvoyé par l'API (CAL-003). */
+/** Événement tel que renvoyé par l'API (`EventOut`). */
 export type EventDto = {
   id: string;
-  calendar_id: string;
   title: string;
-  description: string | null;
-  location: string | null;
   starts_at: string;
   ends_at: string;
   all_day: boolean;
-  time_zone: string;
-  status: 'tentative' | 'confirmed' | 'cancelled';
-  visibility: 'personal' | 'household';
-  attendees?: { user_id: string; display_name?: string; response_status: string }[];
-  reminders?: { id: string; advance_minutes: number }[];
+  status: 'confirmed' | 'cancelled';
   version: number;
-  created_at: string;
+  location: string | null;
+  conference_url: string | null;
+  description: string | null;
+  is_owner: boolean;
+  calendar_link_id: string | null;
+  attendees: { id: string; email: string; response: string }[];
 };
 
 export function toEvent(dto: EventDto): CalendarEvent {
@@ -33,20 +31,46 @@ export function toEvent(dto: EventDto): CalendarEvent {
     location: dto.location ?? '',
     description: dto.description ?? '',
     tone: 'admin',
-    shared: dto.visibility === 'household',
-    members: (dto.attendees ?? []).map((attendee) => attendee.display_name ?? 'Membre'),
-    reminder: dto.reminders?.[0]?.advance_minutes ?? null,
+    shared: false,
+    members: dto.attendees.map((attendee) => attendee.email),
+    reminder: null,
     recurrence: 'none',
     cancelled: dto.status === 'cancelled',
+    version: dto.version,
+  };
+}
+
+function toDateOnly(date: Date): string {
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+/** Corps de création/édition d'un événement local (sans calendrier externe). */
+function eventFields(draft: EventDraft) {
+  return {
+    title: draft.title,
+    starts_at: draft.start.toISOString(),
+    ends_at: draft.end.toISOString(),
+    description: draft.description || null,
+    location: draft.location || null,
+    conference_url: null,
+    attendees: draft.members,
+    ...(draft.reminder ? { reminder_minutes_before: [draft.reminder] } : {}),
   };
 }
 
 export const calendarApi = {
-  /** CAL-002 : événements de trois mois autour d'aujourd'hui. */
-  list: () => {
-    const now = new Date();
-    const from = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString();
-    const to = new Date(now.getFullYear(), now.getMonth() + 3, 0).toISOString();
-    return getAll<EventDto>('/calendar/events', { from, to });
-  },
+  /** CAL-002 : événements d'une vue (jour / semaine / mois). `date` est obligatoire. */
+  list: (view: 'day' | 'week' | 'month' = 'month', date: Date = new Date()) =>
+    api.get<EventDto[]>('/events', { query: { view, date: toDateOnly(date) } }),
+
+  /** Événement local : création (sans calendrier externe). */
+  create: (draft: EventDraft) => api.post<EventDto>('/events/local', eventFields(draft)),
+
+  /** Événement local : modification partielle (`EventUpdateIn`, version requise). */
+  update: (id: string, version: number, draft: EventDraft) =>
+    api.patch<EventDto>(`/events/${id}/local`, { ...eventFields(draft), version }),
+
+  /** Annuler un événement local. */
+  cancel: (id: string, version: number) => api.post<EventDto>(`/events/${id}/local/cancel`, { version }),
 };

@@ -1,9 +1,11 @@
 // S-05 - Nouveau mot de passe | Module M01 Comptes et authentification | Phase S2
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Icon } from '@/components/icon';
+import { displayMessage, isApiError } from '@/lib/api';
+import { IS_DEMO } from '@/lib/config';
 import { DARK, LIGHT, useAppColors, type AppColors } from '@/constants/app-colors';
 import { FontFamily, Radius, Space, Tint } from '@/constants/design';
 
@@ -12,47 +14,74 @@ import {
   AuthIconTile,
   AuthScreen,
   AuthTitle,
+  FormError,
   InfoNote,
   PrimaryButton,
   useFormStyles,
 } from '../components/auth-ui';
+import { resetPassword, tokenFromLink } from '../services/auth.service';
+import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from '../types';
 
-type Field = 'password' | 'confirm';
+type Field = 'password' | 'confirm' | 'link';
 
 export default function ResetPasswordScreen() {
   const formStyles = useFormStyles();
   const { c, styles } = useLook();
+  // Jeton du lien reçu par e-mail : …/reset-password?token=… (valable 60 min, usage unique).
+  const params = useLocalSearchParams<{ token?: string }>();
+  const [link, setLink] = useState('');
+  const token = params.token ?? tokenFromLink(link);
+  const [error, setError] = useState<string | null>(null);
   // Démo : mot de passe prérempli qui respecte toutes les règles.
-  const [password, setPassword] = useState('Demo2026!');
-  const [confirm, setConfirm] = useState('Demo2026!');
+  const [password, setPassword] = useState(IS_DEMO ? 'Demo2026!Bringo' : '');
+  const [confirm, setConfirm] = useState(IS_DEMO ? 'Demo2026!Bringo' : '');
   const [showPassword, setShowPassword] = useState(false);
   const [focused, setFocused] = useState<Field | null>(null);
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
 
   const rules = [
-    { label: 'Au moins 8 caractères', met: password.length >= 8 },
+    { label: `Au moins ${PASSWORD_MIN_LENGTH} caractères`, met: password.length >= PASSWORD_MIN_LENGTH && password.length <= PASSWORD_MAX_LENGTH },
     { label: 'Une majuscule et une minuscule', met: /[A-Z]/.test(password) && /[a-z]/.test(password) },
     { label: 'Un chiffre', met: /[0-9]/.test(password) },
     { label: 'Un caractère spécial', met: /[^A-Za-z0-9]/.test(password) },
   ];
 
-  const allRules = rules.every((rule) => rule.met);
+  // Le backend n'exige que la longueur (et refuse les mots de passe trop courants ou divulgués) :
+  // en mode API, les trois autres règles sont des conseils.
+  const allRules = IS_DEMO ? rules.every((rule) => rule.met) : rules[0].met;
   const match = confirm.length > 0 && confirm === password;
   const mismatch = confirm.length > 0 && !match;
-  const valid = allRules && match;
+  const valid = allRules && match && (IS_DEMO || token.length >= 10);
 
   const iconColor = (field: Field) =>
     focused === field ? c.link : c.muted;
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!valid || loading) return;
     setLoading(true);
-    // Démo : simule l'enregistrement du nouveau mot de passe.
-    setTimeout(() => {
-      setLoading(false);
+    setError(null);
+    if (IS_DEMO) {
+      // Démo : simule l'enregistrement du nouveau mot de passe.
+      setTimeout(() => {
+        setLoading(false);
+        setDone(true);
+      }, 700);
+      return;
+    }
+    try {
+      await resetPassword({ token, password });
       setDone(true);
-    }, 700);
+    } catch (reason) {
+      const fields = isApiError(reason) ? reason.fieldErrors() : {};
+      setError(
+        fields.token
+          ? `${fields.token} Demandez un nouveau lien depuis « Mot de passe oublié ».`
+          : (fields.password ?? displayMessage(reason)),
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (done) {
@@ -85,12 +114,35 @@ export default function ResetPasswordScreen() {
       />
 
       <AuthCard>
-        <Text style={formStyles.fieldLabel}>Nouveau mot de passe</Text>
+        {!IS_DEMO && !params.token ? (
+          <>
+            <Text style={formStyles.fieldLabel}>Lien reçu par e-mail</Text>
+            <View style={[formStyles.inputRow, focused === 'link' && formStyles.inputRowFocused]}>
+              <Icon name="link" size={20} color={iconColor('link')} />
+              <TextInput
+                style={formStyles.inputInline}
+                placeholder="Collez ici le lien de l’e-mail"
+                placeholderTextColor={c.muted}
+                selectionColor={c.link}
+                value={link}
+                onChangeText={setLink}
+                onFocus={() => setFocused('link')}
+                onBlur={() => setFocused(null)}
+                autoCapitalize="none"
+                autoCorrect={false}
+                accessibilityLabel="Lien de réinitialisation"
+              />
+            </View>
+          </>
+        ) : null}
+        <Text style={[formStyles.fieldLabel, !IS_DEMO && !params.token && formStyles.fieldLabelSpaced]}>
+          Nouveau mot de passe
+        </Text>
         <View style={[formStyles.inputRow, focused === 'password' && formStyles.inputRowFocused]}>
           <Icon name="lock" size={20} color={iconColor('password')} />
           <TextInput
             style={formStyles.inputInline}
-            placeholder="8 caractères minimum"
+            placeholder="12 caractères minimum"
             placeholderTextColor={c.muted}
             selectionColor={c.link}
             value={password}
@@ -179,6 +231,7 @@ export default function ResetPasswordScreen() {
           loading={loading}
           onPress={handleSave}
         />
+        <FormError message={error} />
       </AuthCard>
 
       <InfoNote icon="lightbulb" iconColor={Tint.amber}>

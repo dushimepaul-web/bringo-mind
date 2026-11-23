@@ -1,6 +1,7 @@
-// Tableau : la semaine en un coup d'œil (onglet « Tableau »). Démo : chiffres de la semaine du 13 mai 2024.
-// En mode « api », ces chiffres viendront de la synthèse du tableau de bord.
-import { router, type Href } from 'expo-router';
+// Tableau : la semaine en un coup d'œil (onglet « Tableau »). En mode « api », alimenté par
+// la synthèse des rapports (GET /reports/summary).
+import { router } from 'expo-router';
+import { useEffect } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -10,40 +11,24 @@ import { BRAND } from '@/components/brand-logo';
 import { Icon } from '@/components/icon';
 import { DARK, LIGHT, useAppColors, type AppColors } from '@/constants/app-colors';
 import { FontFamily, Radius } from '@/constants/design';
+import { IS_DEMO } from '@/lib/config';
+
+import { syncInsights, useInsights } from '../store';
 
 const STYLES = { light: makeStyles(LIGHT), dark: makeStyles(DARK) };
-
-type Tint = 'tintBlue' | 'tintLime' | 'tintGreen' | 'tintAmber';
-
-const KPIS: { label: string; value: string; icon: string; color: string; bg: Tint; href: Href }[] = [
-  { label: 'Rendez-vous cette semaine', value: '6', icon: 'calendar_month', color: BRAND.blue, bg: 'tintBlue', href: '/calendar' },
-  { label: 'Rappels actifs', value: '7', icon: 'notifications', color: '#5BB81E', bg: 'tintLime', href: '/reminders' },
-  { label: 'Documents à vérifier', value: '1', icon: 'folder', color: BRAND.emerald, bg: 'tintGreen', href: '/documents' },
-  { label: 'Tâches en retard', value: '2', icon: 'warning', color: '#C2410C', bg: 'tintAmber', href: '/tasks' },
-];
-
-/** Tâches terminées par jour (lundi → dimanche) ; aujourd'hui = mardi. */
-const WEEK = [
-  { day: 'L', done: 3 },
-  { day: 'M', done: 2, today: true },
-  { day: 'M', done: 0 },
-  { day: 'J', done: 0 },
-  { day: 'V', done: 0 },
-  { day: 'S', done: 0 },
-  { day: 'D', done: 0 },
-];
-
-const CATEGORIES = [
-  { label: 'Santé', done: 2, total: 3, color: BRAND.blue },
-  { label: 'Logement', done: 1, total: 2, color: BRAND.emerald },
-  { label: 'Famille', done: 2, total: 2, color: '#5BB81E' },
-  { label: 'Impôts', done: 0, total: 1, color: '#0FB5A3' },
-];
 
 export default function InsightsScreen() {
   const c = useAppColors();
   const styles = c.dark ? STYLES.dark : STYLES.light;
-  const max = Math.max(...WEEK.map((d) => d.done), 1);
+  const insights = useInsights();
+
+  useEffect(() => {
+    if (!IS_DEMO) void syncInsights();
+  }, []);
+
+  const week = insights.week.length ? insights.week : WEEK_EMPTY;
+  const max = Math.max(...week.map((d) => d.done), 1);
+  const percent = Math.round(insights.progress * 100);
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <StatusBar style={c.dark ? 'light' : 'dark'} />
@@ -52,12 +37,14 @@ export default function InsightsScreen() {
         <Text style={styles.subtitle}>Votre semaine en un coup d’œil</Text>
 
         <View style={[styles.card, styles.weekCard]}>
-          <ProgressRing size={110} stroke={13} progress={5 / 8} track={c.track}>
-            <Text style={styles.ringValue}>63%</Text>
+          <ProgressRing size={110} stroke={13} progress={insights.progress} track={c.track}>
+            <Text style={styles.ringValue}>{percent}%</Text>
           </ProgressRing>
           <View style={styles.weekText}>
             <Text style={styles.cardTitle}>Progression de la semaine</Text>
-            <Text style={styles.muted}>5 tâches terminées sur 8 prévues.</Text>
+            <Text style={styles.muted}>
+              {insights.completed} tâches terminées sur {insights.total || 0} prévues.
+            </Text>
             <Pressable style={styles.button} accessibilityRole="button" onPress={() => router.push('/tasks')}>
               <Text style={styles.buttonText}>Voir mes tâches →</Text>
             </Pressable>
@@ -65,7 +52,7 @@ export default function InsightsScreen() {
         </View>
 
         <View style={styles.grid}>
-          {KPIS.map((kpi) => (
+          {insights.kpis.map((kpi) => (
             <Pressable
               key={kpi.label}
               style={({ pressed }) => [styles.card, styles.kpi, pressed && styles.pressed]}
@@ -84,7 +71,7 @@ export default function InsightsScreen() {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Tâches terminées par jour</Text>
           <View style={styles.chart}>
-            {WEEK.map((d, index) => (
+            {week.map((d, index) => (
               <View key={index} style={styles.chartCol}>
                 <Text style={styles.chartValue}>{d.done || ''}</Text>
                 <View style={styles.chartTrack}>
@@ -101,28 +88,41 @@ export default function InsightsScreen() {
           </View>
         </View>
 
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Par catégorie</Text>
-          <View style={styles.categories}>
-            {CATEGORIES.map((cat) => (
-              <View key={cat.label} style={styles.category}>
-                <View style={styles.categoryHead}>
-                  <Text style={styles.categoryLabel}>{cat.label}</Text>
-                  <Text style={styles.muted}>
-                    {cat.done} / {cat.total}
-                  </Text>
+        {insights.categories.length ? (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Par catégorie</Text>
+            <View style={styles.categories}>
+              {insights.categories.map((cat) => (
+                <View key={cat.label} style={styles.category}>
+                  <View style={styles.categoryHead}>
+                    <Text style={styles.categoryLabel}>{cat.label}</Text>
+                    <Text style={styles.muted}>
+                      {cat.done} / {cat.total || 0}
+                    </Text>
+                  </View>
+                  <View style={styles.barTrack}>
+                    <View style={[styles.barFill, { width: `${cat.total ? (cat.done / cat.total) * 100 : 0}%`, backgroundColor: cat.color }]} />
+                  </View>
                 </View>
-                <View style={styles.barTrack}>
-                  <View style={[styles.barFill, { width: `${(cat.done / cat.total) * 100}%`, backgroundColor: cat.color }]} />
-                </View>
-              </View>
-            ))}
+              ))}
+            </View>
           </View>
-        </View>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
 }
+
+/** Sept jours vides, affichés tant que la synthèse n'est pas chargée (ou en démo). */
+const WEEK_EMPTY = [
+  { day: 'L', done: 0 },
+  { day: 'M', done: 0 },
+  { day: 'M', done: 0 },
+  { day: 'J', done: 0 },
+  { day: 'V', done: 0 },
+  { day: 'S', done: 0 },
+  { day: 'D', done: 0, today: true },
+];
 
 function makeStyles(c: AppColors) {
   return StyleSheet.create({

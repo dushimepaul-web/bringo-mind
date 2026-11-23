@@ -12,12 +12,13 @@ import { IS_DEMO } from '@/lib/config';
 import { appLock } from '@/lib/app-lock';
 import { DEMO_STATES, setDemoState, useDemoState } from '@/lib/demo-state';
 import { replayIntro } from '@/lib/launch';
+import { useSession } from '@/lib/session';
 import { DARK, LIGHT, useScopedColors, type AppColors } from '@/constants/app-colors';
 import { FontFamily, Radius } from '@/constants/design';
 import { formatLongDay } from '@/lib/demo-dates';
 
 import { LANGUAGES, USER } from '../data';
-import { initialsOf, profileActions, useProfileState } from '../store';
+import { initialsOf, profileActions, syncProfile, useProfileState } from '../store';
 
 type Sheet = 'logout' | 'twoFactorOff' | 'sessions' | 'demo' | 'launch' | null;
 
@@ -37,6 +38,7 @@ const SEARCH_INDEX: { title: string; keywords: string; icon: string; tint: strin
 
 export default function ProfileSettingsScreen() {
   const { c, styles } = useLook();
+  const { signOut } = useSession();
   const kitStyles = useKitStyles();
   const { preferences, user, biometric, twoFactor, sessions, deletionAt, flash } = useProfileState();
   const fullName = `${user.firstName} ${user.lastName}`.trim();
@@ -51,6 +53,13 @@ export default function ProfileSettingsScreen() {
         profileActions.setFlash(null);
       }
     }, [flash]),
+  );
+
+  // Mode API : rafraîchit profil, réglages et consentements à l'arrivée sur l'écran.
+  useFocusEffect(
+    useCallback(() => {
+      if (!IS_DEMO) void syncProfile();
+    }, []),
   );
 
   const language = LANGUAGES.find((entry) => entry.key === preferences.language)?.title;
@@ -274,7 +283,8 @@ export default function ProfileSettingsScreen() {
           icon="logout"
           onPress={() => {
             setSheet(null);
-            router.replace('/login');
+            // POST /auth/logout (session retrouvée par le cookie), puis session locale effacée.
+            void signOut().finally(() => router.replace('/login'));
           }}
         />
         <SecondaryButton label="Rester connecté" onPress={() => setSheet(null)} />

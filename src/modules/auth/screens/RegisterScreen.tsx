@@ -5,6 +5,8 @@ import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-nativ
 
 import { Icon } from '@/components/icon';
 import { appLock } from '@/lib/app-lock';
+import { displayMessage, isApiError } from '@/lib/api';
+import { IS_DEMO } from '@/lib/config';
 import { DARK, LIGHT, useAppColors, type AppColors } from '@/constants/app-colors';
 import { FontFamily, Radius } from '@/constants/design';
 
@@ -14,11 +16,15 @@ import {
   AuthScreen,
   AuthTitle,
   Divider,
+  FormError,
   InfoNote,
   PrimaryButton,
   TextLink,
   useFormStyles,
 } from '../components/auth-ui';
+import { usePublicConfig } from '../hooks/use-public-config';
+import { register } from '../services/auth.service';
+import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from '../types';
 
 type Field = 'firstName' | 'lastName' | 'email' | 'password' | 'confirm';
 
@@ -33,13 +39,17 @@ function openApp() {
 export default function RegisterScreen() {
   const formStyles = useFormStyles();
   const { c, styles } = useLook();
-  // Démo : formulaire prérempli pour parcourir l'inscription en un appui.
-  const [firstName, setFirstName] = useState('Claire');
-  const [lastName, setLastName] = useState('Martin');
-  const [email, setEmail] = useState('claire.martin@email.fr');
+  const config = usePublicConfig();
+  // Démo : formulaire prérempli pour parcourir l'inscription en un appui. API : champs vides.
+  const [firstName, setFirstName] = useState(IS_DEMO ? 'Claire' : '');
+  const [lastName, setLastName] = useState(IS_DEMO ? 'Martin' : '');
+  const [email, setEmail] = useState(IS_DEMO ? 'claire.martin@email.fr' : '');
   const [emailTouched, setEmailTouched] = useState(false);
-  const [password, setPassword] = useState('Demo2026!');
-  const [confirm, setConfirm] = useState('Demo2026!');
+  const [password, setPassword] = useState(IS_DEMO ? 'Demo2026!Bringo' : '');
+  const [confirm, setConfirm] = useState(IS_DEMO ? 'Demo2026!Bringo' : '');
+  const [formError, setFormError] = useState<string | null>(null);
+  /** Inscriptions fermées par l'administrateur (registration.enabled = false). */
+  const closed = config?.registration_enabled === false;
   const [showPassword, setShowPassword] = useState(false);
   const [terms, setTerms] = useState(true);
   const [newsletter, setNewsletter] = useState(true);
@@ -54,9 +64,11 @@ export default function RegisterScreen() {
     firstName.trim().length > 1 &&
     lastName.trim().length > 1 &&
     emailValid &&
-    password.length >= 8 &&
+    password.length >= PASSWORD_MIN_LENGTH &&
+    password.length <= PASSWORD_MAX_LENGTH &&
     confirm === password &&
-    terms;
+    terms &&
+    !closed;
 
   const focusProps = (field: Field) => ({
     onFocus: () => setFocused(field),
@@ -70,11 +82,29 @@ export default function RegisterScreen() {
   const iconColor = (field: Field) =>
     focused === field ? c.link : c.muted;
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!valid || loading) return;
     setLoading(true);
-    // Démo : simule la création du compte avant la vérification de l'e-mail.
-    setTimeout(() => router.push('/verify-email'), 700);
+    setFormError(null);
+    if (IS_DEMO) {
+      // Démo : simule la création du compte avant la vérification de l'e-mail.
+      setTimeout(() => router.push('/verify-email'), 700);
+      return;
+    }
+    try {
+      // 202 sans session : un lien de confirmation (24 h) est envoyé par e-mail.
+      await register({ email, password, fullName: `${firstName.trim()} ${lastName.trim()}` });
+      router.push({ pathname: '/verify-email', params: { email: email.trim().toLowerCase(), sent: '1' } });
+    } catch (error) {
+      const fields = isApiError(error) ? error.fieldErrors() : {};
+      setFormError(
+        fields.captcha
+          ? 'Le serveur exige une vérification anti-robot que l’application ne sait pas encore afficher. Inscrivez-vous depuis app.bringomind.com, puis connectez-vous ici.'
+          : (fields.email ?? fields.password ?? displayMessage(error)),
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -153,7 +183,7 @@ export default function RegisterScreen() {
           <TextInput
             style={formStyles.inputInline}
             {...focusProps('password')}
-            placeholder="8 caractères minimum"
+            placeholder="12 caractères minimum"
             value={password}
             onChangeText={setPassword}
             secureTextEntry={!showPassword}
@@ -228,9 +258,17 @@ export default function RegisterScreen() {
           J’accepte les <Text style={styles.link}>conditions d’utilisation</Text> et la{' '}
           <Text style={styles.link}>politique de confidentialité</Text>.
         </CheckRow>
-        <CheckRow checked={newsletter} onToggle={() => setNewsletter((value) => !value)}>
-          Recevoir les conseils Bringo Mind et les nouveautés (facultatif).
-        </CheckRow>
+        {/* Lettre d'information : aucun champ à l'inscription côté backend (démo seulement). */}
+        {IS_DEMO ? (
+          <CheckRow checked={newsletter} onToggle={() => setNewsletter((value) => !value)}>
+            Recevoir les conseils Bringo Mind et les nouveautés (facultatif).
+          </CheckRow>
+        ) : null}
+
+        {closed ? (
+          <FormError message="Les inscriptions sont momentanément fermées. Réessayez plus tard." />
+        ) : null}
+        <FormError message={formError} />
 
         <PrimaryButton
           label="Créer mon compte"
@@ -241,6 +279,9 @@ export default function RegisterScreen() {
         />
       </AuthCard>
 
+      {/* Inscription Google / Apple : aucune route OAuth côté backend (démo seulement). */}
+      {IS_DEMO ? (
+      <>
       <Divider label="Ou s’inscrire avec" />
       <View style={styles.social}>
         <SocialButton
@@ -255,6 +296,8 @@ export default function RegisterScreen() {
           onPress={() => openApp()}
         />
       </View>
+      </>
+      ) : null}
 
       
 

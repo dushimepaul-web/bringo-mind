@@ -71,6 +71,11 @@ export class ApiError extends Error {
   readonly retryAfter?: number;
   /** Version actuelle de la ressource, renvoyée avec un 409 (verrouillage optimiste). */
   readonly currentVersion?: number;
+  /**
+   * Détails renvoyés dans `result` (ex. { mfa_required: true }, { email_not_verified: true },
+   * { feature: "voice.enabled" }, { retry_after: 12 }). Ce sont eux qui guident les écrans.
+   */
+  readonly details: Record<string, unknown>;
 
   constructor(init: {
     status: number;
@@ -80,6 +85,7 @@ export class ApiError extends Error {
     requestId?: string;
     retryAfter?: number;
     currentVersion?: number;
+    details?: Record<string, unknown>;
   }) {
     const code = init.code ?? CODE_BY_STATUS[init.status] ?? 'UNKNOWN';
     super(init.message ?? `Erreur ${init.status}`);
@@ -91,6 +97,12 @@ export class ApiError extends Error {
     this.requestId = init.requestId;
     this.retryAfter = init.retryAfter;
     this.currentVersion = init.currentVersion;
+    this.details = init.details ?? {};
+  }
+
+  /** Fonction désactivée par l'administrateur (403 avec result.feature). */
+  get disabledFeature(): string | undefined {
+    return this.status === 403 && typeof this.details.feature === 'string' ? this.details.feature : undefined;
   }
 
   /** Erreurs de validation indexées par champ, prêtes pour un formulaire. */
@@ -152,6 +164,21 @@ function parseFieldErrors(source: unknown): FieldError[] {
   });
 }
 
+/**
+ * Erreurs par champ du backend : `result` = { champ: ["message", ...] } (chemin imbriqué « items.0.title »).
+ * Les autres clés (drapeaux comme mfa_required) sont ignorées ici et restent dans `details`.
+ */
+function fieldErrorsFromRecord(result: Record<string, unknown>): FieldError[] {
+  const errors: FieldError[] = [];
+  for (const [field, value] of Object.entries(result)) {
+    if (Array.isArray(value)) {
+      const first = value.find((entry) => typeof entry === 'string');
+      if (typeof first === 'string') errors.push({ field, message: first });
+    }
+  }
+  return errors;
+}
+
 /** Convertit le corps d'une réponse en échec en ApiError. */
 export function parseProblem(
   status: number,
@@ -162,7 +189,21 @@ export function parseProblem(
     return new ApiError({ status, ...meta });
   }
 
-  // Format du guide d'API : { success:false, message, error:{ code, details }, request_id }
+  // Format du backend BringoMind : { statusCode, httpStatus, message, result }
+  if (typeof body.statusCode === 'number' && 'httpStatus' in body) {
+    const result = isRecord(body.result) ? body.result : {};
+    return new ApiError({
+      status,
+      message: asString(body.message),
+      errors: fieldErrorsFromRecord(result),
+      requestId: meta.requestId,
+      retryAfter: meta.retryAfter ?? asNumber(result.retry_after),
+      currentVersion: asNumber(result.current_version) ?? asNumber(result.version),
+      details: result,
+    });
+  }
+
+  // Ancien format : { success:false, message, error:{ code, details }, request_id }
   if (isRecord(body.error)) {
     const rawCode = asString(body.error.code);
     const details = body.error.details;
@@ -184,6 +225,7 @@ export function parseProblem(
     code: rawCode && KNOWN_CODES.has(rawCode) ? (rawCode as ApiErrorCode) : undefined,
     message: asString(body.detail) ?? asString(body.title),
     errors: parseFieldErrors(body.errors !== undefined ? body.errors : body.detail),
+    details: isRecord(body.result) ? body.result : undefined,
     ...meta,
   });
 }
@@ -236,4 +278,15 @@ export function userMessage(error: unknown): string {
     default:
       return 'Une erreur est survenue. Réessayez plus tard.';
   }
+}
+
+/**
+ * Message à afficher : celui du serveur quand il existe (déjà traduit selon Accept-Language et
+ * pensé pour l'utilisateur), sinon le message générique. Jamais pour une erreur 5xx.
+ */
+export function displayMessage(error: unknown): string {
+  if (isApiError(error) && error.serverMessage && error.status < 500) {
+    return error.serverMessage;
+  }
+  return userMessage(error);
 }

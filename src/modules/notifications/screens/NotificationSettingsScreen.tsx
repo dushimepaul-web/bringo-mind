@@ -1,7 +1,7 @@
 // S-22 - Réglages des notifications | Module M10 Notifications | Phase S8
 // Comme les réglages du téléphone : icônes dans des carrés de couleur, chaque interrupteur s'enregistre
 // tout de suite (pas de bouton « Enregistrer »), heures de silence choisies sur des roues à 3 lignes.
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -12,7 +12,7 @@ import { WheelList, WheelSeparator } from '@/components/ui/wheel-list';
 import { DARK, LIGHT, useScopedColors, type AppColors } from '@/constants/app-colors';
 import { FontFamily } from '@/constants/design';
 
-import { updateNotificationSettings, useNotificationSettings, type NotificationSettings } from '../settings-store';
+import { syncNotificationPreferences, updateNotificationSettings, useNotificationSettings, type NotificationSettings } from '../settings-store';
 
 const CHANNELS: { key: keyof NotificationSettings['channels']; icon: string; tint: string; title: string; subtitle: string }[] = [
   { key: 'push', icon: 'phone_iphone', tint: '#2F7BE0', title: 'Sur le téléphone', subtitle: 'iPhone 15 et MacBook Air' },
@@ -38,6 +38,11 @@ export default function NotificationSettingsScreen() {
   const { c, styles } = useLook();
   const kitStyles = useKitStyles();
   const settings = useNotificationSettings();
+
+  // Mode API : charge les préférences du serveur à l'arrivée sur l'écran.
+  useEffect(() => {
+    void syncNotificationPreferences();
+  }, []);
   const [toast, setToast] = useState<string | null>(null);
 
   const off = !settings.enabled;

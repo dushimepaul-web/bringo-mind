@@ -16,9 +16,9 @@ import { DARK, LIGHT, useAppColors, type AppColors } from '@/constants/app-color
 import { FontFamily, Radius } from '@/constants/design';
 import { useQuery } from '@/hooks/use-query';
 import { IS_DEMO } from '@/lib/config';
-import { DEMO_TODAY } from '@/lib/demo-dates';
 
 import { KoraRobot } from '../components/kora-robot';
+import { syncDashboard, useDashboard } from '../store';
 
 /** Couleurs identiques en clair et en sombre (les autres viennent de useAppColors). */
 const C = {
@@ -35,8 +35,10 @@ function useHome() {
   return { c, styles: c.dark ? STYLES.dark : STYLES.light };
 }
 
-/** Démo : rien à charger (les données sont en mémoire). */
-const loadDashboard = async () => undefined;
+/** Mode « api » : charge la synthèse de DASH-001 (GET /dashboard). Démo : rien à charger. */
+const loadDashboard = async (_signal: AbortSignal) => {
+  if (!IS_DEMO) await syncDashboard();
+};
 
 export default function DashboardScreen() {
   const { c, styles } = useHome();
@@ -74,6 +76,7 @@ const go = (href: Href) => () => router.push(href);
 
 function HomeHeader() {
   const { c, styles } = useHome();
+  const unread = useDashboard().unread;
   return (
     <View style={styles.header}>
       <View style={styles.headerBrand}>
@@ -81,11 +84,17 @@ function HomeHeader() {
       </View>
       <View style={styles.headerRight}>
         <ThemeToggle />
-        <Pressable style={styles.bell} accessibilityRole="button" accessibilityLabel="Notifications, 3 non lues" onPress={go('/notifications')}>
+        <Pressable
+          style={styles.bell}
+          accessibilityRole="button"
+          accessibilityLabel={`Notifications, ${unread} non lues`}
+          onPress={go('/notifications')}>
           <Icon name="notifications" size={30} color={c.text} />
-          <View style={styles.bellBadge}>
-            <Text style={styles.bellBadgeText}>3</Text>
-          </View>
+          {unread > 0 ? (
+            <View style={styles.bellBadge}>
+              <Text style={styles.bellBadgeText}>{unread > 9 ? '9+' : unread}</Text>
+            </View>
+          ) : null}
         </Pressable>
         <Pressable style={styles.account} accessibilityRole="button" accessibilityLabel="Mes informations personnelles" onPress={go('/profile/complete')}>
           <OutlineRing size={46} stroke={4}>
@@ -102,55 +111,12 @@ function HomeHeader() {
 
 // ——— Conseil de Kora ———
 
-function greetingFor(date: Date): string {
-  const hour = date.getHours();
-  if (hour >= 18 || hour < 5) return 'Bonsoir';
-  if (hour >= 12) return 'Bon après-midi';
-  return 'Bonjour';
-}
-
-type Tip = { title: string; line: string; small: string; cta: string; href: Href };
-
-/** Conseils de Kora (démo), un par diapositive. */
-function tipsFor(hello: string): Tip[] {
-  return [
-    {
-      title: `${hello} Claire ! 👋`,
-      line: 'Voici votre planning du jour :',
-      small: '📅 2 événements, 1 tâche importante.',
-      cta: 'Voir mon planning →',
-      href: '/calendar/agenda',
-    },
-    {
-      title: 'Facture Engie à vérifier',
-      line: 'Kora a lu une nouvelle facture :',
-      small: '⚡ 118,50 € prélevés le 27 mai.',
-      cta: 'Vérifier →',
-      href: '/documents',
-    },
-    {
-      title: 'Dentiste de Léo',
-      line: 'Vendredi 17 mai à 10h00 :',
-      small: '🦷 Cabinet Dr Lemoine, Paris 11e.',
-      cta: 'Ajouter un rappel →',
-      href: '/reminders/add',
-    },
-    {
-      title: 'Déclaration de revenus',
-      line: 'Plus que 12 jours :',
-      small: '📄 75 % du dossier est prêt.',
-      cta: 'Continuer →',
-      href: '/tasks',
-    },
-  ];
-}
-
 /** Durée d'affichage d'un conseil avant de glisser au suivant. */
 const TIP_MS = 5000;
 
 function KoraBanner() {
   const { styles } = useHome();
-  const tips = tipsFor(greetingFor(IS_DEMO ? DEMO_TODAY : new Date()));
+  const tips = useDashboard().tips;
   // La première diapositive est répétée à la fin : la boucle continue sans revenir en arrière à l'écran.
   const slides = [...tips, tips[0]];
   const scroller = useRef<ScrollViewInstance>(null);
@@ -301,11 +267,18 @@ function Pill({ label, color, bg }: { label: string; color: string; bg: string }
   );
 }
 
+const DAYS = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+const MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+/** « mardi 14 mai 2024 » à partir de la date du tableau de bord (AAAA-MM-JJ). */
+function formatDateLabel(value: string): string {
+  const date = value ? new Date(`${value}T12:00:00`) : new Date();
+  return `${DAYS[date.getDay()]} ${date.getDate()} ${MONTHS[date.getMonth()]} ${date.getFullYear()}`;
+}
+
 function TodayCard() {
   const { c, styles } = useHome();
-  const done = 2;
-  const total = 3;
-  const percent = Math.round((done / total) * 100);
+  const { todayTasks, done, total, date } = useDashboard();
+  const percent = total ? Math.round((done / total) * 100) : 0;
   return (
     <View style={styles.cardWrap}>
       <View style={styles.cardAccent} />
@@ -316,52 +289,39 @@ function TodayCard() {
             <Text style={styles.cardTitle}>Aujourd’hui</Text>
           </View>
           <View style={styles.todayHeadRight}>
-            <Text style={styles.todayDate}>Mardi 14 mai 2024</Text>
+            <Text style={styles.todayDate}>{formatDateLabel(date)}</Text>
           </View>
         </View>
 
         <View style={styles.todayBody}>
           <View style={styles.todayList}>
-            <Pressable style={styles.todayItem} accessibilityRole={pressRole} onPress={go('/calendar/detail?id=reunion')}>
-              <View style={[styles.todayBar, { backgroundColor: '#2E9950' }]} />
-              <View style={styles.todayItemBody}>
-                <View style={styles.todayLine}>
-                  <Icon name="schedule" size={17} color="#2E9950" />
-                  <Text style={styles.todayTime}>14:00 – 15:00</Text>
-                </View>
-                <View style={styles.todayLine}>
-                  <Text style={styles.todayTitle} numberOfLines={1}>
-                    Réunion projet Bringo Mind
-                  </Text>
-                  <Pill label="Agenda" color={c.blueText} bg={c.tintBlue} />
-                </View>
-              </View>
-            </Pressable>
-
-            <Pressable
-              style={[styles.todayItem, styles.todayItemTinted]}
-              accessibilityRole={pressRole}
-              onPress={go('/tasks/detail?id=attestation')}>
-              <View style={[styles.todayBar, { backgroundColor: '#E8B62B' }]} />
-              <View style={styles.todayItemBody}>
-                <View style={styles.todayLine}>
-                  <Icon name="check_box" size={17} color="#E8B62B" />
-                  <Text style={styles.todaySub}>À faire aujourd’hui</Text>
-                </View>
-                <View style={styles.todayLine}>
-                  <Text style={styles.todayTitle} numberOfLines={1}>
-                    Renvoyer l’attestation
-                  </Text>
-                  <Pill label="Priorité haute" color={c.amberText} bg={c.tintAmber} />
-                </View>
-              </View>
-            </Pressable>
+            {todayTasks.length ? (
+              todayTasks.slice(0, 2).map((task) => (
+                <Pressable key={task.id} style={styles.todayItem} accessibilityRole={pressRole} onPress={go(task.href)}>
+                  <View style={[styles.todayBar, { backgroundColor: '#E8B62B' }]} />
+                  <View style={styles.todayItemBody}>
+                    <View style={styles.todayLine}>
+                      <Icon name="schedule" size={17} color="#E8B62B" />
+                      <Text style={styles.todayTime}>{task.time || 'Aujourd’hui'}</Text>
+                    </View>
+                    <View style={styles.todayLine}>
+                      <Text style={styles.todayTitle} numberOfLines={1}>
+                        {task.title}
+                      </Text>
+                      <Pill label={task.priority} color={c.amberText} bg={c.tintAmber} />
+                    </View>
+                  </View>
+                </Pressable>
+              ))
+            ) : (
+              <Text style={styles.todaySub}>Rien à faire aujourd’hui.</Text>
+            )}
           </View>
 
           <View style={styles.todayDivider} />
 
           <View style={styles.progress}>
-            <ProgressRing size={72} stroke={10} progress={done / total} track={c.track}>
+            <ProgressRing size={72} stroke={10} progress={total ? done / total : 0} track={c.track}>
               <Text style={styles.progressValue}>{percent}%</Text>
             </ProgressRing>
             <Text style={styles.progressText}>
@@ -384,6 +344,7 @@ function TodayCard() {
 
 function UpcomingCard() {
   const { c, styles } = useHome();
+  const { upcoming } = useDashboard();
   return (
     <View style={[styles.card, styles.upcomingCard]}>
       <View style={styles.upcomingHead}>
@@ -396,18 +357,23 @@ function UpcomingCard() {
           <Icon name="chevron_right" size={20} color={c.link} />
         </Pressable>
       </View>
-      <Pressable style={styles.upcomingRow} accessibilityRole={pressRole} onPress={go('/calendar/detail?id=dentiste-leo')}>
-        <View style={styles.dateTile}>
-          <Text style={styles.dateDay}>Ven.</Text>
-          <Text style={styles.dateNum}>17</Text>
-        </View>
-        <Text style={styles.upcomingTime}>10:00</Text>
-        <Icon name="stethoscope" size={20} color={c.text} />
-        <Text style={styles.upcomingTitle} numberOfLines={1}>
-          Dentiste de Léo
-        </Text>
-        <Pill label="Santé" color={c.blueText} bg={c.tintBlue} />
-      </Pressable>
+      {upcoming.length ? (
+        upcoming.slice(0, 2).map((event) => (
+          <Pressable key={event.id} style={styles.upcomingRow} accessibilityRole={pressRole} onPress={go(event.href)}>
+            <View style={styles.dateTile}>
+              <Text style={styles.dateDay}>{event.day}</Text>
+              <Text style={styles.dateNum}>{event.num}</Text>
+            </View>
+            <Text style={styles.upcomingTime}>{event.time}</Text>
+            <Icon name="event" size={20} color={c.text} />
+            <Text style={styles.upcomingTitle} numberOfLines={1}>
+              {event.title}
+            </Text>
+          </Pressable>
+        ))
+      ) : (
+        <Text style={styles.upcomingTitle}>Aucun rendez-vous à venir.</Text>
+      )}
     </View>
   );
 }

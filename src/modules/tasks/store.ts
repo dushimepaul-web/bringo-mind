@@ -88,7 +88,7 @@ export const taskActions = {
     if (!before) return;
     // La démo vit au mardi 14 mai : on date l'achèvement en conséquence.
     update(id, { status: 'done', completedAt: DEMO_TODAY });
-    remote(() => tasksApi.complete(id, before.version ?? 1), (dto) => replace(id, dto), () => update(id, before));
+    remote(() => tasksApi.complete(id), (dto) => replace(id, dto), () => update(id, before));
   },
   reopen(id: string) {
     const before = find(id);
@@ -100,13 +100,13 @@ export const taskActions = {
     const before = find(id);
     if (!before) return;
     update(id, { status: 'archived' });
-    remote(() => tasksApi.setStatus(id, before.version ?? 1, 'cancelled'), (dto) => replace(id, dto), () => update(id, before));
+    remote(() => tasksApi.archive(id), (dto) => replace(id, dto), () => update(id, before));
   },
   restore(id: string) {
     const before = find(id);
     if (!before) return;
     update(id, { status: 'open' });
-    remote(() => tasksApi.setStatus(id, before.version ?? 1, 'planned'), (dto) => replace(id, dto), () => update(id, before));
+    remote(() => tasksApi.unarchive(id), (dto) => replace(id, dto), () => update(id, before));
   },
   postpone(id: string, days: number) {
     const before = find(id);
