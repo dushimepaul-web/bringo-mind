@@ -33,6 +33,8 @@ export type Activity = {
   target: string;
   at: Date;
   href?: Href;
+  /** Mode « api » : nom de l'auteur tel que renvoyé par le journal (membre actuel, ancien membre ou système). */
+  whoName?: string;
 };
 
 export type SharedTask = {

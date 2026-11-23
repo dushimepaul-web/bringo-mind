@@ -1,7 +1,7 @@
 // Mobile - Transférer la propriété du foyer | Module M08 Foyer | Phase S7
 // Action sensible : choix du membre, conséquences expliquées, confirmation forte (nom du foyer).
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -12,13 +12,14 @@ import { FontFamily } from '@/constants/design';
 
 import { Avatar, ChoiceCard } from '../components/household-ui';
 import { ROLE_LABELS, firstName } from '../data';
-import { householdActions, useHouseholdState } from '../store';
+import { ensureHousehold, householdActions, useHouseholdState } from '../store';
 
 export default function TransferOwnershipScreen() {
   const { c, styles } = useLook();
   const kitStyles = useKitStyles();
   const { to } = useLocalSearchParams<{ to?: string }>();
   const { name, members } = useHouseholdState();
+  useEffect(() => ensureHousehold(), []);
   const me = members.find((member) => member.you);
   const eligible = members.filter((member) => !member.you && member.role !== 'child');
   const [target, setTarget] = useState(() => eligible.find((member) => member.id === to)?.id ?? eligible[0]?.id);

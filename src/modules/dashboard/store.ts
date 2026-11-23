@@ -22,7 +22,10 @@ export type DashboardData = {
   unread: number;
 };
 
-const EMPTY: DashboardData = { date: '', tips: [], todayTasks: [], done: 0, total: 0, upcoming: [], unread: 0 };
+/** Conseil affiché tant qu'aucune donnée n'est chargée (et toujours en mode démo). */
+const WELCOME_TIP: DashboardTip = { title: 'Bienvenue', line: 'Votre planning du jour :', small: 'Rien de prévu pour le moment.', cta: 'Voir mon planning →', href: '/calendar/agenda' };
+
+const EMPTY: DashboardData = { date: '', tips: [WELCOME_TIP], todayTasks: [], done: 0, total: 0, upcoming: [], unread: 0 };
 
 let state: DashboardData = EMPTY;
 const listeners = new Set<() => void>();
@@ -120,7 +123,7 @@ export async function syncDashboard(): Promise<void> {
 
     emit({
       date: dto.date,
-      tips: tips.length ? tips : [{ title: 'Bienvenue', line: 'Votre planning du jour :', small: 'Rien de prévu pour le moment.', cta: 'Voir mon planning →', href: '/calendar/agenda' }],
+      tips: tips.length ? tips : [WELCOME_TIP],
       todayTasks,
       done: completed,
       total: today.length,

@@ -1,7 +1,7 @@
 // S-18 - Membres et invitations | Module M08 Foyer | Phase S7
 // Les actions sensibles (rôle, retrait, annulation) sont confirmées et peuvent être annulées.
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -13,7 +13,7 @@ import { dayOffset, formatDay } from '@/lib/demo-dates';
 
 import { Avatar, ChoiceCard, RoleTag, SectionHeader, SmallButton, useFlashToast, useHouseholdStyles } from '../components/household-ui';
 import { ROLE_HINTS, ROLE_LABELS, firstName } from '../data';
-import { householdActions, useHouseholdState } from '../store';
+import { ensureHousehold, householdActions, useHouseholdState } from '../store';
 import type { HouseholdRole, Invitation, Member } from '../types';
 
 type Step =
@@ -34,6 +34,7 @@ export default function MembersInvitationsScreen() {
   const kitStyles = useKitStyles();
   const householdStyles = useHouseholdStyles();
   const { name, members, invitations } = useHouseholdState();
+  useEffect(() => ensureHousehold(), []);
   const [step, setStep] = useState<Step>(null);
   const [showRoles, setShowRoles] = useState(false);
   const [toast, setToast] = useFlashToast();
@@ -138,7 +139,7 @@ export default function MembersInvitationsScreen() {
                       variant="danger"
                       onPress={() => {
                         const undo = householdActions.cancelInvitation(invitation.id);
-                        setToast({ text: 'Invitation annulée', undo });
+                        setToast({ text: 'Invitation annulée', undo: householdActions.canUndo ? undo : undefined });
                       }}
                     />
                   </View>
@@ -272,7 +273,7 @@ export default function MembersInvitationsScreen() {
                 const memberName = step.member.name;
                 const undo = householdActions.removeMember(step.member.id);
                 close();
-                setToast({ text: `${firstName(memberName)} a été retiré du foyer`, undo });
+                setToast({ text: `${firstName(memberName)} a été retiré du foyer`, undo: householdActions.canUndo ? undo : undefined });
               }}
             />
             <SecondaryButton label="Garder dans le foyer" onPress={close} />

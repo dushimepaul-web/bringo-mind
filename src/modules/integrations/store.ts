@@ -35,8 +35,8 @@ let state: Snapshot = {
   known: SENDERS,
   calendars: { personal: true, work: false, family: true },
   twoWay: false,
-  emails: DEMO_EMAILS,
-  conflicts: DEMO_CONFLICTS,
+  emails: IS_DEMO ? DEMO_EMAILS : [],
+  conflicts: IS_DEMO ? DEMO_CONFLICTS : [],
   flash: null,
 };
 const listeners = new Set<() => void>();

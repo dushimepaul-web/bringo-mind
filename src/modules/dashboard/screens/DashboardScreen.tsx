@@ -118,7 +118,8 @@ function KoraBanner() {
   const { styles } = useHome();
   const tips = useDashboard().tips;
   // La première diapositive est répétée à la fin : la boucle continue sans revenir en arrière à l'écran.
-  const slides = [...tips, tips[0]];
+  // Tant que les conseils ne sont pas chargés (liste vide), aucune diapositive : évite de lire `tips[0]` inexistant.
+  const slides = tips.length ? [...tips, tips[0]] : [];
   const scroller = useRef<ScrollViewInstance>(null);
   const index = useRef(0);
   const [width, setWidth] = useState(0);
@@ -137,7 +138,7 @@ function KoraBanner() {
 
   // Défilement automatique : glisse au conseil suivant ; arrivé sur la copie du premier, revient au vrai premier sans animation.
   useEffect(() => {
-    if (!width || paused || reduceMotion) return;
+    if (!width || paused || reduceMotion || tips.length < 2) return;
     const timer = setInterval(() => {
       const next = index.current + 1;
       scroller.current?.scrollTo({ x: next * width, animated: true });

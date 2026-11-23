@@ -29,6 +29,7 @@ import {
   formatLongDay,
   formatTime,
 } from '@/lib/demo-dates';
+import { IS_DEMO } from '@/lib/config';
 
 import {
   RECURRENCE_LABELS,
@@ -51,12 +52,13 @@ const RECURRENCES: EventRecurrence[] = ['none', 'weekly', 'monthly'];
 function demoDraft(day?: Date, start?: Date): EventDraft {
   const startAt = start ?? atTime(day ?? addDays(DEMO_TODAY, 1), 10);
   return {
-    title: 'Retirer la carte d’identité de Léo',
+    // Mode « api » : formulaire vide (aucun texte de démonstration).
+    title: IS_DEMO ? 'Retirer la carte d’identité de Léo' : '',
     start: startAt,
     end: new Date(startAt.getTime() + 45 * 60000),
     allDay: false,
-    location: 'Mairie du 11e • Place Léon-Blum',
-    description: 'Apporter l’ancienne carte et le récépissé de demande.',
+    location: IS_DEMO ? 'Mairie du 11e • Place Léon-Blum' : '',
+    description: IS_DEMO ? 'Apporter l’ancienne carte et le récépissé de demande.' : '',
     tone: 'admin',
     // Personnel par défaut : le partage avec le foyer est toujours un choix explicite.
     shared: false,
@@ -161,7 +163,7 @@ export default function EventFormScreen() {
       eventActions.setFlash({ text: 'Événement mis à jour.' });
     } else {
       const newId = eventActions.create(clean);
-      eventActions.setFlash({ text: `Événement ajouté : ${when}.`, undo: eventActions.remove.bind(null, newId) });
+      eventActions.setFlash({ text: `Événement ajouté : ${when}.`, undo: eventActions.canUndo ? eventActions.remove.bind(null, newId) : undefined });
     }
     if (router.canGoBack()) router.back();
     else router.replace('/calendar');

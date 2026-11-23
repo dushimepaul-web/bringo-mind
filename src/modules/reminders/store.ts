@@ -16,7 +16,7 @@ type Snapshot = {
   flash: { text: string; undo?: () => void } | null;
 };
 
-let state: Snapshot = { reminders: DEMO_REMINDERS, notificationsAllowed: false, flash: null };
+let state: Snapshot = { reminders: IS_DEMO ? DEMO_REMINDERS : [], notificationsAllowed: false, flash: null };
 const listeners = new Set<() => void>();
 
 function emit(next: Partial<Snapshot>) {

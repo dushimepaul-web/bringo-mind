@@ -3,6 +3,7 @@
 // (listes et cases à cocher insérées depuis la barre d'outils de l'éditeur).
 import { useSyncExternalStore } from 'react';
 
+import { IS_DEMO } from '@/lib/config';
 import { DEMO_TODAY, addDays, atTime } from '@/lib/demo-dates';
 
 export type NoteColor = 'mint' | 'lime' | 'blue' | 'lavender' | 'pink' | 'amber';
@@ -81,7 +82,7 @@ const DEMO_NOTES: Note[] = [
 
 type Snapshot = { notes: Note[]; sort: NoteSort };
 
-let state: Snapshot = { notes: DEMO_NOTES, sort: 'recent' };
+let state: Snapshot = { notes: IS_DEMO ? DEMO_NOTES : [], sort: 'recent' };
 const listeners = new Set<() => void>();
 
 function emit(next: Partial<Snapshot>) {
