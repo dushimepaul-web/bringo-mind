@@ -8,7 +8,8 @@
       "developmentClient": true,
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_DATA_MODE": "demo"
+        "EXPO_PUBLIC_DATA_MODE": "api",
+        "EXPO_PUBLIC_API_URL": "https://app.bringomind.com"
       },
       "android": {
         "buildType": "apk"
@@ -23,7 +24,8 @@
     "preview": {
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_DATA_MODE": "demo"
+        "EXPO_PUBLIC_DATA_MODE": "api",
+        "EXPO_PUBLIC_API_URL": "https://app.bringomind.com"
       },
       "android": {
         "buildType": "apk"

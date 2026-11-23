@@ -10,13 +10,23 @@ import { OutlineRing } from '@/components/rings';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { DARK, LIGHT, useDarkModeSupported, useScopedColors, type AppColors } from '@/constants/app-colors';
 import { FontFamily, Radius } from '@/constants/design';
+import { IS_DEMO } from '@/lib/config';
+import { useSession } from '@/lib/session';
 
-/** Démo : notifications non lues. */
-const UNREAD = 3;
+/** Démo : notifications non lues (en mode « api », pas de pastille fictive). */
+const UNREAD = IS_DEMO ? 3 : 0;
+
+/** Initiales du nom complet (« Claire Martin » → « CM »). */
+function initials(name: string | undefined): string {
+  const parts = (name ?? '').trim().split(/\s+/).filter(Boolean);
+  return (parts.slice(0, 2).map((part) => part[0]).join('') || '?').toUpperCase();
+}
 
 export function AppHeader() {
   const { c, styles } = useLook();
   const themable = useDarkModeSupported();
+  const { user } = useSession();
+  const avatar = IS_DEMO ? 'CM' : initials(user?.full_name);
   return (
     <View style={styles.header}>
       <BrandLogo size={50} />
@@ -25,17 +35,19 @@ export function AppHeader() {
         <Pressable
           style={styles.bell}
           accessibilityRole="button"
-          accessibilityLabel={`Notifications, ${UNREAD} non lues`}
+          accessibilityLabel={UNREAD ? `Notifications, ${UNREAD} non lues` : 'Notifications'}
           onPress={() => router.push('/notifications')}>
           <Icon name="notifications" size={30} color={c.text} />
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>{UNREAD}</Text>
-          </View>
+          {UNREAD ? (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{UNREAD}</Text>
+            </View>
+          ) : null}
         </Pressable>
         <Pressable style={styles.account} accessibilityRole="button" accessibilityLabel="Mes informations personnelles" onPress={() => router.push('/profile/complete')}>
           <OutlineRing size={46} stroke={4}>
             <View style={styles.avatar}>
-              <Text style={styles.avatarText}>CM</Text>
+              <Text style={styles.avatarText}>{avatar}</Text>
             </View>
           </OutlineRing>
           <Icon name="expand_more" size={22} color={c.link} />

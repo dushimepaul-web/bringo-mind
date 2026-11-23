@@ -1,7 +1,7 @@
 // S-18 (formulaire) - Inviter un membre | Module M08 Foyer | Phase S7
 // Démo : champs préremplis ; l'envoi est confirmé avant de partir.
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -12,7 +12,7 @@ import { FontFamily } from '@/constants/design';
 
 import { ChoiceCard, SmallButton, useHouseholdStyles } from '../components/household-ui';
 import { ROLE_HINTS, ROLE_LABELS, isValidEmail } from '../data';
-import { householdActions, useHouseholdState } from '../store';
+import { ensureHousehold, householdActions, useHouseholdState } from '../store';
 import type { Invitation } from '../types';
 
 export default function InviteMemberScreen() {
@@ -20,6 +20,7 @@ export default function InviteMemberScreen() {
   const kitStyles = useKitStyles();
   const householdStyles = useHouseholdStyles();
   const { name, members, invitations } = useHouseholdState();
+  useEffect(() => ensureHousehold(), []);
   const [email, setEmail] = useState('sophie.martin@email.fr');
   const [role, setRole] = useState<Invitation['role']>('member');
   const [message, setMessage] = useState(

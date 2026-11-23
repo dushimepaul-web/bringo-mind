@@ -20,7 +20,7 @@ import { FontFamily, Radius } from '@/constants/design';
 import { DEMO_TODAY, dayOffset, formatTime, startOfDay } from '@/lib/demo-dates';
 
 import { itemsForDay, type DayItem, type SpaceFilter, useTones } from '../components/calendar-ui';
-import { MONTHS, TASK_DEADLINES, WEEKDAY_SHORT, durationOf, formatDuration } from '../data';
+import { MONTHS, WEEKDAY_SHORT, durationOf, formatDuration } from '../data';
 import { QueryView } from '@/components/ui/states';
 import { useQuery } from '@/hooks/use-query';
 
@@ -39,7 +39,7 @@ type Row =
 export default function AgendaScreen() {
   const { c, styles } = useLook();
   const kitStyles = useKitStyles();
-  const { events } = useCalendarState();
+  const { events, deadlines } = useCalendarState();
   const sync = useQuery('events', syncEvents);
   const [filter, setFilter] = useState<SpaceFilter>('all');
   const [showTasks, setShowTasks] = useState(true);
@@ -55,7 +55,7 @@ export default function AgendaScreen() {
     const matches = (title: string, place = '') =>
       !term || title.toLowerCase().includes(term) || place.toLowerCase().includes(term);
     const visibleEvents = events.filter((event) => matches(event.title, event.location));
-    const visibleTasks = showTasks ? TASK_DEADLINES.filter((task) => matches(task.title)) : [];
+    const visibleTasks = showTasks ? deadlines.filter((task) => matches(task.title)) : [];
 
     // Tous les jours qui ont quelque chose de prévu, plus aujourd'hui (toujours affiché).
     const keys = new Map<string, Date>();
@@ -79,7 +79,7 @@ export default function AgendaScreen() {
       result.push({ type: 'day', key: day.toDateString(), day, items });
     }
     return result;
-  }, [events, filter, showTasks, query]);
+  }, [events, deadlines, filter, showTasks, query]);
 
   const upcoming = rows.filter(
     (row): row is Extract<Row, { type: 'day' }> => row.type === 'day' && dayOffset(row.day) >= 0,

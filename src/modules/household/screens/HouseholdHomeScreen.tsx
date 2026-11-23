@@ -10,24 +10,35 @@ import { Icon } from '@/components/icon';
 import { BottomSheet, Chip, PrimaryButton, SecondaryButton, SheetOption, Tag, TopBar, UndoToast, useKitStyles } from '@/components/ui/kit';
 import { DARK, LIGHT, useScopedColors, type AppColors } from '@/constants/app-colors';
 import { FontFamily, Radius } from '@/constants/design';
+import { IS_DEMO } from '@/lib/config';
 import { dayOffset, formatDay, formatTime } from '@/lib/demo-dates';
 
 import { Avatar, SectionHeader, useFlashToast, useHouseholdStyles } from '../components/household-ui';
-import { ROLE_LABELS, SHARED_DOCS, SHARED_EVENTS, SHARED_TASKS, WEEKDAY_SHORT, firstName } from '../data';
+import { ROLE_LABELS, WEEKDAY_SHORT, firstName } from '../data';
 import { QueryView } from '@/components/ui/states';
-import { useQuery } from '@/hooks/use-query';
+import { useQuery, type QueryState } from '@/hooks/use-query';
 
 import { householdActions, syncHousehold, useHouseholdState } from '../store';
-import type { SharedTask } from '../types';
+import type { Member, SharedTask } from '../types';
 
 export default function HouseholdHomeScreen() {
   const kitStyles = useKitStyles();
   const { hasHousehold } = useHouseholdState();
   const [toast, setToast] = useFlashToast();
+  // Chargé ici (et non dans HouseholdHome) : en mode « api », on ne sait s'il y a un foyer qu'après la réponse.
+  const sync = useQuery('household', syncHousehold);
 
   return (
     <SafeAreaView style={kitStyles.safe} edges={['top']}>
-      {hasHousehold ? <HouseholdHome /> : <NoHousehold />}
+      {hasHousehold ? (
+        <HouseholdHome sync={sync} />
+      ) : !IS_DEMO && sync.status !== 'success' ? (
+        <QueryView query={sync} loadingRows={5}>
+          <NoHousehold />
+        </QueryView>
+      ) : (
+        <NoHousehold />
+      )}
       {toast ? (
         <UndoToast key={toast.text} text={toast.text} onUndo={toast.undo} onHide={() => setToast(null)} bottom={24} />
       ) : null}
@@ -78,12 +89,12 @@ function NoHousehold() {
   );
 }
 
-function HouseholdHome() {
+function HouseholdHome({ sync }: { sync: QueryState }) {
   const { c, styles } = useLook();
   const kitStyles = useKitStyles();
   const householdStyles = useHouseholdStyles();
-  const { name, members, invitations, koraDismissed, createdAt: created, demoContent, activity } = useHouseholdState();
-  const sync = useQuery('household', syncHousehold);
+  const { name, members, invitations, koraDismissed, createdAt: created, demoContent, activity, sharedTasks, sharedEvents, sharedDocs } =
+    useHouseholdState();
   // Un seul filtre par personne, pour les tâches ET les événements.
   const [person, setPerson] = useState<string>('all');
   const [menu, setMenu] = useState(false);
@@ -91,12 +102,12 @@ function HouseholdHome() {
   const me = members.find((member) => member.you);
   const canManage = me?.role === 'owner' || me?.role === 'admin';
   const concerns = (people: string[]) => person === 'all' || people.includes(person);
-  const upcoming = SHARED_EVENTS.filter((event) => dayOffset(event.start) >= 0);
-  const openTasks = SHARED_TASKS.filter((task) => !task.done);
+  const upcoming = sharedEvents.filter((event) => dayOffset(event.start) >= 0);
+  const openTasks = sharedTasks.filter((task) => !task.done);
   const countFor = (id: string) =>
     openTasks.filter((task) => task.people.includes(id)).length +
     upcoming.filter((event) => event.people.includes(id)).length;
-  const tasks = SHARED_TASKS.filter((task) => concerns(task.people));
+  const tasks = sharedTasks.filter((task) => concerns(task.people));
   const events = upcoming.filter((event) => concerns(event.people)).slice(0, person === 'all' ? 3 : 4);
   const personName = members.find((member) => member.id === person);
   const forWhom = personName ? (personName.you ? 'vous' : firstName(personName.name)) : '';
@@ -213,7 +224,7 @@ function HouseholdHome() {
           {tasks.length === 0 ? (
             <Text style={[kitStyles.muted, styles.none]}>Aucune tâche partagée pour {forWhom}.</Text>
           ) : (
-            tasks.map((task, index) => <TaskRow key={task.id} task={task} first={index === 0} />)
+            tasks.map((task, index) => <TaskRow key={task.id} task={task} first={index === 0} members={members} />)
           )}
         </View>
 
@@ -257,9 +268,9 @@ function HouseholdHome() {
         </View>
 
         {/* Documents partagés */}
-        <SectionHeader title="Documents partagés" count={SHARED_DOCS.length} action="Documents" href="/documents" />
+        <SectionHeader title="Documents partagés" count={sharedDocs.length} action="Documents" href="/documents" />
         <View style={styles.docs}>
-          {SHARED_DOCS.map((doc) => (
+          {sharedDocs.map((doc) => (
             <Pressable
               key={doc.id}
               style={({ pressed }) => [kitStyles.card, styles.doc, pressed && kitStyles.cardPressed]}
@@ -284,7 +295,7 @@ function HouseholdHome() {
         <View style={styles.groupCard}>
           {activity.slice(0, 3).map((item, index) => {
             const member = members.find((entry) => entry.id === item.who);
-            const who = item.who === 'kora' ? 'Kora' : member?.you ? 'Vous' : member ? firstName(member.name) : item.who;
+            const who = item.who === 'kora' ? 'Kora' : member?.you ? 'Vous' : member ? firstName(member.name) : (item.whoName ?? item.who);
             return (
               <Pressable
                 key={item.id}
@@ -342,21 +353,23 @@ function HouseholdHome() {
             }}
           />
         ) : null}
-        <SheetOption
-          icon="visibility"
-          label="Aperçu sans foyer (démo)"
-          hint="Voir l’écran d’une personne qui n’a pas de foyer"
-          onPress={() => {
-            setMenu(false);
-            householdActions.previewWithoutHousehold();
-          }}
-        />
+        {IS_DEMO ? (
+          <SheetOption
+            icon="visibility"
+            label="Aperçu sans foyer (démo)"
+            hint="Voir l’écran d’une personne qui n’a pas de foyer"
+            onPress={() => {
+              setMenu(false);
+              householdActions.previewWithoutHousehold();
+            }}
+          />
+        ) : null}
       </BottomSheet>
     </>
   );
 }
 
-function TaskRow({ task, first }: { task: SharedTask; first: boolean }) {
+function TaskRow({ task, first, members }: { task: SharedTask; first: boolean; members: Member[] }) {
   const { c, styles } = useLook();
   const kitStyles = useKitStyles();
   const offset = dayOffset(task.due);
@@ -368,7 +381,9 @@ function TaskRow({ task, first }: { task: SharedTask; first: boolean }) {
       : late
         ? `En retard • ${formatDay(task.due)}`
         : `Pour le ${formatDay(task.due)}`;
-  const who = task.assignee === 'claire' ? 'Vous' : 'Thomas';
+  const assignee = members.find((member) => member.id === task.assignee);
+  // Démo : Claire ou Thomas. Mode « api » : le membre à qui la tâche est attribuée.
+  const who = IS_DEMO ? (task.assignee === 'claire' ? 'Vous' : 'Thomas') : assignee ? (assignee.you ? 'Vous' : firstName(assignee.name)) : 'Non attribuée';
   return (
     <Pressable
       style={({ pressed }) => [styles.task, !first && styles.groupDivider, pressed && kitStyles.cardPressed]}

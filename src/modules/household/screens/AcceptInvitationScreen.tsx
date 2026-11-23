@@ -1,7 +1,7 @@
 // Mobile - Accepter une invitation | Module M08 Foyer | Phase S7
 // La personne voit qui l'invite, ce qui sera partagé et ce qui reste privé, avant de décider.
-import { router } from 'expo-router';
-import { useState } from 'react';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -9,11 +9,14 @@ import { Icon } from '@/components/icon';
 import { BottomSheet, PrimaryButton, SecondaryButton, Tag, TopBar, useKitStyles } from '@/components/ui/kit';
 import { DARK, LIGHT, useScopedColors, type AppColors } from '@/constants/app-colors';
 import { FontFamily } from '@/constants/design';
+import { userMessage } from '@/lib/api';
+import { IS_DEMO } from '@/lib/config';
 import { DEMO_TODAY, addDays, formatLongDay } from '@/lib/demo-dates';
 
 import { Avatar } from '../components/household-ui';
-import { DEMO_HOUSEHOLD, DEMO_MEMBERS, firstName } from '../data';
-import { householdActions } from '../store';
+import { DEMO_HOUSEHOLD, DEMO_MEMBERS, ROLE_LABELS, firstName } from '../data';
+import type { InvitationPreviewDto } from '../services/household.service';
+import { householdActions, previewInvitation } from '../store';
 
 const SHARED = [
   { icon: 'task_alt', text: 'Les tâches que les membres partagent avec le foyer' },
@@ -29,8 +32,62 @@ export default function AcceptInvitationScreen() {
   const { c, styles } = useLook();
   const kitStyles = useKitStyles();
   const [decline, setDecline] = useState(false);
-  const host = DEMO_MEMBERS.find((member) => member.id === 'thomas') ?? DEMO_MEMBERS[0];
-  const expires = addDays(DEMO_TODAY, 6);
+  // Mode « api » : le lien de l'e-mail ouvre cet écran avec ?token=…
+  const { token } = useLocalSearchParams<{ token?: string }>();
+  const [preview, setPreview] = useState<InvitationPreviewDto | null>(null);
+  const [error, setError] = useState<string | null>(IS_DEMO || token ? null : 'Lien d’invitation incomplet : ouvrez-le depuis l’e-mail reçu.');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (IS_DEMO || !token) return;
+    let active = true;
+    previewInvitation(token)
+      .then((dto) => active && setPreview(dto))
+      .catch((reason: unknown) => active && setError(userMessage(reason)));
+    return () => {
+      active = false;
+    };
+  }, [token]);
+
+  const demoHost = DEMO_MEMBERS.find((member) => member.id === 'thomas') ?? DEMO_MEMBERS[0];
+  const host = IS_DEMO ? demoHost : { name: preview?.invited_by ?? 'Un membre', color: demoHost.color };
+  const householdName = IS_DEMO ? DEMO_HOUSEHOLD.name : (preview?.household_name ?? '…');
+  const roleLabel = IS_DEMO ? 'Membre' : preview ? ROLE_LABELS[preview.role === 'viewer' ? 'member' : preview.role] : '…';
+  const expires = IS_DEMO ? addDays(DEMO_TODAY, 6) : preview ? new Date(preview.expires_at) : null;
+  const ready = IS_DEMO || (Boolean(preview) && !busy);
+
+  const accept = async () => {
+    if (IS_DEMO) {
+      householdActions.joinDemoHousehold();
+      householdActions.setFlash({ text: `Bienvenue dans ${DEMO_HOUSEHOLD.name}` });
+      router.replace('/household');
+      return;
+    }
+    if (!token) return;
+    setBusy(true);
+    try {
+      const name = await householdActions.acceptInvitation(token);
+      householdActions.setFlash({ text: `Bienvenue dans ${name}` });
+      router.replace('/household');
+    } catch (reason) {
+      setError(userMessage(reason));
+      setBusy(false);
+    }
+  };
+
+  const refuse = async () => {
+    setDecline(false);
+    if (!IS_DEMO && token) {
+      try {
+        await householdActions.declineInvitation(token);
+      } catch (reason) {
+        setError(userMessage(reason));
+        return;
+      }
+    }
+    householdActions.setFlash({ text: 'Invitation refusée' });
+    leave();
+  };
 
   const leave = () => (router.canGoBack() ? router.back() : router.replace('/household'));
 
@@ -41,20 +98,23 @@ export default function AcceptInvitationScreen() {
         <View style={[kitStyles.card, styles.hero]}>
           <Avatar name={host.name} color={host.color} size={64} />
           <Text style={styles.from}>{host.name} vous invite à rejoindre</Text>
-          <Text style={styles.household}>{DEMO_HOUSEHOLD.name}</Text>
+          <Text style={styles.household}>{householdName}</Text>
           <View style={styles.tags}>
-            <Tag label="Rôle : Membre" icon="person" />
-            <Tag label={`${DEMO_MEMBERS.length} membres`} icon="group" tone="teal" />
+            <Tag label={`Rôle : ${roleLabel}`} icon="person" />
+            {IS_DEMO ? <Tag label={`${DEMO_MEMBERS.length} membres`} icon="group" tone="teal" /> : null}
           </View>
-          <View style={styles.faces}>
-            {DEMO_MEMBERS.map((member) => (
-              <View key={member.id} style={styles.face}>
-                <Avatar name={member.name} color={member.color} size={36} />
-                <Text style={styles.faceName}>{firstName(member.name)}</Text>
-              </View>
-            ))}
-          </View>
-          <Text style={styles.expiry}>Invitation valable jusqu’au {formatLongDay(expires).toLowerCase()}</Text>
+          {IS_DEMO ? (
+            <View style={styles.faces}>
+              {DEMO_MEMBERS.map((member) => (
+                <View key={member.id} style={styles.face}>
+                  <Avatar name={member.name} color={member.color} size={36} />
+                  <Text style={styles.faceName}>{firstName(member.name)}</Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
+          {expires ? <Text style={styles.expiry}>Invitation valable jusqu’au {formatLongDay(expires).toLowerCase()}</Text> : null}
+          {error ? <Text style={[styles.expiry, { color: c.error }]}>{error}</Text> : null}
         </View>
 
         <Text style={[kitStyles.label, styles.label]}>Ce que vous verrez dans le foyer</Text>
@@ -82,13 +142,10 @@ export default function AcceptInvitationScreen() {
         <PrimaryButton
           label="Rejoindre le foyer"
           icon="group_add"
-          onPress={() => {
-            householdActions.joinDemoHousehold();
-            householdActions.setFlash({ text: `Bienvenue dans ${DEMO_HOUSEHOLD.name}` });
-            router.replace('/household');
-          }}
+          disabled={!ready}
+          onPress={() => void accept()}
         />
-        <SecondaryButton label="Refuser" onPress={() => setDecline(true)} />
+        <SecondaryButton label="Refuser" disabled={!ready} onPress={() => setDecline(true)} />
       </View>
 
       <BottomSheet
@@ -99,11 +156,7 @@ export default function AcceptInvitationScreen() {
         <SecondaryButton
           label="Refuser l’invitation"
           danger
-          onPress={() => {
-            setDecline(false);
-            householdActions.setFlash({ text: 'Invitation refusée' });
-            leave();
-          }}
+          onPress={() => void refuse()}
         />
         <SecondaryButton label="Revenir" onPress={() => setDecline(false)} />
       </BottomSheet>

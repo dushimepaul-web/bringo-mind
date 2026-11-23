@@ -108,7 +108,7 @@ const DEMO: AppNotification[] = [
 
 type Snapshot = { items: AppNotification[]; error: string | null };
 
-let state: Snapshot = { items: DEMO, error: null };
+let state: Snapshot = { items: IS_DEMO ? DEMO : [], error: null };
 
 /** Mode « api » : envoie la requête ; en cas d'échec, annule la modification locale. */
 function remote(call: () => Promise<unknown>, rollback: () => void) {

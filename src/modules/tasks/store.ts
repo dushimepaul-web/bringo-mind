@@ -17,7 +17,7 @@ type Snapshot = {
   flash: { text: string; undo?: () => void } | null;
 };
 
-let state: Snapshot = { tasks: DEMO_TASKS, flash: null };
+let state: Snapshot = { tasks: IS_DEMO ? DEMO_TASKS : [], flash: null };
 const listeners = new Set<() => void>();
 
 function emit(next: Partial<Snapshot>) {

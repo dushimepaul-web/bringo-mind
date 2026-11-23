@@ -1,8 +1,8 @@
 // API Calendrier (contrat 2.11.0, docs/backend/modules/07_planification_et_calendrier.md) et conversion
 // vers le modèle des écrans. GET /events renvoie la vue demandée (`day` | `week` | `month`) autour d'une date.
-import { api } from '@/lib/api';
+import { api, getAll } from '@/lib/api';
 
-import type { CalendarEvent, EventDraft } from '../types';
+import type { CalendarEvent, EventDraft, TaskDeadline } from '../types';
 
 /** Événement tel que renvoyé par l'API (`EventOut`). */
 export type EventDto = {
@@ -40,6 +40,8 @@ export function toEvent(dto: EventDto): CalendarEvent {
   };
 }
 
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 function toDateOnly(date: Date): string {
   const pad = (value: number) => String(value).padStart(2, '0');
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
@@ -54,7 +56,8 @@ function eventFields(draft: EventDraft) {
     description: draft.description || null,
     location: draft.location || null,
     conference_url: null,
-    attendees: draft.members,
+    // L'API n'accepte que des adresses e-mail (les prénoms du foyer ne sont pas envoyés).
+    attendees: draft.members.filter((member) => EMAIL.test(member)),
     ...(draft.reminder ? { reminder_minutes_before: [draft.reminder] } : {}),
   };
 }
@@ -74,3 +77,28 @@ export const calendarApi = {
   /** Annuler un événement local. */
   cancel: (id: string, version: number) => api.post<EventDto>(`/events/${id}/local/cancel`, { version }),
 };
+
+/** Tâche réduite à ce que le calendrier affiche (`TaskOut` de GET /tasks). */
+type TaskDueDto = {
+  id: string;
+  title: string;
+  status: string;
+  household_id: string | null;
+  due_at: string | null;
+  due_date: string | null;
+  due_all_day: boolean;
+};
+
+const CLOSED = new Set(['completed', 'cancelled', 'archived']);
+
+/** Échéances des tâches ouvertes (lecture seule dans le calendrier). */
+export async function listTaskDeadlines(): Promise<TaskDeadline[]> {
+  const tasks = await getAll<TaskDueDto>('/tasks', { scope: 'all', sort: 'due_at' });
+  return tasks
+    .filter((task) => !CLOSED.has(task.status) && (task.due_at || task.due_date))
+    .map((task) => {
+      const [y, m, d] = (task.due_date ?? '').split('-').map(Number);
+      const due = task.due_at ? new Date(task.due_at) : new Date(y, m - 1, d);
+      return { id: task.id, title: task.title, due, hasTime: Boolean(task.due_at) && !task.due_all_day, shared: Boolean(task.household_id) };
+    });
+}

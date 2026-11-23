@@ -12,7 +12,7 @@ type Snapshot = {
   flash: { text: string; undo?: () => void } | null;
 };
 
-let state: Snapshot = { documents: DEMO_DOCUMENTS, flash: null };
+let state: Snapshot = { documents: IS_DEMO ? DEMO_DOCUMENTS : [], flash: null };
 const listeners = new Set<() => void>();
 
 function emit(next: Partial<Snapshot>) {

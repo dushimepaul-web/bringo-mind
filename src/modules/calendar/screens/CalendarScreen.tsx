@@ -3,7 +3,7 @@
 // mois entier qui se déplie, bande de la semaine, puis la journée « Heure | Événement »
 // (cartes à la hauteur de la durée, ligne verte de l'heure actuelle, échéances de tâches).
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -15,11 +15,12 @@ import { QueryView } from '@/components/ui/states';
 import { DARK, LIGHT, useScopedColors, type AppColors } from '@/constants/app-colors';
 import { FontFamily, Radius } from '@/constants/design';
 import { useQuery } from '@/hooks/use-query';
+import { IS_DEMO } from '@/lib/config';
 import { DEMO_TODAY, addDays, dayOffset, formatTime, startOfDay } from '@/lib/demo-dates';
 
 import { itemsForDay, type DayItem, type SpaceFilter } from '../components/calendar-ui';
-import { MONTHS, TASK_DEADLINES, TONES, WEEKDAY_LETTERS, durationOf, monthGrid, sameDay, weekOf } from '../data';
-import { eventActions, syncEvents, useCalendarState } from '../store';
+import { MONTHS, TONES, WEEKDAY_LETTERS, durationOf, monthGrid, sameDay, weekOf } from '../data';
+import { ensureMonth, eventActions, syncEvents, useCalendarState } from '../store';
 import type { CalendarEvent } from '../types';
 
 const FILTERS: { key: SpaceFilter; label: string; icon: string }[] = [
@@ -42,7 +43,7 @@ function startMinutes(item: DayItem): number {
 export default function CalendarScreen() {
   const { c, styles } = useLook();
   const kit = useKitStyles();
-  const { events, flash } = useCalendarState();
+  const { events, deadlines, flash } = useCalendarState();
   const sync = useQuery('events', syncEvents);
   const [selected, setSelected] = useState(() => startOfDay(DEMO_TODAY));
   const [monthOpen, setMonthOpen] = useState(false);
@@ -64,13 +65,19 @@ export default function CalendarScreen() {
   );
 
   const visibleEvents = useMemo(() => events.filter((event) => !event.cancelled), [events]);
-  const items = useMemo(() => itemsForDay(selected, visibleEvents, TASK_DEADLINES, filter), [selected, visibleEvents, filter]);
+  const items = useMemo(() => itemsForDay(selected, visibleEvents, deadlines, filter), [selected, visibleEvents, deadlines, filter]);
   const week = useMemo(() => weekOf(selected), [selected]);
   const grid = useMemo(() => monthGrid(selected.getFullYear(), selected.getMonth()), [selected]);
-  const hasItems = (day: Date) => itemsForDay(day, visibleEvents, TASK_DEADLINES, filter).length > 0;
+  const hasItems = (day: Date) => itemsForDay(day, visibleEvents, deadlines, filter).length > 0;
 
   // Ligne de l'heure actuelle : seulement aujourd'hui, avant le premier élément qui commence après.
-  const nowMinutes = DEMO_TODAY.getHours() * 60 + DEMO_TODAY.getMinutes();
+  const now = IS_DEMO ? DEMO_TODAY : new Date();
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+  // Mode « api » : charge le mois affiché quand on navigue (les 3 premiers mois sont chargés à l'ouverture).
+  useEffect(() => {
+    ensureMonth(selected);
+  }, [selected]);
   const isToday = dayOffset(selected) === 0;
   const nowIndex = isToday ? items.findIndex((item) => startMinutes(item) > nowMinutes) : -2;
   const nowAt = nowIndex === -1 ? items.length : nowIndex;
@@ -101,7 +108,7 @@ export default function CalendarScreen() {
   const cancelEvent = (event: CalendarEvent) => {
     setMenuEvent(null);
     eventActions.cancel(event.id);
-    setToast({ text: 'Événement annulé.', undo: () => eventActions.restore(event.id) });
+    setToast({ text: 'Événement annulé.', undo: eventActions.canUndo ? () => eventActions.restore(event.id) : undefined });
   };
 
   return (
@@ -352,7 +359,7 @@ export default function CalendarScreen() {
 function NowLine() {
   const { styles } = useLook();
   return (
-    <View style={styles.nowRow} accessibilityLabel={`Maintenant, ${formatTime(DEMO_TODAY)}`}>
+    <View style={styles.nowRow} accessibilityLabel={`Maintenant, ${formatTime(IS_DEMO ? DEMO_TODAY : new Date())}`}>
       <View style={styles.timeCol} />
       <View style={styles.nowDot} />
       <View style={styles.nowLine} />

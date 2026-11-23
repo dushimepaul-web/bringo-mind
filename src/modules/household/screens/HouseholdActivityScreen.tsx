@@ -1,7 +1,7 @@
 // S-19 - Activité du foyer | Module M08 Foyer | Phase S7
 // Seules les actions sur les éléments partagés apparaissent ; toucher une ligne ouvre l'élément.
 import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -13,7 +13,7 @@ import { dayOffset, formatDay, formatLongDay, formatTime } from '@/lib/demo-date
 
 import { Avatar, useHouseholdStyles } from '../components/household-ui';
 import { KIND_LABELS, firstName } from '../data';
-import { useHouseholdState } from '../store';
+import { ensureHousehold, useHouseholdState } from '../store';
 import type { Activity, ActivityKind } from '../types';
 
 const FILTERS: { key: ActivityKind | 'all'; label: string }[] = [
@@ -37,6 +37,7 @@ export default function HouseholdActivityScreen() {
   const kitStyles = useKitStyles();
   const householdStyles = useHouseholdStyles();
   const { name, members, activity } = useHouseholdState();
+  useEffect(() => ensureHousehold(), []);
   const [filter, setFilter] = useState<ActivityKind | 'all'>('all');
 
   const groups = useMemo(() => {
@@ -51,12 +52,12 @@ export default function HouseholdActivityScreen() {
     return result;
   }, [activity, filter]);
 
-  const person = (who: string): { label: string; avatar: string; color: string; kora: boolean } => {
+  const person = (who: string, whoName?: string): { label: string; avatar: string; color: string; kora: boolean } => {
     if (who === 'kora') return { label: 'Kora', avatar: 'Kora', color: c.solid, kora: true };
     const member = members.find((entry) => entry.id === who);
     return {
-      label: member ? (member.you ? 'Vous' : firstName(member.name)) : 'Un ancien membre',
-      avatar: member?.name ?? '?',
+      label: member ? (member.you ? 'Vous' : firstName(member.name)) : (whoName ?? 'Un ancien membre'),
+      avatar: member?.name ?? whoName ?? '?',
       color: member?.color ?? '#94a3b8',
       kora: false,
     };
@@ -92,7 +93,7 @@ export default function HouseholdActivityScreen() {
               </View>
               <View style={[kitStyles.card, styles.list]}>
                 {group.items.map((item, index) => {
-                  const who = person(item.who);
+                  const who = person(item.who, item.whoName);
                   const kind = KIND_LABELS[item.kind];
                   // « Vous avez… » plutôt que « Vous a… ».
                   const verb = who.label === 'Vous' ? item.verb.replace(/^a /, 'avez ') : item.verb;

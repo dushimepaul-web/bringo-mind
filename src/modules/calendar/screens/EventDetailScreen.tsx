@@ -8,7 +8,9 @@ import { Icon } from '@/components/icon';
 import { BottomSheet, IconButton, PrimaryButton, SecondaryButton, SheetOption, Tag, TopBar, UndoToast, useKitStyles } from '@/components/ui/kit';
 import { DARK, LIGHT, useScopedColors, type AppColors } from '@/constants/app-colors';
 import { FontFamily, Radius, Serene } from '@/constants/design';
+import { IS_DEMO } from '@/lib/config';
 import { formatLongDay, formatTime } from '@/lib/demo-dates';
+import { useSession } from '@/lib/session';
 
 import { RECURRENCE_LABELS, USER_TIMEZONE, conflictsFor, durationOf, formatDuration, reminderLabel } from '../data';
 import { useTones } from '../components/calendar-ui';
@@ -23,6 +25,7 @@ export default function EventDetailScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const event = useEvent(id);
   const { events } = useCalendarState();
+  const { user } = useSession();
   const [sheet, setSheet] = useState<Sheet>(null);
   const [notify, setNotify] = useState(true);
   const [toast, setToast] = useState<{ text: string; undo?: () => void } | null>(null);
@@ -58,14 +61,14 @@ export default function EventDetailScreen() {
     eventActions.cancel(event.id);
     setToast({
       text: event.shared && notify ? 'Événement annulé. Thomas a été prévenu.' : 'Événement annulé.',
-      undo: () => eventActions.restore(event.id),
+      undo: eventActions.canUndo ? () => eventActions.restore(event.id) : undefined,
     });
   };
 
   const remove = () => {
     setSheet(null);
     const undo = eventActions.remove(event.id);
-    eventActions.setFlash({ text: `« ${event.title} » supprimé.`, undo });
+    eventActions.setFlash({ text: `« ${event.title} » supprimé.`, undo: eventActions.canUndo ? undo : undefined });
     if (router.canGoBack()) router.back();
     else router.replace('/calendar');
   };
@@ -87,8 +90,11 @@ export default function EventDetailScreen() {
             <Icon name="event_busy" size={22} color="#b91c1c" />
             <View style={styles.flexMin}>
               <Text style={styles.cancelTitle}>Événement annulé</Text>
-              <Text style={styles.cancelText}>Il reste visible barré dans votre calendrier.</Text>
+              <Text style={styles.cancelText}>
+                {eventActions.canUndo ? 'Il reste visible barré dans votre calendrier.' : 'Il n’apparaît plus dans votre calendrier.'}
+              </Text>
             </View>
+            {eventActions.canUndo ? (
             <Pressable
               style={({ pressed }) => [styles.restore, pressed && styles.pressed]}
               accessibilityRole="button"
@@ -98,6 +104,7 @@ export default function EventDetailScreen() {
               }}>
               <Text style={styles.restoreText}>Rétablir</Text>
             </Pressable>
+            ) : null}
           </View>
         ) : null}
 
@@ -155,15 +162,23 @@ export default function EventDetailScreen() {
           {!event.allDay ? (
             <InfoRow icon="timer" label="Durée" value={formatDuration(durationOf(event))} />
           ) : null}
-          <InfoRow icon="public" label="Fuseau" value={`${USER_TIMEZONE.label} (${USER_TIMEZONE.offset})`} />
+          <InfoRow icon="public" label="Fuseau" value={IS_DEMO ? `${USER_TIMEZONE.label} (${USER_TIMEZONE.offset})` : timeZoneLabel(user?.timezone)} />
           <InfoRow icon="notifications_active" label="Rappel" value={reminderLabel(event.reminder)} />
           <InfoRow icon="event_repeat" label="Récurrence" value={RECURRENCE_LABELS[event.recurrence]} last />
         </View>
 
         <SectionTitle icon="group" title="Participants" />
         <View style={[kitStyles.card, styles.info]}>
-          <Person initial="C" name="Claire Martin (vous)" detail="Organisatrice" dark />
-          {event.shared
+          {IS_DEMO ? (
+            <Person initial="C" name="Claire Martin (vous)" detail="Organisatrice" dark />
+          ) : (
+            <Person initial={(user?.full_name ?? '?').charAt(0).toUpperCase()} name={`${user?.full_name ?? 'Vous'} (vous)`} detail="Organisateur" dark />
+          )}
+          {/* Mode « api » : les invités sont les adresses e-mail renvoyées par l'API. */}
+          {!IS_DEMO
+            ? event.members.map((email) => <Person key={email} initial={email.charAt(0).toUpperCase()} name={email} detail="Invité" />)
+            : null}
+          {IS_DEMO && event.shared
             ? event.members.map((name) => (
                 <Person key={name} initial={name.charAt(0)} name={`${name} Martin`} detail="Membre du foyer • Confirmé" />
               ))
@@ -235,7 +250,11 @@ export default function EventDetailScreen() {
       <BottomSheet
         visible={sheet === 'cancel'}
         title="Annuler cet événement ?"
-        subtitle="Il restera visible, barré, dans votre calendrier. Vous pourrez le rétablir."
+        subtitle={
+          eventActions.canUndo
+            ? 'Il restera visible, barré, dans votre calendrier. Vous pourrez le rétablir.'
+            : 'Il sera retiré de votre calendrier. Cette action ne peut pas être annulée.'
+        }
         onClose={() => setSheet(null)}>
         {event.shared ? (
           <View style={styles.notifyRow}>
@@ -612,3 +631,13 @@ function useLook() {
   return { c, styles: c.dark ? STYLES.dark : STYLES.light };
 }
 
+
+/** Fuseau du compte (ou du téléphone) avec son décalage actuel, ex. « Africa/Bujumbura (UTC+2) ». */
+function timeZoneLabel(zone: string | undefined): string {
+  const name = zone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'Heure locale';
+  const minutes = -new Date().getTimezoneOffset();
+  const sign = minutes >= 0 ? '+' : '-';
+  const hours = Math.floor(Math.abs(minutes) / 60);
+  const rest = Math.abs(minutes) % 60;
+  return `${name} (UTC${sign}${hours}${rest ? `:${String(rest).padStart(2, '0')}` : ''})`;
+}

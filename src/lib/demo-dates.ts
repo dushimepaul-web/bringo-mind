@@ -1,10 +1,13 @@
 // Date de démonstration et formatage des dates en français, partagés par les modules.
 // La démo « vit » au mardi 14 mai 2024 pour que tous les écrans restent cohérents.
 
+import { IS_DEMO } from './config';
+
 type Due = { dueAt: Date; hasTime: boolean };
 
 /** « Aujourd'hui » de la démo : mardi 14 mai 2024 (cohérent avec le tableau de bord). */
-export const DEMO_TODAY = new Date(2024, 4, 14, 9, 30);
+// En mode « api », c'est la vraie date du jour (au lancement de l'app).
+export const DEMO_TODAY = IS_DEMO ? new Date(2024, 4, 14, 9, 30) : new Date();
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
